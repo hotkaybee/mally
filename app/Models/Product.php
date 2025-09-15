@@ -2,10 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Brand;
-use App\Models\Category;
-use App\Models\Order;
-use App\Models\OrderProduct;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

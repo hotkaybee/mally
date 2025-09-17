@@ -38,8 +38,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                // Removed default widgets for cleaner dashboard
             ])
             ->middleware([
                 EncryptCookies::class,

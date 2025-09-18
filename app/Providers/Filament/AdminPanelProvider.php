@@ -38,7 +38,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                // Removed default widgets for cleaner dashboard
+                \App\Filament\Widgets\SalesOverviewWidget::class,
+                \App\Filament\Widgets\MonthlyRevenueChart::class,
+                \App\Filament\Widgets\RecentOrdersWidget::class,
+                \App\Filament\Widgets\LowStockWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

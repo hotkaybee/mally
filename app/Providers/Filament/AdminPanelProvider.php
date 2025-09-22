@@ -16,6 +16,10 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use App\Filament\Widgets\SalesOverviewWidget;;
+use App\Filament\Widgets\MonthlyRevenueChart;;
+use App\Filament\Widgets\RecentOrdersWidget;;
+use App\Filament\Widgets\LowStockWidget;;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -36,10 +40,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                \App\Filament\Widgets\SalesOverviewWidget::class,
-                \App\Filament\Widgets\MonthlyRevenueChart::class,
-                \App\Filament\Widgets\RecentOrdersWidget::class,
-                \App\Filament\Widgets\LowStockWidget::class,
+                SalesOverviewWidget::class,
+                MonthlyRevenueChart::class,
+                RecentOrdersWidget::class,
+                LowStockWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

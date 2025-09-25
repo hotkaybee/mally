@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 
 class MonthlyRevenueChart extends ChartWidget
 {
+    protected static ?int $sort = 3;
     protected ?string $heading = 'Monthly Revenue';
 
     protected function getData(): array
@@ -41,11 +42,11 @@ class MonthlyRevenueChart extends ChartWidget
         for ($i = 11; $i >= 0; $i--) {
             $month = $now->copy()->subMonths($i);
             $months[] = $month->format('M Y');
-            
+
             $monthlyRevenue = Order::whereYear('created_at', $month->year)
                 ->whereMonth('created_at', $month->month)
                 ->sum('amount');
-                
+
             $revenue[] = $monthlyRevenue;
         }
 

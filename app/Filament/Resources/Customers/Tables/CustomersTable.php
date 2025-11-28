@@ -16,25 +16,33 @@ class CustomersTable
         return $table
             ->columns([
                 TextColumn::make('first_name')
+                    ->label(__('first_name'))
                     ->searchable(),
                 TextColumn::make('last_name')
+                    ->label(__('last_name'))
                     ->searchable(),
                 TextColumn::make('email')
-                    ->label('Email address')
+                    ->label(__('Email address'))
                     ->searchable(),
                 TextColumn::make('phone_number')
+                    ->label(__('phone_number'))
                     ->searchable(),
                 TextColumn::make('telegram')
+                    ->label(__('telegram'))
                     ->searchable(),
                 TextColumn::make('instagram')
+                    ->label(__('instagram'))
                     ->searchable(),
                 TextColumn::make('source')
+                    ->label(__('source'))
                     ->badge(),
                 TextColumn::make('created_at')
+                    ->label(__('created_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
+                    ->label(__('updated_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

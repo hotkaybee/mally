@@ -14,6 +14,7 @@ class OrderForm
         return $schema
             ->components([
                 Select::make('customer_id')
+                    ->label(__('customer_id'))
                     ->relationship('customer', 'first_name')
                     ->getOptionLabelFromRecordUsing(fn ($record) => $record->first_name . ' ' . $record->last_name)
                     ->searchable(['first_name', 'last_name'])
@@ -23,7 +24,7 @@ class OrderForm
                     ->relationship('orderProducts')
                     ->schema([
                         Select::make('product_id')
-                            ->label('Product')
+                            ->label(__('Product'))
                             ->options(\App\Models\Product::all()->pluck('name', 'id'))
                             ->searchable()
                             ->required()
@@ -39,6 +40,7 @@ class OrderForm
                                 }
                             }),
                         TextInput::make('quantity')
+                            ->label(__('quantity'))
                             ->numeric()
                             ->default(1)
                             ->required()
@@ -48,6 +50,7 @@ class OrderForm
                                 $set('total_price', $price * ($state ?: 1));
                             }),
                         TextInput::make('price')
+                            ->label(__('price'))
                             ->numeric()
                             ->required()
                             ->reactive()
@@ -56,27 +59,31 @@ class OrderForm
                                 $set('total_price', ($state ?: 0) * $quantity);
                             }),
                         TextInput::make('total_price')
+                            ->label(__('total_price'))
                             ->numeric()
                             ->disabled()
                             ->dehydrated(),
                     ])
                     ->columns(4)
                     ->defaultItems(1)
-                    ->addActionLabel('Add Product')
+                    ->addActionLabel(__('Add Product'))
                     ->collapsible(),
 
                 TextInput::make('amount')
+                    ->label(__('amount'))
                     ->required()
                     ->numeric(),
                 TextInput::make('amount_paid')
+                    ->label(__('amount_paid'))
                     ->required()
                     ->numeric()
                     ->default(0.0),
                 Select::make('status')
+                    ->label(__('status'))
                     ->options([
-                        'processing' => 'Processing',
-                        'awaiting_delivery' => 'Awaiting delivery',
-                        'delivered' => 'Delivered',
+                        'processing' => __('Processing'),
+                        'awaiting_delivery' => __('Awaiting delivery'),
+                        'delivered' => __('Delivered'),
                     ])
                     ->default('processing')
                     ->required(),

@@ -17,16 +17,20 @@ class BrandsTable
         return $table
             ->columns([
                 ImageColumn::make('logo')
-                    ->label('Logo'),
+                    ->label(__('Logo')),
                 TextColumn::make('name')
+                    ->label(__('name'))
                     ->searchable(),
                 TextColumn::make('website')
+                    ->label(__('website'))
                     ->searchable(),
                 TextColumn::make('created_at')
+                    ->label(__('created_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
+                    ->label(__('updated_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

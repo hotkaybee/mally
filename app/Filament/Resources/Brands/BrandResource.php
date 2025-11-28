@@ -24,6 +24,21 @@ class BrandResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Brands');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('Brands');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('Brands');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return BrandForm::configure($schema);

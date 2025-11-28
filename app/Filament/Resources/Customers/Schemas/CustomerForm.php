@@ -13,19 +13,29 @@ class CustomerForm
         return $schema
             ->components([
                 TextInput::make('first_name')
+                    ->label(__('first_name'))
                     ->required(),
                 TextInput::make('last_name')
+                    ->label(__('last_name'))
                     ->required(),
                 TextInput::make('email')
-                    ->label('Email address')
+                    ->label(__('Email address'))
                     ->email()
                     ->required(),
                 TextInput::make('phone_number')
+                    ->label(__('phone_number'))
                     ->tel(),
-                TextInput::make('telegram'),
-                TextInput::make('instagram'),
+                TextInput::make('telegram')
+                    ->label(__('telegram')),
+                TextInput::make('instagram')
+                    ->label(__('instagram')),
                 Select::make('source')
-                    ->options(['word_of_mouth' => 'Word of mouth', 'friend' => 'Friend', 'instagram' => 'Instagram'])
+                    ->label(__('source'))
+                    ->options([
+                        'word_of_mouth' => __('Word of mouth'),
+                        'friend' => __('Friend'),
+                        'instagram' => __('Instagram')
+                    ])
                     ->required(),
             ]);
     }

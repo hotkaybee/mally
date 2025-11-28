@@ -16,22 +16,27 @@ class OrdersTable
         return $table
             ->columns([
                 TextColumn::make('customer.first_name')
-                    ->label('Customer')
+                    ->label(__('Customer'))
                     ->formatStateUsing(fn ($record) => $record->customer->first_name . ' ' . $record->customer->last_name)
                     ->searchable(['customer.first_name', 'customer.last_name']),
                 TextColumn::make('amount')
+                    ->label(__('amount'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('amount_paid')
+                    ->label(__('amount_paid'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('status')
+                    ->label(__('status'))
                     ->badge(),
                 TextColumn::make('created_at')
+                    ->label(__('created_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
+                    ->label(__('updated_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

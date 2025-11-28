@@ -9,7 +9,11 @@ use Illuminate\Support\Carbon;
 class MonthlyRevenueChart extends ChartWidget
 {
     protected static ?int $sort = 3;
-    protected ?string $heading = 'Monthly Revenue';
+
+    public function getHeading(): ?string
+    {
+        return __('Monthly Revenue');
+    }
 
     protected function getData(): array
     {
@@ -18,7 +22,7 @@ class MonthlyRevenueChart extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Revenue',
+                    'label' => __('Total Revenue'),
                     'data' => $data['revenue'],
                     'backgroundColor' => '#f59e0b',
                     'borderColor' => '#f59e0b',

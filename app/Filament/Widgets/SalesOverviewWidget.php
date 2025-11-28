@@ -15,23 +15,23 @@ class SalesOverviewWidget extends BaseWidget
     protected function getStats(): array
     {
         return [
-            Stat::make('Total Orders', Order::count())
-                ->description('All time orders')
+            Stat::make(__('Total Orders'), Order::count())
+                ->description(__('All time orders'))
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color('success'),
 
-            Stat::make('Total Revenue', '$' . number_format(Order::sum('amount'), 2))
-                ->description('All time revenue')
+            Stat::make(__('Total Revenue'), '$' . number_format(Order::sum('amount'), 2))
+                ->description(__('All time revenue'))
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('primary'),
 
-            Stat::make('Total Customers', Customer::count())
-                ->description('Registered customers')
+            Stat::make(__('Total Customers'), Customer::count())
+                ->description(__('Registered customers'))
                 ->descriptionIcon('heroicon-m-users')
                 ->color('info'),
 
-            Stat::make('Total Products', Product::count())
-                ->description('Products in inventory')
+            Stat::make(__('Total Products'), Product::count())
+                ->description(__('Products in inventory'))
                 ->descriptionIcon('heroicon-m-cube')
                 ->color('warning'),
         ];

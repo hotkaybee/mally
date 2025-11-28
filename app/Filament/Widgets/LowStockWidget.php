@@ -12,7 +12,10 @@ class LowStockWidget extends BaseWidget
     protected static ?int $sort = 4;
     protected int | string | array $columnSpan = 'full';
 
-    protected static ?string $heading = 'Low Stock Alert';
+    public function getHeading(): ?string
+    {
+        return __('Low Stock Products');
+    }
 
     public function table(Table $table): Table
     {
@@ -29,7 +32,7 @@ class LowStockWidget extends BaseWidget
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('brand.name')
-                    ->label('Brand')
+                    ->label(__('Brand'))
                     ->sortable(),
                 TextColumn::make('quantity')
                     ->badge()
@@ -43,8 +46,8 @@ class LowStockWidget extends BaseWidget
                     ->money('USD')
                     ->sortable(),
             ])
-            ->emptyStateHeading('All products are well stocked!')
-            ->emptyStateDescription('No products with low stock found.')
+            ->emptyStateHeading(__('All products are well stocked!'))
+            ->emptyStateDescription(__('No products with low stock found.'))
             ->emptyStateIcon('heroicon-o-check-circle');
     }
 }

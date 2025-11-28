@@ -12,11 +12,13 @@ class BrandForm
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label(__('name'))
                     ->required(),
                 TextInput::make('website')
+                    ->label(__('website'))
                     ->url(),
                 TextInput::make('logo')
-                    ->label('Logo URL')
+                    ->label(__('Logo URL'))
                     ->url(),
             ]);
     }

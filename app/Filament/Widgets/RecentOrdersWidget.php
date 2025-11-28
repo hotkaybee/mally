@@ -12,7 +12,10 @@ class RecentOrdersWidget extends BaseWidget
     protected static ?int $sort = 2;
     protected int | string | array $columnSpan = 'full';
 
-    protected static ?string $heading = 'Recent Orders';
+    public function getHeading(): ?string
+    {
+        return __('Recent Orders');
+    }
 
     public function table(Table $table): Table
     {
@@ -25,10 +28,10 @@ class RecentOrdersWidget extends BaseWidget
             )
             ->columns([
                 TextColumn::make('id')
-                    ->label('Order #')
+                    ->label(__('Order #'))
                     ->sortable(),
                 TextColumn::make('customer.first_name')
-                    ->label('Customer')
+                    ->label(__('Customer'))
                     ->formatStateUsing(fn ($record) => $record->customer->first_name . ' ' . $record->customer->last_name),
                 TextColumn::make('amount')
                     ->money('USD')

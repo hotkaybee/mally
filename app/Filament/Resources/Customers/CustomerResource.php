@@ -24,6 +24,21 @@ class CustomerResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'first_name';
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Customers');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('Customers');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('Customers');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return CustomerForm::configure($schema);

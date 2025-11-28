@@ -17,36 +17,49 @@ class ProductsTable
         return $table
             ->columns([
                 TextColumn::make('category.name')
+                    ->label(__('category.name'))
                     ->searchable(),
                 TextColumn::make('brand.name')
+                    ->label(__('brand.name'))
                     ->searchable(),
                 TextColumn::make('name')
+                    ->label(__('name'))
                     ->searchable(),
                 TextColumn::make('quantity')
+                    ->label(__('quantity'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('price_original')
+                    ->label(__('price_original'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('markup')
+                    ->label(__('markup'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('selling_price')
+                    ->label(__('selling_price'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('website_price')
+                    ->label(__('website_price'))
                     ->numeric()
                     ->sortable(),
-                ImageColumn::make('image'),
+                ImageColumn::make('image')
+                    ->label(__('image')),
                 TextColumn::make('link')
+                    ->label(__('link'))
                     ->searchable(),
                 TextColumn::make('status')
+                    ->label(__('status'))
                     ->badge(),
                 TextColumn::make('created_at')
+                    ->label(__('created_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
+                    ->label(__('updated_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

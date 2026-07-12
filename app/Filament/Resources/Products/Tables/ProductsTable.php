@@ -29,8 +29,8 @@ class ProductsTable
                     ->label(__('quantity'))
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('price_original')
-                    ->label(__('price_original'))
+                TextColumn::make('delivery_cost')
+                    ->label(__('delivery_cost'))
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('markup')
@@ -43,6 +43,10 @@ class ProductsTable
                     ->sortable(),
                 TextColumn::make('website_price')
                     ->label(__('website_price'))
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('purchase_price')
+                    ->label(__('purchase_price'))
                     ->numeric()
                     ->sortable(),
                 ImageColumn::make('image')

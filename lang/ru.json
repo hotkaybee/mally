@@ -78,5 +78,13 @@
     "Logo": "Логотип",
     "website": "Веб-сайт",
     "Logo URL": "URL логотипа",
-    "icon": "Иконка"
+    "icon": "Иконка",
+    "Batch": "Партия",
+    "Batches": "Партии",
+    "quantity_remaining": "Остаток",
+    "received_at": "Дата поступления",
+    "unit_cost": "Себестоимость",
+    "profit": "Прибыль",
+    "Maintained from batches": "Рассчитывается по партиям",
+    "From the latest batch": "Из последней партии"
 }

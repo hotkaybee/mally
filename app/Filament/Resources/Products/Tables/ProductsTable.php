@@ -29,25 +29,9 @@ class ProductsTable
                     ->label(__('quantity'))
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('delivery_cost')
-                    ->label(__('delivery_cost'))
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('markup')
-                    ->label(__('markup'))
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('selling_price')
                     ->label(__('selling_price'))
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('website_price')
-                    ->label(__('website_price'))
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('purchase_price')
-                    ->label(__('purchase_price'))
-                    ->numeric()
+                    ->money('USD')
                     ->sortable(),
                 ImageColumn::make('image')
                     ->label(__('image')),

@@ -27,16 +27,8 @@ class ProductInfolist
                     ->columnSpanFull(),
                 TextEntry::make('quantity')
                     ->numeric(),
-                TextEntry::make('delivery_cost')
-                    ->numeric(),
-                TextEntry::make('markup')
-                    ->numeric(),
                 TextEntry::make('selling_price')
-                    ->numeric(),
-                TextEntry::make('website_price')
-                    ->numeric(),
-                TextEntry::make('purchase_price')
-                    ->numeric(),
+                    ->money('USD'),
                 ImageEntry::make('image')
                     ->placeholder('-'),
                 TextEntry::make('link')

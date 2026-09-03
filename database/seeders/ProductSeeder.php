@@ -427,8 +427,9 @@ class ProductSeeder extends Seeder
 
         $defaultCategory = Category::first();
 
-        if (!$defaultCategory) {
+        if (! $defaultCategory) {
             $this->command->error('No categories found. Please run CategorySeeder first.');
+
             return;
         }
 
@@ -439,25 +440,34 @@ class ProductSeeder extends Seeder
             $brandName = $this->brandCodeMap[$brandCode] ?? null;
             $brandId = $brandName ? ($brandIds[mb_strtolower($brandName)] ?? null) : null;
 
-            if (!$brandId) {
+            if (! $brandId) {
                 $skippedBrands[$brandCode] = true;
             }
 
-            Product::create([
+            // Catalog product. quantity and selling_price are caches that the
+            // ProductBatch observer fills in once the initial batch is created.
+            $product = Product::create([
                 'brand_id' => $brandId,
                 'category_id' => $defaultCategory->id,
                 'name' => $name,
                 'description' => null,
                 'comment' => null,
-                'quantity' => $quantity,
+                'quantity' => 0,
+                'selling_price' => 0,
+                'image' => null,
+                'link' => null,
+                'status' => 'in_stock',
+            ]);
+
+            // Initial procurement batch holding this row's pricing from sklad.pdf.
+            $product->batches()->create([
                 'purchase_price' => $purchasePrice,
                 'delivery_cost' => $deliveryCost,
                 'markup' => $this->calculateMarkup($purchasePrice, $deliveryCost, $sellingPrice),
                 'selling_price' => $sellingPrice,
                 'website_price' => $websitePrice,
-                'image' => null,
-                'link' => null,
-                'status' => 'in_stock',
+                'quantity' => $quantity,
+                'received_at' => now(),
             ]);
 
             $created++;
@@ -466,7 +476,7 @@ class ProductSeeder extends Seeder
         $this->command->info("Created {$created} products from sklad.pdf.");
 
         if ($skippedBrands) {
-            $this->command->warn('Brands not found (products left unlinked): ' . implode(', ', array_keys($skippedBrands)));
+            $this->command->warn('Brands not found (products left unlinked): '.implode(', ', array_keys($skippedBrands)));
         }
     }
 

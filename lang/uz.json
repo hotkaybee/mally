@@ -78,5 +78,13 @@
     "Logo": "Logotip",
     "website": "Veb-sayt",
     "Logo URL": "Logotip URL",
-    "icon": "Belgi"
+    "icon": "Belgi",
+    "Batch": "Partiya",
+    "Batches": "Partiyalar",
+    "quantity_remaining": "Qoldiq",
+    "received_at": "Kelib tushgan sana",
+    "unit_cost": "Tannarx",
+    "profit": "Foyda",
+    "Maintained from batches": "Partiyalar asosida hisoblanadi",
+    "From the latest batch": "Oxirgi partiyadan"
 }

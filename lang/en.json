@@ -20,10 +20,12 @@
     "brand.name": "Brand",
     "name": "Name",
     "quantity": "Quantity",
-    "price_original": "Original Price",
+    "delivery_cost": "Delivery Cost",
     "markup": "Markup",
+    "markup_percent": "Markup (in percent)",
     "selling_price": "Selling Price",
     "website_price": "Website Price",
+    "purchase_price": "Purchase Price",
     "image": "Image",
     "link": "Link",
     "status": "Status",
@@ -76,5 +78,13 @@
     "Logo": "Logo",
     "website": "Website",
     "Logo URL": "Logo URL",
-    "icon": "Icon"
+    "icon": "Icon",
+    "Receipt": "Receipt",
+    "Receipts": "Receipts",
+    "quantity_remaining": "Remaining",
+    "received_at": "Received on",
+    "unit_cost": "Unit cost",
+    "profit": "Profit",
+    "Maintained from receipts": "Maintained from receipts",
+    "From the latest receipt": "From the latest receipt"
 }

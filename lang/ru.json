@@ -20,10 +20,12 @@
     "brand.name": "Бренд",
     "name": "Название",
     "quantity": "Количество",
-    "price_original": "Исходная цена",
+    "delivery_cost": "Сумма доставки",
     "markup": "Наценка",
+    "markup_percent": "Наценка (в процентах)",
     "selling_price": "Цена продажи",
     "website_price": "Цена на сайте",
+    "purchase_price": "Закупочная цена",
     "image": "Изображение",
     "link": "Ссылка",
     "status": "Статус",
@@ -76,5 +78,13 @@
     "Logo": "Логотип",
     "website": "Веб-сайт",
     "Logo URL": "URL логотипа",
-    "icon": "Иконка"
+    "icon": "Иконка",
+    "Receipt": "Поступление",
+    "Receipts": "Поступления",
+    "quantity_remaining": "Остаток",
+    "received_at": "Дата поступления",
+    "unit_cost": "Себестоимость",
+    "profit": "Прибыль",
+    "Maintained from receipts": "Рассчитывается по поступлениям",
+    "From the latest receipt": "Из последнего поступления"
 }

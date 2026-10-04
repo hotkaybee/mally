@@ -4,8 +4,8 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
 class ProductForm
@@ -29,28 +29,20 @@ class ProductForm
                 Textarea::make('comment')
                     ->label(__('comment'))
                     ->columnSpanFull(),
+                // quantity and selling_price are caches maintained from receipts
+                // (App\Services\InventoryService); shown here read-only.
                 TextInput::make('quantity')
                     ->label(__('quantity'))
-                    ->required()
                     ->numeric()
-                    ->default(0),
-                TextInput::make('price_original')
-                    ->label(__('price_original'))
-                    ->required()
-                    ->numeric(),
-                TextInput::make('markup')
-                    ->label(__('markup'))
-                    ->required()
-                    ->numeric()
-                    ->default(0),
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->helperText(__('Maintained from receipts')),
                 TextInput::make('selling_price')
                     ->label(__('selling_price'))
-                    ->required()
-                    ->numeric(),
-                TextInput::make('website_price')
-                    ->label(__('website_price'))
-                    ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->helperText(__('From the latest receipt')),
                 FileUpload::make('image')
                     ->label(__('image'))
                     ->image(),
@@ -61,7 +53,7 @@ class ProductForm
                     ->options([
                         'in_stock' => __('In stock'),
                         'out_of_stock' => __('Out of stock'),
-                        'on_the_way' => __('On the way')
+                        'on_the_way' => __('On the way'),
                     ])
                     ->default('in_stock')
                     ->required(),

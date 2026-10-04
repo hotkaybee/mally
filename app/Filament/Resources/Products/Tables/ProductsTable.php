@@ -29,21 +29,9 @@ class ProductsTable
                     ->label(__('quantity'))
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('price_original')
-                    ->label(__('price_original'))
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('markup')
-                    ->label(__('markup'))
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('selling_price')
                     ->label(__('selling_price'))
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('website_price')
-                    ->label(__('website_price'))
-                    ->numeric()
+                    ->money('USD')
                     ->sortable(),
                 ImageColumn::make('image')
                     ->label(__('image')),

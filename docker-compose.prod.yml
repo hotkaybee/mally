@@ -1,0 +1,71 @@
+services:
+  app:
+    # Image is built and pushed by CI to GHCR, then pulled on the server.
+    image: ${APP_IMAGE:-ghcr.io/hotkaybee/mally:latest}
+    # To build locally instead of pulling, uncomment the block below
+    # and run: docker compose -f docker-compose.prod.yml up -d --build
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: mally-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_KEY=${APP_KEY}
+      - APP_URL=${APP_URL:-http://localhost}
+      - APP_LOCALE=${APP_LOCALE:-ru}
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-mally}
+      - DB_USERNAME=${DB_USERNAME:-mally}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SESSION_DRIVER=database
+      - CACHE_STORE=database
+      - QUEUE_CONNECTION=database
+    volumes:
+      - ./.env:/var/www/html/.env:ro
+      - ./storage:/var/www/html/storage
+      - ./public/storage:/var/www/html/public/storage
+    networks:
+      - mally-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-v"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  mysql:
+    image: mysql:8.0
+    container_name: mally-mysql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-mally}
+      MYSQL_USER: ${DB_USERNAME:-mally}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - mally-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  mally-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local

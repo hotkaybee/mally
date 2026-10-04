@@ -79,12 +79,12 @@
     "website": "Website",
     "Logo URL": "Logo URL",
     "icon": "Icon",
-    "Batch": "Batch",
-    "Batches": "Batches",
+    "Receipt": "Receipt",
+    "Receipts": "Receipts",
     "quantity_remaining": "Remaining",
     "received_at": "Received on",
     "unit_cost": "Unit cost",
     "profit": "Profit",
-    "Maintained from batches": "Maintained from batches",
-    "From the latest batch": "From the latest batch"
+    "Maintained from receipts": "Maintained from receipts",
+    "From the latest receipt": "From the latest receipt"
 }

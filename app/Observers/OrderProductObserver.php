@@ -3,7 +3,7 @@
 namespace App\Observers;
 
 use App\Models\OrderProduct;
-use App\Models\ProductBatch;
+use App\Models\ProductReceipt;
 use App\Services\InventoryService;
 
 class OrderProductObserver
@@ -11,14 +11,14 @@ class OrderProductObserver
     public function __construct(private InventoryService $inventory) {}
 
     /**
-     * Freeze the unit cost from the chosen batch onto the line, so profit stays
-     * correct even if the batch is edited later.
+     * Freeze the unit cost from the chosen receipt onto the line, so profit
+     * stays correct even if the receipt is edited later.
      */
     public function saving(OrderProduct $line): void
     {
-        if ($line->product_batch_id) {
-            $batch = ProductBatch::find($line->product_batch_id);
-            $line->unit_cost = $batch ? $batch->unit_cost : 0;
+        if ($line->product_receipt_id) {
+            $receipt = ProductReceipt::find($line->product_receipt_id);
+            $line->unit_cost = $receipt ? $receipt->unit_cost : 0;
         } else {
             $line->unit_cost = 0;
         }
@@ -31,12 +31,12 @@ class OrderProductObserver
 
     /**
      * Return the units the line previously held, then draw the new amounts —
-     * covers quantity changes and switching to a different batch.
+     * covers quantity changes and switching to a different receipt.
      */
     public function updating(OrderProduct $line): void
     {
         $this->inventory->release(
-            $line->getOriginal('product_batch_id'),
+            $line->getOriginal('product_receipt_id'),
             (int) $line->getOriginal('quantity'),
         );
 
@@ -45,6 +45,6 @@ class OrderProductObserver
 
     public function deleted(OrderProduct $line): void
     {
-        $this->inventory->release($line->product_batch_id, (int) $line->quantity);
+        $this->inventory->release($line->product_receipt_id, (int) $line->quantity);
     }
 }

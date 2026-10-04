@@ -79,12 +79,12 @@
     "website": "Veb-sayt",
     "Logo URL": "Logotip URL",
     "icon": "Belgi",
-    "Batch": "Partiya",
-    "Batches": "Partiyalar",
+    "Receipt": "Kelib tushish",
+    "Receipts": "Kelib tushishlar",
     "quantity_remaining": "Qoldiq",
     "received_at": "Kelib tushgan sana",
     "unit_cost": "Tannarx",
     "profit": "Foyda",
-    "Maintained from batches": "Partiyalar asosida hisoblanadi",
-    "From the latest batch": "Oxirgi partiyadan"
+    "Maintained from receipts": "Kelib tushishlar asosida hisoblanadi",
+    "From the latest receipt": "Oxirgi kelib tushishdan"
 }

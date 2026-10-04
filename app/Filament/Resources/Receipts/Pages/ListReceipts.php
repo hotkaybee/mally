@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\Batches\Pages;
+namespace App\Filament\Resources\Receipts\Pages;
 
-use App\Filament\Resources\Batches\BatchResource;
+use App\Filament\Resources\Receipts\ReceiptResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-class ListBatches extends ListRecords
+class ListReceipts extends ListRecords
 {
-    protected static string $resource = BatchResource::class;
+    protected static string $resource = ReceiptResource::class;
 
     protected function getHeaderActions(): array
     {

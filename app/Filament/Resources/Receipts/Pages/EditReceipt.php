@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Filament\Resources\Batches\Pages;
+namespace App\Filament\Resources\Receipts\Pages;
 
-use App\Filament\Resources\Batches\BatchResource;
+use App\Filament\Resources\Receipts\ReceiptResource;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
 
-class EditBatch extends EditRecord
+class EditReceipt extends EditRecord
 {
-    protected static string $resource = BatchResource::class;
+    protected static string $resource = ReceiptResource::class;
 
     protected function getHeaderActions(): array
     {

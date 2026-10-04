@@ -8,8 +8,8 @@ return new class extends Migration
 {
     /**
      * Pricing (purchase price, delivery cost, markup, website price) now lives on
-     * product_batches. Products keep only `quantity` and `selling_price`, which
-     * become read-only caches maintained from the batches.
+     * product_receipts. Products keep only `quantity` and `selling_price`, which
+     * become read-only caches maintained from the receipts.
      */
     public function up(): void
     {

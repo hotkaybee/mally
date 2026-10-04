@@ -445,7 +445,7 @@ class ProductSeeder extends Seeder
             }
 
             // Catalog product. quantity and selling_price are caches that the
-            // ProductBatch observer fills in once the initial batch is created.
+            // ProductReceipt observer fills in once the initial receipt is created.
             $product = Product::create([
                 'brand_id' => $brandId,
                 'category_id' => $defaultCategory->id,
@@ -459,8 +459,8 @@ class ProductSeeder extends Seeder
                 'status' => 'in_stock',
             ]);
 
-            // Initial procurement batch holding this row's pricing from sklad.pdf.
-            $product->batches()->create([
+            // Initial procurement receipt holding this row's pricing from sklad.pdf.
+            $product->receipts()->create([
                 'purchase_price' => $purchasePrice,
                 'delivery_cost' => $deliveryCost,
                 'markup' => $this->calculateMarkup($purchasePrice, $deliveryCost, $sellingPrice),

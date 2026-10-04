@@ -24,7 +24,7 @@ class OrderProduct extends Model
     protected $fillable = [
         'order_id',
         'product_id',
-        'product_batch_id',
+        'product_receipt_id',
         'quantity',
         'price',
         'unit_cost',
@@ -48,8 +48,8 @@ class OrderProduct extends Model
         return $this->belongsTo(Product::class);
     }
 
-    public function batch(): BelongsTo
+    public function receipt(): BelongsTo
     {
-        return $this->belongsTo(ProductBatch::class, 'product_batch_id');
+        return $this->belongsTo(ProductReceipt::class, 'product_receipt_id');
     }
 }

@@ -13,8 +13,9 @@ class AdminPanelSmokeTest extends TestCase
 
     /**
      * Rendering these pages builds the full Filament schemas — including the
-     * order form's batch-options and maxValue closures and the Batch form's
-     * price calculator — so a 200 proves there are no render-time errors.
+     * order form's receipt-options and maxValue closures and the Receipt
+     * form's price calculator — so a 200 proves there are no render-time
+     * errors.
      */
     #[DataProvider('adminPages')]
     public function test_admin_page_renders(string $url): void
@@ -30,8 +31,8 @@ class AdminPanelSmokeTest extends TestCase
     public static function adminPages(): array
     {
         return [
-            'batches list' => ['/admin/batches'],
-            'batch create' => ['/admin/batches/create'],
+            'receipts list' => ['/admin/receipts'],
+            'receipt create' => ['/admin/receipts/create'],
             'orders create' => ['/admin/orders/create'],
             'products list' => ['/admin/products'],
         ];

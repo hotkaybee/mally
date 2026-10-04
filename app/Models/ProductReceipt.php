@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Observers\ProductBatchObserver;
+use App\Observers\ProductReceiptObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[ObservedBy(ProductBatchObserver::class)]
-class ProductBatch extends Model
+#[ObservedBy(ProductReceiptObserver::class)]
+class ProductReceipt extends Model
 {
     use HasFactory;
 
@@ -49,7 +49,7 @@ class ProductBatch extends Model
     }
 
     /**
-     * Landed cost of a single unit from this batch (закуп + карго).
+     * Landed cost of a single unit from this receipt (закуп + карго).
      */
     public function getUnitCostAttribute(): float
     {

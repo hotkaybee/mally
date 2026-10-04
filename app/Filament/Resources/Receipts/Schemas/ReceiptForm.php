@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Batches\Schemas;
+namespace App\Filament\Resources\Receipts\Schemas;
 
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -10,7 +10,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
-class BatchForm
+class ReceiptForm
 {
     protected static function updateSellingPrice(Get $get, Set $set): void
     {

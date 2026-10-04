@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Batches\Tables;
+namespace App\Filament\Resources\Receipts\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -9,7 +9,7 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class BatchesTable
+class ReceiptsTable
 {
     public static function configure(Table $table): Table
     {

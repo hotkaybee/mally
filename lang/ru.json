@@ -79,12 +79,12 @@
     "website": "Веб-сайт",
     "Logo URL": "URL логотипа",
     "icon": "Иконка",
-    "Batch": "Партия",
-    "Batches": "Партии",
+    "Receipt": "Поступление",
+    "Receipts": "Поступления",
     "quantity_remaining": "Остаток",
     "received_at": "Дата поступления",
     "unit_cost": "Себестоимость",
     "profit": "Прибыль",
-    "Maintained from batches": "Рассчитывается по партиям",
-    "From the latest batch": "Из последней партии"
+    "Maintained from receipts": "Рассчитывается по поступлениям",
+    "From the latest receipt": "Из последнего поступления"
 }

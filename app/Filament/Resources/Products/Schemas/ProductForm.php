@@ -29,20 +29,20 @@ class ProductForm
                 Textarea::make('comment')
                     ->label(__('comment'))
                     ->columnSpanFull(),
-                // quantity and selling_price are caches maintained from batches
+                // quantity and selling_price are caches maintained from receipts
                 // (App\Services\InventoryService); shown here read-only.
                 TextInput::make('quantity')
                     ->label(__('quantity'))
                     ->numeric()
                     ->disabled()
                     ->dehydrated(false)
-                    ->helperText(__('Maintained from batches')),
+                    ->helperText(__('Maintained from receipts')),
                 TextInput::make('selling_price')
                     ->label(__('selling_price'))
                     ->numeric()
                     ->disabled()
                     ->dehydrated(false)
-                    ->helperText(__('From the latest batch')),
+                    ->helperText(__('From the latest receipt')),
                 FileUpload::make('image')
                     ->label(__('image'))
                     ->image(),

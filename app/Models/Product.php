@@ -14,8 +14,8 @@ class Product extends Model
 
     /**
      * `quantity` and `selling_price` are read-only caches maintained from the
-     * product's batches (see App\Services\InventoryService). Purchase price,
-     * delivery cost, markup and website price now live on each ProductBatch.
+     * product's receipts (see App\Services\InventoryService). Purchase price,
+     * delivery cost, markup and website price now live on each ProductReceipt.
      */
     protected $fillable = [
         'brand_id',
@@ -45,15 +45,15 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
-    public function batches(): HasMany
+    public function receipts(): HasMany
     {
-        return $this->hasMany(ProductBatch::class);
+        return $this->hasMany(ProductReceipt::class);
     }
 
     public function orders(): BelongsToMany
     {
         return $this->belongsToMany(Order::class)
             ->using(OrderProduct::class)
-            ->withPivot(['quantity', 'price', 'total_price', 'product_batch_id', 'unit_cost']);
+            ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
     }
 }

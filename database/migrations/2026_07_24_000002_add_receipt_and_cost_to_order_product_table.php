@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('order_product', function (Blueprint $table) {
-            $table->foreignId('product_batch_id')
+            $table->foreignId('product_receipt_id')
                 ->nullable()
                 ->after('product_id')
-                ->constrained('product_batches')
+                ->constrained('product_receipts')
                 ->nullOnDelete();
             $table->decimal('unit_cost', 10, 2)->default(0)->after('price');
         });
@@ -27,7 +27,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('order_product', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('product_batch_id');
+            $table->dropConstrainedForeignId('product_receipt_id');
             $table->dropColumn('unit_cost');
         });
     }

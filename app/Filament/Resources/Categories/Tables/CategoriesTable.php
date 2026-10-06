@@ -15,11 +15,23 @@ class CategoriesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort(Category::nameColumn())
             ->columns([
-                TextColumn::make('name')
-                    ->label(__('name'))
+                TextColumn::make('name_en')
+                    ->label(__('name_en'))
                     ->searchable()
+                    ->sortable()
                     ->icon(fn (Category $record) => $record->icon),
+                TextColumn::make('name_ru')
+                    ->label(__('name_ru'))
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('-'),
+                TextColumn::make('name_uz')
+                    ->label(__('name_uz'))
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('-'),
                 TextColumn::make('created_at')
                     ->label(__('created_at'))
                     ->dateTime()

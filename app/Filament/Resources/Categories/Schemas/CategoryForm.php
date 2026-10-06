@@ -11,9 +11,16 @@ class CategoryForm
     {
         return $schema
             ->components([
-                TextInput::make('name')
-                    ->label(__('name'))
-                    ->required(),
+                // One field per locale — these names are shown to customers on
+                // the public site, so each language needs its own value.
+                TextInput::make('name_en')
+                    ->label(__('name_en'))
+                    ->required()
+                    ->unique(ignoreRecord: true),
+                TextInput::make('name_ru')
+                    ->label(__('name_ru')),
+                TextInput::make('name_uz')
+                    ->label(__('name_uz')),
                 TextInput::make('icon')
                     ->label(__('icon')),
             ]);

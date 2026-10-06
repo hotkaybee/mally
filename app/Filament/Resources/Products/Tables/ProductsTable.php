@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Tables;
 
+use App\Models\Category;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -9,6 +10,7 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductsTable
 {
@@ -18,7 +20,22 @@ class ProductsTable
             ->columns([
                 TextColumn::make('category.name')
                     ->label(__('category.name'))
-                    ->searchable(),
+                    // `category.name` is a locale-aware accessor, so searching
+                    // and sorting target the real per-locale columns instead.
+                    ->searchable(query: fn (Builder $query, string $search) => $query->whereHas(
+                        'category',
+                        fn (Builder $categoryQuery) => $categoryQuery->where(
+                            fn (Builder $q) => collect(Category::nameColumns())->each(
+                                fn (string $column) => $q->orWhere($column, 'like', "%{$search}%")
+                            )
+                        )
+                    ))
+                    ->sortable(query: fn (Builder $query, string $direction) => $query
+                        ->orderBy(
+                            Category::select(Category::nameColumn())
+                                ->whereColumn('categories.id', 'products.category_id'),
+                            $direction
+                        )),
                 TextColumn::make('brand.name')
                     ->label(__('brand.name'))
                     ->searchable(),

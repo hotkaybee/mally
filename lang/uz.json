@@ -19,6 +19,7 @@
     "category.name": "Kategoriya",
     "brand.name": "Brend",
     "name": "Nomi",
+    "sku": "Artikul",
     "quantity": "Miqdori",
     "delivery_cost": "Yetkazib berish narxi",
     "markup": "Ustama",

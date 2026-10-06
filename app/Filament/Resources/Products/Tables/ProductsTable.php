@@ -25,6 +25,10 @@ class ProductsTable
                 TextColumn::make('name')
                     ->label(__('name'))
                     ->searchable(),
+                TextColumn::make('sku')
+                    ->label(__('sku'))
+                    ->searchable()
+                    ->placeholder('-'),
                 TextColumn::make('quantity')
                     ->label(__('quantity'))
                     ->numeric()

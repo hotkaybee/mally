@@ -23,6 +23,10 @@ class ProductForm
                 TextInput::make('name')
                     ->label(__('name'))
                     ->required(),
+                TextInput::make('sku')
+                    ->label(__('sku'))
+                    ->maxLength(255)
+                    ->unique(ignoreRecord: true),
                 Textarea::make('description')
                     ->label(__('description'))
                     ->columnSpanFull(),

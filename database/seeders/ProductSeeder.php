@@ -72,7 +72,6 @@ class ProductSeeder extends Seeder
     ];
 
     /**
-     * Stock rows from sklad_06_oct.xlsx, sheet "sklad" (rows 3-309).
      * Columns: [name, brand code, quantity, purchase price (закуп), delivery
      * cost (карго), website price (цена на сайте), selling price (цена
      * продажи), comment (комментарий)].

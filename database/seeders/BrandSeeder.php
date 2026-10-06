@@ -37,7 +37,6 @@ class BrandSeeder extends Seeder
             ['name' => 'Makeup by Mario', 'website' => 'https://www.makeupbymario.com/', 'logo' => 'https://logos-world.net/wp-content/uploads/2021/02/Makeup-by-Mario-Logo.png'],
             ['name' => 'Lancome', 'website' => 'https://www.lancome-usa.com/', 'logo' => 'https://logos-world.net/wp-content/uploads/2020/12/Lancome-Logo.png'],
             ['name' => 'Bobbi Brown', 'website' => 'https://www.bobbibrowncosmetics.com/', 'logo' => 'https://logos-world.net/wp-content/uploads/2020/12/Bobbi-Brown-Logo.png'],
-            // Brands referenced by sklad.pdf that were previously missing
             ['name' => 'Estée Lauder', 'website' => 'https://www.esteelauder.com/', 'logo' => null],
             ['name' => 'One/Size', 'website' => 'https://onesizebeauty.com/', 'logo' => null],
             ['name' => 'Beauty Creations', 'website' => 'https://www.beautycreationscosmetics.com/', 'logo' => null],

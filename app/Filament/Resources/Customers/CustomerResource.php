@@ -22,6 +22,8 @@ class CustomerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $recordTitleAttribute = 'first_name';
 
     public static function getNavigationLabel(): string

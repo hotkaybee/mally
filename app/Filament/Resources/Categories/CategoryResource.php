@@ -24,6 +24,8 @@ class CategoryResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static ?int $navigationSort = 2;
+
     /**
      * Filament uses the record title attribute for two different things: it
      * reads it off the model for display (accessors apply), and it puts it

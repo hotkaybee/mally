@@ -22,6 +22,8 @@ class ReceiptResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $recordTitleAttribute = 'id';
 
     public static function getNavigationLabel(): string

@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Brand;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Brand;
 
 class BrandSeeder extends Seeder
 {
@@ -37,7 +37,6 @@ class BrandSeeder extends Seeder
             ['name' => 'Makeup by Mario', 'website' => 'https://www.makeupbymario.com/', 'logo' => 'https://logos-world.net/wp-content/uploads/2021/02/Makeup-by-Mario-Logo.png'],
             ['name' => 'Lancome', 'website' => 'https://www.lancome-usa.com/', 'logo' => 'https://logos-world.net/wp-content/uploads/2020/12/Lancome-Logo.png'],
             ['name' => 'Bobbi Brown', 'website' => 'https://www.bobbibrowncosmetics.com/', 'logo' => 'https://logos-world.net/wp-content/uploads/2020/12/Bobbi-Brown-Logo.png'],
-            // Brands referenced by sklad.pdf that were previously missing
             ['name' => 'Estée Lauder', 'website' => 'https://www.esteelauder.com/', 'logo' => null],
             ['name' => 'One/Size', 'website' => 'https://onesizebeauty.com/', 'logo' => null],
             ['name' => 'Beauty Creations', 'website' => 'https://www.beautycreationscosmetics.com/', 'logo' => null],
@@ -60,6 +59,14 @@ class BrandSeeder extends Seeder
             ['name' => 'Glow Recipe', 'website' => 'https://www.glowrecipe.com/', 'logo' => null],
             ['name' => 'Kiehl\'s', 'website' => 'https://www.kiehls.com/', 'logo' => null],
             ['name' => 'Jessup', 'website' => 'https://jessupbeauty.com/', 'logo' => null],
+            // Brands first stocked in the 06 Oct 2026 warehouse snapshot
+            ['name' => 'Buxom', 'website' => 'https://www.buxomcosmetics.com/', 'logo' => null],
+            ['name' => 'Haus Labs', 'website' => 'https://hauslabs.com/', 'logo' => null],
+            ['name' => 'Kosas', 'website' => 'https://kosas.com/', 'logo' => null],
+            ['name' => 'Laneige', 'website' => 'https://us.laneige.com/', 'logo' => null],
+            ['name' => 'Lys Beauty', 'website' => 'https://lysbeauty.com/', 'logo' => null],
+            ['name' => 'Saie', 'website' => 'https://saiehello.com/', 'logo' => null],
+            ['name' => 'Salt & Stone', 'website' => 'https://saltandstone.com/', 'logo' => null],
         ];
 
         foreach ($brands as $brand) {

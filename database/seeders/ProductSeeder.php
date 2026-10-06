@@ -11,8 +11,14 @@ use Illuminate\Support\Facades\DB;
 class ProductSeeder extends Seeder
 {
     /**
-     * Maps the short brand codes used in sklad.pdf to the canonical brand
-     * names stored in the brands table (see BrandSeeder).
+     * The warehouse snapshot this catalogue was taken from. Receipts are dated
+     * with it rather than "today", so re-seeding stays deterministic.
+     */
+    private const SNAPSHOT_DATE = '2026-10-06';
+
+    /**
+     * Maps the short brand codes used in the warehouse spreadsheet to the
+     * canonical brand names stored in the brands table (see BrandSeeder).
      */
     private array $brandCodeMap = [
         'esteelauder' => 'Estée Lauder',
@@ -53,363 +59,338 @@ class ProductSeeder extends Seeder
         'bobbi brown' => 'Bobbi Brown',
         'khiels' => "Kiehl's",
         'jessup' => 'Jessup',
+        // Codes introduced by the 06 Oct 2026 snapshot
+        'kiehls' => "Kiehl's",
+        'Shiseido' => 'Shiseido',
+        'buxom' => 'Buxom',
+        'haus labs' => 'Haus Labs',
+        'kosas' => 'Kosas',
+        'laneige' => 'Laneige',
+        'lys' => 'Lys Beauty',
+        'saie' => 'Saie',
+        'salt and stone' => 'Salt & Stone',
     ];
 
     /**
-     * Product rows taken from sklad.pdf.
-     * Columns: [name, brand code, quantity, purchase price, delivery cost (карго), website price (цена на сайте), selling price (продажа цена)].
-     * A selling price of 0 means the продажа column was blank in the PDF.
-     * Large selling prices (>= 1000) are UZS soum values recorded as-is; their markup is left at 0 to be filled in manually later.
+     * Columns: [name, brand code, quantity, purchase price (закуп), delivery
+     * cost (карго), website price (цена на сайте), selling price (цена
+     * продажи), comment (комментарий)].
+     *
+     * A selling price of 0 means the spreadsheet left it blank (or held "?").
+     * Rows repeating the same brand and name become separate receipts of one
+     * product, which is how a product bought twice at different prices is
+     * meant to be recorded.
+     *
+     * @var array<int, array{0: string, 1: string, 2: int, 3: float, 4: float, 5: float, 6: float, 7: ?string}>
      */
     private array $rows = [
-        // esteelauder
-        ['Блокбастер нкд', 'esteelauder', 1, 90.0, 20.0, 90.0, 150.0],
-        ['blokbaster fioletoviy', 'esteelauder', 3, 85.3, 19.9, 90.0, 150.0],
-        ['beautiful magnolia 3 tali atir nabor', 'esteelauder', 2, 89.1, 9.0, 112.0, 120.0],
-        ['daywear oq gift nabor', 'esteelauder', 1, 54.4, 7.0, 68.0, 0],
-        ['kotta sivorotkali 50 ml oq gift nabor', 'esteelauder', 1, 93.8, 12.0, 134.0, 0],
-        ['kotta kremli oq gift nabor', 'esteelauder', 1, 73.3, 11.0, 124.0, 0],
-        ['4 tali nabor vozrastnoy', 'esteelauder', 1, 45.0, 3.0, 45.0, 55.0],
-        ['4 tali daywear nabor', 'esteelauder', 1, 40.0, 4.0, 40.0, 50.0],
-        ['soft clean toner & cleanser nabor', 'esteelauder', 1, 46.0, 11.5, 46.0, 0],
-        ['mini 4 tali gift nabor', 'esteelauder', 1, 23.4, 5.5, 48.0, 0],
-        ['розовая косметика набор', 'esteelauder', 1, 0.0, 3.0, 0.0, 0],
-        ['Косметичка ок синий', 'esteelauder', 1, 0.0, 3.0, 0.0, 0],
-        ['косметичка набор синий', 'esteelauder', 1, 0.0, 3.0, 0.0, 0],
-        ['косметичка набор розово голубой', 'esteelauder', 1, 0.0, 3.0, 0.0, 0],
-        ['futurist foundation', 'esteelauder', 1, 41.3, 2.0, 55.0, 0],
-        ['double wear foundation', 'esteelauder', 1, 41.6, 1.0, 52.0, 0],
-        ['futurist tint foundation', 'esteelauder', 1, 44.0, 2.0, 55.0, 0],
-        ['futurist base', 'esteelauder', 2, 23.0, 1.0, 46.0, 0],
-        ['mascara full size', 'esteelauder', 1, 0.0, 2.0, 35.0, 0],
-        ['perfectly clean cleanser 150 ml', 'esteelauder', 2, 19.0, 2.0, 32.0, 0],
-        ['pefectly clean toner 200 ml', 'esteelauder', 1, 19.0, 2.0, 32.0, 0],
-        ['nutritious lotion 100 ml', 'esteelauder', 2, 24.0, 4.0, 39.0, 0],
-        ['nutritious cleanser 125 ml', 'esteelauder', 1, 0.0, 2.0, 28.0, 0],
-        ['nutritious mini set', 'esteelauder', 1, 12.0, 2.0, 15.0, 0],
-        ['advanced night repair eye cream 15 ml', 'esteelauder', 2, 0.0, 2.0, 76.0, 0],
-        ['kichkina podarochnaya korobka nabor', 'esteelauder', 2, 0.0, 5.0, 0.0, 0],
-        ['kotta podarochnaya korobka', 'esteelauder', 9, 0.0, 6.0, 0.0, 0],
-        // vs
-        ['bardovaya sumochka brelok', 'vs', 1, 9.9, 2.0, 25.0, 0],
-        ['bantik brelok', 'vs', 1, 9.9, 2.0, 20.0, 0],
-        ['qora sumochka brelok', 'vs', 2, 6.8, 2.0, 25.0, 0],
-        ['vs strazali brelok', 'vs', 1, 11.4, 2.0, 25.0, 0],
-        ['bomshell atir 50ml', 'vs', 1, 20.1, 5.0, 60.0, 60.0],
-        ['tease atir 50 ml', 'vs', 1, 26.0, 5.0, 60.0, 60.0],
-        ['bomshell midnight atir 100 ml', 'vs', 1, 24.8, 8.0, 80.0, 75.0],
-        ['very sexy orchid atir100 ml', 'vs', 1, 27.5, 7.6, 80.0, 70.0],
-        ['bomshell soiree atir 50 ml', 'vs', 1, 20.4, 5.0, 60.0, 0],
-        ['bomshell amalfi atir 50 ml', 'vs', 1, 20.6, 5.5, 60.0, 0],
-        ['bomshell midnight atir 7 ml', 'vs', 2, 8.3, 2.0, 20.0, 0],
-        ['bomshell amalfi atir 7 ml', 'vs', 2, 8.3, 2.0, 20.0, 0],
-        ['bomshell glamour atir 7 ml', 'vs', 1, 7.6, 2.0, 20.0, 0],
-        ['bomshell soiree aitr 7 ml', 'vs', 3, 8.1, 2.0, 20.0, 0],
-        ['atir nabor 3 tali bomsheell', 'vs', 1, 42.5, 13.0, 85.0, 80.0],
-        ['atir nabor 3 tali tease', 'vs', 1, 42.5, 13.0, 85.0, 80.0],
-        ['hibiscus 3 tali mini nabor', 'vs', 1, 15.2, 5.0, 20.0, 0],
-        ['4 tali mist nabor shimmer', 'vs', 3, 12.2, 8.0, 35.0, 0],
-        ['4 tali mist nabor', 'vs', 1, 10.5, 8.0, 35.0, 0],
-        ['bomshell parfume & lotion nabor', 'vs', 2, 13.3, 3.5, 38.0, 0],
-        ['tease parfume & lotion nabor', 'vs', 1, 18.5, 4.0, 38.0, 0],
-        ['very sexy parfume & lotion nabor', 'vs', 3, 13.3, 4.3, 38.0, 0],
-        ['bare parfume & lotion nabor', 'vs', 1, 18.5, 4.0, 38.0, 0],
-        ['cocunt milk & rose 4 tali nabor', 'vs', 1, 18.0, 4.0, 35.0, 0],
-        ['pure seduction mini nabor', 'vs', 1, 6.2, 4.0, 20.0, 0],
-        ['love spell mini nabor', 'vs', 1, 6.2, 4.0, 20.0, 0],
-        ['raskladnoy vs nadpis kosmetichka', 'vs', 1, 20.6, 5.5, 45.0, 0],
-        ['qora 4 pcs kosmeticka', 'vs', 1, 27.0, 5.0, 55.0, 0],
-        ['qora angel 2 pcs kosmeticka', 'vs', 3, 14.1, 2.0, 35.0, 0],
-        ['oq qizil poloska pijama s dlinnim rukavom', 'vs', 2, 30.0, 4.0, 70.0, 0],
-        ['rozoviy qizil poloska pijama s dlinnim rukavom', 'vs', 2, 28.7, 4.6, 70.0, 0],
-        ['zelyonaya pijama s dlinnim rukavom', 'vs', 1, 27.5, 5.2, 70.0, 0],
-        ['qizil futbolkali pijama', 'vs', 1, 33.8, 3.0, 65.0, 0],
-        ['oq futbolkali pijama', 'vs', 2, 20.4, 5.0, 70.0, 0],
-        ['oq vs nadpis s dlinnim rukavom pijama', 'vs', 1, 33.8, 5.0, 70.0, 0],
-        ['rozoviy poloska s dlinnim rukavom pijama', 'vs', 2, 33.8, 5.0, 70.0, 0],
-        ['qizil longsleevel pijama', 'vs', 1, 13.4, 5.0, 50.0, 0],
-        ['goluvoy futbolka shortinli pijama', 'vs', 1, 28.3, 3.0, 50.0, 0],
-        ['qizil odamchali s dlinnim rukavom pijama', 'vs', 1, 20.6, 5.0, 70.0, 0],
-        ['qizil poloskali pijama s dlinnim rukavom', 'vs', 1, 20.6, 5.0, 70.0, 0],
-        ['rozoviy obtyashka s dlinnim rukavom pijama', 'vs', 2, 24.3, 5.5, 65.0, 0],
-        ['qizil banniy xalat', 'vs', 1, 17.1, 9.0, 70.0, 55.0],
-        ['oq pink tapochka', 'vs', 1, 18.8, 4.5, 45.0, 0],
-        ['rozoviy pink tapochka', 'vs', 2, 14.5, 3.5, 45.0, 0],
-        ['rozoviy vs tapochka', 'vs', 2, 17.9, 4.0, 45.0, 0],
-        ['qizil tapochka', 'vs', 3, 18.1, 4.3, 45.0, 0],
-        ['oq teddy sumka', 'vs', 1, 0.0, 4.0, 65.0, 35.0],
-        ['leopardoviy strazali trusi', 'vs', 3, 5.0, 1.0, 120000.0, 0],
-        ['siniy trusi', 'vs', 1, 3.8, 0.5, 10.5, 0],
-        ['gryazno rozoviy trusi', 'vs', 1, 3.8, 0.5, 10.5, 66.0],
-        ['qora bakali trusi', 'vs', 1, 3.8, 0.5, 10.5, 0],
-        ['fioletoviy trusi', 'vs', 1, 3.8, 0.5, 10.5, 0],
-        ['oq strazali trusi', 'vs', 1, 5.0, 1.0, 14.5, 120000.0],
-        ['rozoviy strazali trusi', 'vs', 1, 5.0, 1.0, 14.5, 120000.0],
-        ['rozoviy poloskali trusi', 'vs', 1, 3.8, 0.5, 10.5, 0],
-        ['fioletoviy vishnyali trusi', 'vs', 2, 3.8, 0.5, 10.5, 0],
-        ['5 pack logo cotton Hip huger pantie L', 'vs', 1, 15.0, 3.0, 28.0, 35.0],
-        ['5 pack logo cotton Hip huger pantie M', 'vs', 1, 15.0, 3.0, 28.0, 35.0],
-        ['5 pack seamless high leg M', 'vs', 1, 15.0, 3.0, 28.0, 35.0],
-        ['5 pack seamless high leg L', 'vs', 1, 15.0, 3.0, 28.0, 35.0],
-        ['5 pack qizil stringi S', 'vs', 1, 13.5, 1.5, 28.0, 35.0],
-        ['5 pack qizil stringi M', 'vs', 1, 13.5, 1.5, 28.0, 35.0],
-        ['5 pack goluboy stringi S', 'vs', 1, 16.6, 3.0, 28.0, 35.0],
-        ['5 pack goluboy stringi M', 'vs', 1, 16.6, 3.0, 28.0, 35.0],
-        ['5 pack cvetochkali S', 'vs', 1, 16.6, 3.0, 28.0, 35.0],
-        ['love spell joy shimmer mist', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['love spell joy lotion', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['pear glace mist', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['pear glace lotion', 'vs', 1, 4.3, 3.0, 20.0, 210000.0],
-        ['velvet petals joy shimmer mist', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['velvet petals joy lotion', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['seaside surf mist', 'vs', 1, 4.3, 3.0, 20.0, 210000.0],
-        ['seaside surf lotion', 'vs', 1, 4.3, 3.0, 20.0, 210000.0],
-        ['midnight bloom mist', 'vs', 1, 7.1, 3.0, 20.0, 210000.0],
-        ['midnight blom lotion', 'vs', 1, 7.1, 3.0, 20.0, 210000.0],
-        ['hibiscus mist', 'vs', 1, 4.8, 4.0, 23.0, 230000.0],
-        ['hibiscus lotion', 'vs', 1, 4.8, 4.0, 23.0, 230000.0],
-        ['bomshell midnight mist', 'vs', 1, 8.7, 4.0, 25.0, 310000.0],
-        ['bomshell midnight lotion', 'vs', 1, 8.7, 4.0, 25.0, 310000.0],
-        ['bomshell mist', 'vs', 2, 10.4, 3.5, 25.0, 310000.0],
-        ['mango templation mist', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['mango templation lotion', 'vs', 1, 4.8, 3.0, 20.0, 210000.0],
-        ['vanilla orchid feel comfor mist', 'vs', 1, 10.0, 3.0, 23.0, 230000.0],
-        ['vanilla orchid feel comfort body wash', 'vs', 1, 10.0, 3.0, 23.0, 230000.0],
-        ['velvet petals lotion', 'vs', 1, 5.0, 3.0, 20.0, 210000.0],
-        ['velvet petals body wash', 'vs', 1, 6.0, 4.0, 20.0, 230000.0],
-        ['daring mist', 'vs', 1, 8.5, 3.5, 25.0, 310000.0],
-        ['daring lotion', 'vs', 1, 8.5, 3.5, 25.0, 310000.0],
-        ['bomshell soiree mist', 'vs', 1, 6.8, 3.0, 25.0, 310000.0],
-        ['lotus mist', 'vs', 1, 5.5, 3.7, 20.0, 210000.0],
-        ['lotus skrab', 'vs', 1, 6.0, 3.0, 20.0, 0],
-        ['lavander lotion', 'vs', 1, 7.0, 3.0, 20.0, 210000.0],
-        ['lavander body wash', 'vs', 1, 5.3, 3.0, 20.0, 210000.0],
-        ['Coastal bliss lotion', 'vs', 2, 4.3, 3.0, 20.0, 210000.0],
-        ['cocunt milk & rose lotion', 'vs', 1, 7.0, 3.0, 20.0, 210000.0],
-        ['macadamia lotion', 'vs', 1, 7.0, 3.0, 20.0, 210000.0],
-        ['Bomshell amalfi lotion', 'vs', 2, 6.3, 3.3, 25.0, 310000.0],
-        ['pure seduction daydream lotion', 'vs', 1, 5.9, 3.0, 20.0, 210000.0],
-        ['velvet petals daydream lotion', 'vs', 1, 5.9, 3.0, 20.0, 210000.0],
-        ['Vibrant breeze lotion', 'vs', 1, 4.3, 3.0, 20.0, 210000.0],
-        ['Island rush lotion', 'vs', 1, 4.3, 3.0, 20.0, 210000.0],
-        ['nectar pulse mist', 'vs', 1, 6.0, 3.0, 20.0, 210000.0],
-        ['cucumber body wash', 'vs', 1, 6.0, 4.0, 20.0, 0],
-        ['almond blossom body wash', 'vs', 2, 4.0, 3.0, 20.0, 0],
-        ['intimate wash', 'vs', 1, 5.6, 2.0, 15.0, 0],
-        ['coco chill mini scrub', 'vs', 1, 3.0, 2.0, 10.0, 0],
-        ['pineapple scrub', 'vs', 1, 7.0, 4.0, 20.0, 235000.0],
-        ['merry pom butter', 'vs', 1, 5.5, 2.0, 20.0, 180000.0],
-        ['supper berry scrub', 'vs', 1, 5.1, 5.0, 20.0, 0],
-        ['coco passion butter', 'vs', 1, 4.3, 3.0, 20.0, 0],
-        // cht
-        ['collagen blesk i karandash nabor pillow talk', 'cht', 2, 18.8, 2.0, 25.0, 470000.0],
-        ['collagen blesk i karandash nabor pillow talk medium', 'cht', 2, 18.8, 2.0, 25.0, 470000.0],
-        ['Konfetka rozoviy', 'cht', 3, 30.0, 2.0, 35.0, 0],
-        ['Kollagen trio blesk nabor', 'cht', 2, 15.0, 2.0, 25.0, 0],
-        ['Umivalka & krem nabor', 'cht', 1, 23.8, 2.0, 34.0, 0],
-        ['Magic cream 15 ml', 'cht', 2, 15.0, 1.0, 32.0, 0],
-        ['Magic water cream 30 ml', 'cht', 4, 32.5, 2.0, 69.0, 0],
-        ['Lip nabor 4 pcs pillow talk', 'cht', 1, 37.8, 3.0, 54.0, 0],
-        ['Lip nabor 4 pcs pillow talk medium', 'cht', 1, 37.8, 3.0, 54.0, 0],
-        ['Pillow talk nabor eye set', 'cht', 1, 36.0, 1.0, 59.0, 0],
-        ['Fiksator zolotisty nabor', 'cht', 1, 44.0, 3.5, 54.0, 0],
-        ['Fiksator nabor 34 ml', 'cht', 1, 24.0, 3.0, 32.0, 0],
-        ['Fiksator 34 ml', 'cht', 1, 12.0, 1.5, 25.0, 0],
-        ['Super star nabor', 'cht', 2, 23.2, 2.0, 32.0, 0],
-        ['Umivalka 124 ml', 'cht', 1, 15.0, 2.0, 32.0, 0],
-        ['Matte liquid blush', 'cht', 3, 22.1, 1.0, 42.0, 0],
-        ['Blush highlighter 2 in 1', 'cht', 2, 22.1, 1.0, 42.0, 0],
-        ['Highlighter liqiuid', 'cht', 4, 22.1, 1.0, 42.0, 0],
-        ['contourwand', 'cht', 4, 22.1, 1.0, 42.0, 0],
-        ['super star mascara', 'cht', 3, 15.0, 1.0, 29.0, 0],
-        ['push up lashes mascara', 'cht', 3, 15.0, 1.0, 29.0, 0],
-        ['liquid matte lipstick', 'cht', 3, 0.0, 2.0, 37.0, 0],
-        ['collagen blesk & lip liner nabor', 'cht', 2, 0.0, 2.0, 25.0, 0],
-        ['hyaluronic balm', 'cht', 3, 8.8, 1.0, 35.0, 0],
-        ['blush stick', 'cht', 1, 0.0, 2.0, 44.0, 0],
-        ['bronzer', 'cht', 1, 29.0, 2.0, 50.0, 0],
-        ['love pallete', 'cht', 2, 34.5, 3.0, 69.0, 0],
-        ['suxoy highlighter', 'cht', 4, 0.0, 2.0, 50.0, 0],
-        ['powder', 'cht', 4, 28.4, 2.0, 49.0, 0],
-        ['blush & highlighter pallete', 'cht', 1, 14.5, 1.0, 29.0, 0],
-        ['pigment', 'cht', 1, 17.0, 1.0, 34.0, 0],
-        ['eyeshadow pallete pillow talk', 'cht', 2, 27.5, 2.0, 58.0, 0],
-        ['eyeshadow pallete bella sofia', 'cht', 3, 0.0, 2.0, 58.0, 0],
-        ['eyes to mesmerise', 'cht', 4, 20.3, 1.0, 35.0, 0],
-        ['rozvaya kosmetichka', 'cht', 3, 7.9, 3.0, 45.0, 0],
-        // Onesize
-        ['mini fixing spray', 'Onesize', 3, 14.4, 1.0, 18.0, 0],
-        ['fixing spray', 'Onesize', 3, 27.2, 1.5, 34.0, 0],
-        ['powder duo set', 'Onesize', 1, 25.0, 2.0, 38.0, 0],
-        ['Lip liner', 'Onesize', 1, 14.0, 1.0, 14.0, 19.0],
-        // Gisou
-        ['Hair oil & blesk set', 'Gisou', 2, 31.2, 2.5, 36.0, 0],
-        ['Blesk', 'Gisou', 7, 14.9, 1.5, 28.0, 0],
-        ['Kotta set 4 tali', 'Gisou', 3, 69.0, 8.0, 75.0, 0],
-        // lancome
-        ['lancome boks', 'lancome', 1, 84.0, 22.0, 89.0, 140.0],
-        // beauty creations
-        ['mini rozovie teni', 'beauty creations', 2, 8.8, 2.0, 10.0, 0],
-        ['mini nyud teni', 'beauty creations', 2, 8.8, 2.0, 10.0, 0],
-        ['mini persikoviy teni', 'beauty creations', 2, 8.8, 2.0, 10.0, 0],
-        ['lip liner set', 'beauty creations', 1, 0.0, 4.5, 20.0, 0],
-        // hourglass
-        ['konsiler', 'hourglass', 4, 30.4, 1.0, 38.0, 0],
-        ['powder', 'hourglass', 1, 41.6, 2.0, 52.0, 0],
-        // make up by mario
-        ['nature pallete', 'make up by mario', 6, 51.0, 2.0, 69.0, 0],
-        ['nude pallete', 'make up by mario', 1, 42.0, 2.0, 56.0, 0],
-        ['cream blush', 'make up by mario', 1, 0.0, 2.0, 34.0, 0],
-        ['blush & contour set', 'make up by mario', 1, 24.0, 1.0, 30.0, 0],
-        ['lip balm', 'make up by mario', 4, 14.5, 1.0, 26.0, 0],
-        // huda beauty
-        ['fixing spray', 'huda beauty', 4, 19.8, 2.0, 31.0, 0],
-        ['creamy eyeshadow', 'huda beauty', 1, 0.0, 2.0, 0.0, 0],
-        ['pressed powder', 'huda beauty', 4, 15.2, 2.0, 40.0, 0],
-        ['powder', 'huda beauty', 3, 33.2, 3.0, 39.0, 0],
-        // fenty
-        ['mini eyeshadow', 'fenty', 2, 15.0, 2.0, 30.0, 0],
-        ['fenty mini set', 'fenty', 2, 31.8, 2.5, 35.0, 42.0],
-        ['foundation', 'fenty', 1, 20.0, 2.0, 40.0, 0],
-        // natasha denona
-        ['nude pallete', 'natasha denona', 1, 58.7, 4.0, 69.0, 0],
-        ['retro pallete', 'natasha denona', 1, 43.8, 5.0, 69.0, 0],
-        // nars
-        ['mini blush & blesk', 'nars', 3, 24.0, 3.0, 30.0, 0],
-        ['luqiud blush & blesk', 'nars', 1, 25.6, 2.0, 32.0, 0],
-        ['concelear', 'nars', 1, 25.6, 1.0, 32.0, 0],
-        // dior
-        ['highlighter', 'dior', 1, 43.2, 2.0, 54.0, 0],
-        // patrick ta
-        ['blush', 'patrick ta', 1, 30.4, 1.0, 38.0, 0],
-        // anastasia beverly hills
-        ['mini eyeshadow & mascara', 'anastasia beverly hills', 1, 24.7, 3.0, 38.0, 0],
-        ['stick blush & blesk', 'anastasia beverly hills', 1, 20.4, 2.0, 34.0, 0],
-        // laura mercier
-        ['mini set powder & stick eyeshadow', 'laura mercier', 2, 21.0, 1.0, 30.0, 0],
-        ['powder rozoviy krishka', 'laura mercier', 1, 33.6, 2.0, 48.0, 0],
-        ['powder qora krishka', 'laura mercier', 1, 30.1, 2.0, 43.0, 0],
-        ['powder set', 'laura mercier', 1, 30.1, 5.4, 43.0, 0],
-        ['blush & stick set', 'laura mercier', 1, 33.0, 2.0, 37.0, 0],
-        // lancome
-        ['mascara set', 'lancome', 1, 24.0, 3.0, 30.0, 0],
-        // ysl
-        ['mascara duo', 'ysl', 2, 40.6, 2.0, 46.0, 0],
-        ['parfume libre duo set', 'ysl', 1, 31.0, 3.0, 40.0, 0],
-        ['parfume libre gift set', 'ysl', 2, 83.2, 5.5, 115.0, 0],
-        // too faced
-        ['chocolate pallete', 'too faced', 1, 15.2, 3.0, 54.0, 0],
-        ['contour stick', 'too faced', 1, 17.5, 2.0, 35.0, 0],
-        // grande mascara
-        ['mascara set', 'grande mascara', 1, 17.7, 2.0, 23.0, 0],
-        // pat magrat
-        ['blesk duo', 'pat magrat', 1, 17.6, 1.0, 29.0, 0],
-        // urban decay
-        ['mini fixing duo', 'urban decay', 2, 19.4, 2.0, 25.0, 0],
-        ['fixing spray', 'urban decay', 1, 27.2, 2.0, 34.0, 0],
-        // tarte
-        ['juicy pallete', 'tarte', 1, 20.0, 3.0, 49.0, 0],
-        ['trippinwithtarte pallete', 'tarte', 1, 31.8, 2.0, 49.0, 0],
-        ['in bloom pallete', 'tarte', 1, 31.8, 5.4, 49.0, 0],
-        ['matte pallete', 'tarte', 1, 31.8, 4.5, 49.0, 0],
-        ['plumper & lip liner set', 'tarte', 3, 20.2, 1.0, 27.0, 0],
-        ['plumper set of 5', 'tarte', 1, 31.8, 2.0, 49.0, 0],
-        ['tarte big set of 2', 'tarte', 3, 46.2, 4.0, 59.0, 0],
-        ['plumper big set', 'tarte', 1, 79.2, 6.0, 99.0, 0],
-        ['bej eyeliner', 'tarte', 1, 9.0, 1.0, 22.0, 0],
-        ['plumper', 'tarte', 1, 9.5, 0.0, 27.0, 0],
-        ['bronzer', 'tarte', 1, 16.0, 1.0, 32.0, 0],
-        ['blush', 'tarte', 1, 15.0, 1.0, 30.0, 0],
-        // sephora
-        ['brush22', 'sephora', 1, 15.2, 1.0, 19.0, 0],
-        ['brush 57', 'sephora', 1, 19.2, 1.0, 24.0, 0],
-        ['brush 27', 'sephora', 1, 18.4, 1.0, 23.0, 0],
-        ['brush 64', 'sephora', 1, 28.0, 1.0, 35.0, 0],
-        ['blush & brush set', 'sephora', 1, 23.2, 2.0, 29.0, 0],
-        // sheglam
-        ['blesk', 'sheglam', 2, 5.0, 1.0, 5.5, 0],
-        ['liquid contour', 'sheglam', 1, 5.0, 1.0, 5.5, 0],
-        // makeup forever
-        ['pressed powder', 'makeup forever', 2, 36.0, 2.0, 45.0, 0],
-        // caudalie
-        ['mini clay mask', 'caudalie', 2, 17.6, 1.0, 22.0, 0],
-        // rhode
-        ['blush', 'rhode', 3, 21.6, 2.0, 25.0, 0],
-        // rare beauty
-        ['mist', 'rare beauty', 4, 14.0, 2.5, 28.0, 0],
-        ['lotion', 'rare beauty', 4, 14.0, 4.0, 28.0, 0],
-        ['blush', 'rare beauty', 3, 20.0, 2.0, 25.0, 0],
-        ['liquid highlighter', 'rare beauty', 1, 23.0, 2.0, 27.0, 0],
-        ['liquid contour', 'rare beauty', 1, 23.8, 2.0, 28.0, 0],
-        ['lip oil', 'rare beauty', 1, 15.4, 1.0, 22.0, 0],
-        ['eyeshadow stick', 'rare beauty', 1, 11.0, 1.0, 22.0, 0],
-        ['blush mini trio set', 'rare beauty', 1, 28.8, 3.0, 36.0, 0],
-        ['blush & parfume set', 'rare beauty', 1, 24.0, 2.0, 30.0, 0],
-        // sephora favorites
-        ['mascara set', 'sephora favorites', 1, 23.8, 1.0, 28.0, 0],
-        // clinique
-        ['mini cream duo set', 'clinique', 2, 14.0, 2.0, 14.0, 0],
-        ['rozovaya kosmetichka nabor', 'clinique', 1, 0.0, 3.0, 0.0, 0],
-        ['black honey', 'clinique', 2, 18.8, 1.0, 20.0, 0],
-        ['mosturizing lotion125 ml', 'clinique', 2, 17.0, 3.0, 34.0, 0],
-        ['4 pcs eye liner', 'clinique', 4, 19.0, 2.0, 45.0, 0],
-        ['mini black honey & mascara set', 'clinique', 4, 9.8, 2.0, 20.0, 0],
-        ['clinique 5 pcs gift set', 'clinique', 1, 0.0, 2.0, 65.0, 0],
-        ['moisturise surge 30 ml', 'clinique', 1, 25.5, 1.0, 30.0, 0],
-        ['moisturise surge 30 ml bez korobki', 'clinique', 1, 0.0, 1.0, 30.0, 0],
-        ['moisturise surge 50 ml', 'clinique', 1, 40.0, 2.0, 48.0, 0],
-        ['all about eyes 15ml', 'clinique', 1, 42.0, 2.0, 42.0, 0],
-        ['light reflecting primer', 'clinique', 1, 0.0, 1.0, 40.0, 0],
-        ['wrinkle correcting cream 5 ml', 'clinique', 1, 0.0, 1.0, 0.0, 0],
-        ['mascara & lipstick', 'clinique', 1, 12.8, 1.0, 0.0, 0],
-        ['mascara & blesk', 'clinique', 1, 12.8, 1.0, 0.0, 0],
-        // bbw
-        ['in the stars gift set', 'bbw', 1, 0.0, 2.0, 16.0, 0],
-        ['mini gingham rozovy mist', 'bbw', 1, 3.0, 2.0, 9.0, 0],
-        ['gingham rozovly mist', 'bbw', 2, 6.0, 3.0, 19.0, 0],
-        ['gingham rozovly body cream', 'bbw', 2, 6.0, 3.0, 19.0, 0],
-        ['gingham mist', 'bbw', 2, 6.0, 3.0, 19.0, 0],
-        ['gingham body cream', 'bbw', 2, 6.0, 3.0, 19.0, 0],
-        ['japanese cherry blossom mist', 'bbw', 2, 6.0, 3.0, 19.0, 0],
-        ['japanese ccherry blossom butter', 'bbw', 1, 4.5, 3.0, 21.0, 0],
-        ['you are the one mist', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['you are the once body cream', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['thousand wishesw mist', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['thousand wishes body cream', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['pure wonderlotion', 'bbw', 2, 6.0, 3.0, 19.0, 0],
-        ['pure wonder body wash', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['butterfly body cream', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['in the stars body cream', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['white jasmine mist', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['champange body wash', 'bbw', 1, 6.0, 3.0, 19.0, 0],
-        ['into the night body butter', 'bbw', 1, 4.5, 3.0, 21.0, 0],
-        // sol ded janerio
-        ['4 tali kotta 62 nabor', 'sol ded janerio', 2, 48.0, 18.0, 69.0, 0],
-        ['3 tali kotta 40 nabor', 'sol ded janerio', 1, 34.0, 14.7, 0.0, 0],
-        ['mini 62 nabor', 'sol ded janerio', 1, 27.2, 2.0, 34.0, 0],
-        ['mini 5 mists nabor', 'sol ded janerio', 1, 31.2, 5.0, 39.0, 0],
-        ['butter 62 500ml', 'sol ded janerio', 1, 62.4, 10.0, 85.0, 0],
-        // fresh
-        ['cleanser & cream set', 'fresh', 1, 20.0, 3.0, 33.0, 0],
-        ['toner, serum, cream set', 'fresh', 2, 42.3, 6.5, 59.0, 0],
-        // glow recipe
-        ['cream & serum set', 'glow recipe', 2, 33.6, 3.0, 42.0, 0],
-        // bobbi brown
-        ['mini trio set', 'bobbi brown', 2, 0.0, 1.0, 0.0, 0],
-        ['base 100 ml', 'bobbi brown', 1, 79.1, 4.0, 113.0, 0],
-        ['base 50 ml', 'bobbi brown', 1, 48.3, 2.0, 69.0, 0],
-        ['base 15 ml', 'bobbi brown', 1, 17.5, 1.0, 25.0, 0],
-        ['face cream 50 ml', 'bobbi brown', 1, 0.0, 1.0, 69.0, 0],
-        ['set of two base 50 ml', 'bobbi brown', 2, 69.7, 4.0, 82.0, 0],
-        // khiels
-        ['mini set', 'khiels', 1, 0.0, 2.0, 0.0, 0],
-        ['duo cream set', 'khiels', 1, 31.2, 3.0, 39.0, 0],
-        // jessup
-        ['persikoviy 14 in 7 kisti', 'jessup', 1, 36.5, 2.0, 45.7, 0],
-        ['goluboy 14 in 10 kisti', 'jessup', 1, 38.1, 2.0, 44.9, 0],
-        ['goluboy 10 in 6 kisti', 'jessup', 1, 26.1, 2.0, 34.8, 0],
-        ['goluboy 5 in 3 kisti', 'jessup', 1, 20.0, 2.0, 26.6, 0],
-        ['chernie kisti', 'jessup', 1, 21.6, 3.0, 24.6, 0],
+        ['concelear double wear', 'esteelauder', 3, 19, 1, 38, 40, '1N, 2W, 2C'],
+        ['beautiful magnolia 3 tali atir nabor', 'esteelauder', 2, 89.12, 9, 112, 120, '7556493050'],
+        ['mini 4 tali gift nabor', 'esteelauder', 1, 28.39, 5.5, 48, 55, '98$ value'],
+        ['Косметичка набор ок синий', 'esteelauder', 1, 0, 3, 0, 40, '7364004131'],
+        ['futurist foundation', 'esteelauder', 1, 55, 2, 55, 57, '2n1'],
+        ['double wear foundation', 'esteelauder', 1, 44.2, 2, 52, 55, '1n2'],
+        ['futurist base', 'esteelauder', 1, 23, 1, 46, 50, null],
+        ['nutritious lotion 100 ml', 'esteelauder', 1, 24, 4, 39, 39, null],
+        ['soft clean cleanser', 'esteelauder', 2, 0, 2, 32, 35, null],
+        ['double wear foundation pump', 'esteelauder', 1, 7, 1.5, 10, 12, null],
+        ['day wear cream + advanced night repair 15ml each set', 'esteelauder', 2, 0, 2, 0, 24, null],
+        ['multi effect cream + advanced night repair 15 ml each set', 'esteelauder', 1, 0, 2, 0, 24, null],
+        ['revitalising supreme cream + advanced night repair 15 ml each set', 'esteelauder', 1, 0, 2, 0, 24, null],
+        ['glow fixing spray', 'urban decay', 1, 17, 2, 34, 41, null],
+        ['natural fixing spray mini', 'urban decay', 1, 10, 1, 18, 23, null],
+        ['nude pallete', 'natasha denona', 1, 58.65, 4, 69, 77, null],
+        ['face pallete', 'natasha denona', 3, 30, 2, 62, 47, null],
+        ['contour stick', 'too faced', 1, 17.5, 2, 35, 25, 'chocolate mousse'],
+        ['blush duo set', 'too faced', 3, 12, 2, 42, 25, null],
+        ['cloudberry cream', 'glow recipe', 2, 15, 2, 42, 35, null],
+        ['night cream', 'glow recipe', 1, 9, 2, 20, 20, null],
+        ['watermelon lotion', 'glow recipe', 2, 15, 2, 42, 35, null],
+        ['spf', 'glow recipe', 3, 12.5, 2, 35, 30, null],
+        ['cream & serum set', 'glow recipe', 2, 33.6, 3, 42, 0, null],
+        ['highlighter', 'make up by mario', 2, 15, 2, 34, 25, 'pearl'],
+        ['original pallete', 'make up by mario', 1, 55.2, 2, 69, 77, null],
+        ['cream blush', 'make up by mario', 1, 0, 2, 34, 30, 'barely blushing'],
+        ['lip balm', 'make up by mario', 4, 14.5, 1, 26, 24, 'blush glow 2sht, cinamon glow 2 sht'],
+        ['cleanser & cream set', 'fresh', 1, 20, 3, 33, 40, null],
+        ['toner', 'rhode', 2, 25.6, 3, 32, 40, null],
+        ['mini toner', 'rhode', 1, 16, 2, 20, 27, null],
+        ['blush', 'rhode', 4, 21, 2, 25, 32, 'toasted teddy 2 ta, tan line, sleepy girl'],
+        ['mini clay mask', 'caudalie', 2, 17.6, 1, 22, 0, null],
+        ['Blesk', 'Gisou', 7, 14.9, 1.5, 28, 0, 'Honey gold, watermelon sugar 3sht., raspberry glow, glazed plum, peach'],
+        ['Kotta set 4 tali', 'Gisou', 2, 69, 8, 75, 0, null],
+        ['set of two base 50 ml', 'bobbi brown', 2, 69.7, 4, 82, 0, '36.85$ bittasi'],
+        ['base 100 ml', 'bobbi brown', 1, 79.1, 4, 113, 0, null],
+        ['mini trio set', 'bobbi brown', 2, 0, 1, 0, 0, null],
+        ['base 50 ml', 'bobbi brown', 1, 48.3, 2, 69, 0, null],
+        ['base 15 ml', 'bobbi brown', 1, 17.5, 1, 25, 0, null],
+        ['face cream 50 ml', 'bobbi brown', 1, 0, 1, 69, 0, null],
+        ['4 tali kotta 62 nabor', 'sol ded janerio', 2, 48, 18, 69, 0, null],
+        ['3 tali kotta 40 nabor', 'sol ded janerio', 1, 34, 14.65, 0, 0, null],
+        ['sumochkali 62 nabor', 'sol ded janerio', 1, 29.4, 7, 49, 0, null],
+        ['butter 62 500ml', 'sol ded janerio', 1, 62.4, 10, 85, 0, null],
+        ['lotion 62 400 ml', 'sol ded janerio', 1, 16, 6.6, 28, 0, null],
+        ['dedozorant 40', 'sol ded janerio', 1, 16.2, 2, 18, 0, null],
+        ['dedozorant 59', 'sol ded janerio', 1, 16.2, 2, 18, 0, null],
+        ['mini nabor 62', 'sol ded janerio', 4, 20.4, 5, 34, 0, null],
+        ['mini nabor 59', 'sol ded janerio', 1, 20.4, 5, 34, 0, null],
+        ['mini nabor 40', 'sol ded janerio', 1, 20.4, 5, 34, 0, null],
+        ['mini mist 62', 'sol ded janerio', 1, 18.2, 2, 26, 0, null],
+        ['mini mist 68', 'sol ded janerio', 2, 18.2, 2, 26, 0, null],
+        ['mini mist 76', 'sol ded janerio', 1, 18.2, 2, 26, 0, null],
+        ['mini mist 40', 'sol ded janerio', 1, 18.2, 2, 26, 0, null],
+        ['kotta mist 62', 'sol ded janerio', 3, 22.1, 4, 39, 0, null],
+        ['kotta mist 68', 'sol ded janerio', 1, 27.3, 4, 39, 0, null],
+        ['neroli dedozorant', 'salt and stone', 1, 18, 2, 20, 0, null],
+        ['bergamot', 'salt and stone', 1, 18, 2, 20, 0, null],
+        ['santal', 'salt and stone', 1, 18, 2, 20, 0, null],
+        ['concelear', 'hourglass', 6, 30.4, 1, 38, 0, '1, 1.3 , 1.8, 2, 2.5, 3.3'],
+        ['fixing spray', 'Onesize', 2, 27.2, 1.5, 34, 0, null],
+        ['powder duo set', 'Onesize', 1, 25, 2, 38, 0, null],
+        ['Lip liner', 'Onesize', 1, 14, 1, 14, 19, 'Shy but fly'],
+        ['mini fixing spray', 'Onesize', 2, 14.4, 1, 18, 0, null],
+        ['pressed powder', 'makeup forever', 1, 36, 2, 45, 0, '1n06, 1n10'],
+        ['hyaluronic foundation', 'makeup forever', 1, 34.3, 2, 49, 0, null],
+        ['hyaluronic foundation mini', 'makeup forever', 1, 16.1, 2, 23, 0, null],
+        ['concelear', 'makeup forever', 1, 8, 1, 33, 29, '2,1(Y)'],
+        ['powder', 'lys', 1, 12, 2, 26, 25, null],
+        ['uxodoviy nabor', 'kiehls', 1, 31.5, 5, 45, 0, null],
+        ['blesk', 'haus labs', 2, 18.2, 1, 26, 25, 'guava, cocoa'],
+        ['pomada', 'kosas', 1, 9, 1, 26, 17, 'high cut'],
+        ['full on blesk', 'buxom', 1, 9, 1, 26, 19, 'erin'],
+        ['plump shot blesk', 'buxom', 1, 10, 1, 19, 19, 'Spellbound Pink'],
+        ['blesk', 'laneige', 1, 17.6, 1, 22, 25, 'maple glaze'],
+        ['mascara set', 'grande mascara', 1, 17.68, 2, 23, 25, null],
+        ['sivorotka genefique 30 ml', 'lancome', 1, 0, 10, 65, 45, null],
+        ['mascara set', 'lancome', 1, 24, 3, 30, 35, null],
+        ['mascara idole', 'lancome', 2, 15, 2, 30, 30, null],
+        ['mini eyeshadow & mascara', 'anastasia beverly hills', 1, 24.7, 3, 38, 35, null],
+        ['stick blush & blesk', 'anastasia beverly hills', 1, 20.4, 2, 34, 30, null],
+        ['glow foundation', 'saie', 1, 28, 2, 40, 35, '1'],
+        ['mini eyeshadow', 'fenty', 1, 15, 2, 30, 24, '1 nature'],
+        ['foundation', 'fenty', 1, 20, 2, 40, 37, '150'],
+        ['concelear mini', 'fenty', 1, 10, 1, 16, 16, '120N'],
+        ['pomada', 'fenty', 3, 13, 1, 27, 30, 'hibiscus, fenty glow, it\'s fussy'],
+        ['Blesk', 'fenty', 1, 10, 1, 26, 20, 'Melon Chillz'],
+        ['skin glow forever', 'dior', 2, 48, 2, 60, 67, '1N, 1,5N'],
+        ['backstage eyeshadow 001', 'dior', 1, 44, 2, 55, 65, null],
+        ['backstage eyeshadow 002', 'dior', 1, 44, 2, 55, 65, null],
+        ['bardovaya sumochka brelok', 'vs', 1, 9.87, 2, 25, 20, null],
+        ['vs strazali brelok', 'vs', 1, 11.39, 2, 25, 25, null],
+        ['bomshell atir 50ml', 'vs', 1, 20.1, 5, 60, 60, 'W151076965'],
+        ['tease atir 50 ml', 'vs', 1, 25.97, 5, 60, 60, 'W148588193'],
+        ['very sexy orchid atir100 ml', 'vs', 1, 27.49, 7.6, 80, 70, 'W155830271'],
+        ['bomshell wild flower 50 ml', 'vs', 2, 15.06, 5, 80, 70, null],
+        ['bomshell soiree atir 50 ml', 'vs', 1, 20.37, 5, 60, 60, null],
+        ['bomshell boquet 50 ml', 'vs', 3, 19.2, 5, 60, 60, null],
+        ['bomshell amalfi atir 50 ml', 'vs', 1, 20.55, 5.5, 60, 60, null],
+        ['bomshell midnight atir 7 ml', 'vs', 1, 8.32, 2, 20, 17, null],
+        ['bomshell amalfi atir 7 ml', 'vs', 1, 8.32, 2, 20, 17, null],
+        ['bomshell bronze atir 7 ml', 'vs', 1, 7.58, 2, 20, 17, null],
+        ['bomshell soiree aitr 7 ml', 'vs', 1, 8.07, 2, 20, 17, null],
+        ['bomshell boquet 7 ml', 'vs', 3, 9.9, 2, 20, 17, null],
+        ['bomshell seduction 7ml', 'vs', 1, 9.9, 2, 20, 17, null],
+        ['bomshell 7ml', 'vs', 1, 9.97, 2, 20, 17, null],
+        ['blesk nabor', 'vs', 2, 9.44, 3, 25, 24, null],
+        ['3 tali svechka nabor', 'vs', 1, 15.11, 5, 40, 40, null],
+        ['peach mango 4 tali nabor', 'vs', 1, 14.76, 10.5, 40, 50, null],
+        ['3 tali kokos nabor', 'vs', 1, 9.73, 4, 35, 39, null],
+        ['3 tali klubnika nabor', 'vs', 1, 9.73, 4, 35, 39, null],
+        ['3 tali vanila nabor', 'vs', 1, 12.92, 7.14, 35, 39, null],
+        ['atir nabor 3 tali tease', 'vs', 1, 42.5, 13, 85, 80, 'W151997804'],
+        ['atir nabor kotta korobka 3 tali tease', 'vs', 1, 30, 14.76, 85, 80, null],
+        ['hibiscus 3 tali mini nabor', 'vs', 2, 24.1, 5, 20, 35, null],
+        ['4 tali mist nabor shimmer', 'vs', 1, 12.22, 8, 35, 37, null],
+        ['4 tali mist nabor', 'vs', 1, 10.53, 8, 35, 37, null],
+        ['4 tali mist nabor organic', 'vs', 1, 12.05, 5, 38, 38, null],
+        ['bomshell parfume & lotion nabor', 'vs', 2, 13.28, 3.5, 38, 35, null],
+        ['tease parfume & lotion nabor', 'vs', 1, 18.5, 4, 38, 35, null],
+        ['bare parfume & lotion nabor', 'vs', 1, 18.5, 4, 38, 35, null],
+        ['qora 4 pcs kosmeticka', 'vs', 1, 27, 5, 55, 52, null],
+        ['qora angel 2 pcs kosmeticka', 'vs', 1, 14.1, 2, 35, 31.5, null],
+        ['oq bride kosmetichka', 'vs', 1, 16.91, 3, 40, 35, null],
+        ['rozoviy poloska kosmetichka', 'vs', 1, 19.03, 3, 45, 40, null],
+        ['oq qizil poloska pijama s dlinnim rukavom', 'vs', 2, 30, 4, 70, 55, 's regular, m regular'],
+        ['rozoviy qizil poloska pijama s dlinnim rukavom', 'vs', 2, 28.72, 4.58, 70, 55, 'm long, l regular'],
+        ['zelyonaya pijama s dlinnim rukavom', 'vs', 1, 27.45, 5.16, 70, 55, 'm short'],
+        ['qizil futbolkali pijama', 'vs', 1, 31.75, 5, 65, 55, 'm regular'],
+        ['oq futbolkali pijama', 'vs', 2, 20.38, 5, 70, 55, 'm regular, l regular'],
+        ['oq vs nadpis s dlinnim rukavom pijama', 'vs', 1, 33.75, 5, 70, 55, 's regular'],
+        ['rozoviy poloska s dlinnim rukavom pijama', 'vs', 2, 33.75, 5, 70, 55, 's regular, m regular'],
+        ['qizil longsleeveli pijama', 'vs', 1, 13.36, 5, 50, 55, 's regular'],
+        ['qizil odamchali s dlinnim rukavom pijama', 'vs', 1, 20.63, 5, 70, 55, 'm short'],
+        ['qizil poloskali pijama s dlinnim rukavom', 'vs', 1, 20.62, 5, 70, 55, 'm regular'],
+        ['rozoviy obtyashka s dlinnim rukavom pijama', 'vs', 2, 24.3, 5.5, 65, 55, 's short, m short'],
+        ['qizil banniy xalat', 'vs', 1, 17.08, 9, 70, 55, 'm/l'],
+        ['oq pink tapochka', 'vs', 1, 18.75, 4.5, 45, 35, 'm'],
+        ['rozoviy pink tapochka', 'vs', 1, 14.5, 3.5, 45, 35, 's'],
+        ['rozoviy vs tapochka', 'vs', 2, 17.86, 4, 45, 35, 'm, l'],
+        ['qizil tapochka', 'vs', 2, 18.12, 4.3, 45, 35, '2 ta M, 1 L'],
+        ['oq teddy sumka', 'vs', 1, 0, 4, 65, 35, null],
+        ['oq rozoviy poloska sumka', 'vs', 1, 0, 5, 65, 35, null],
+        ['5 pack logo cotton Hip huger pantie L', 'vs', 1, 15, 3, 28, 35, 'W152743832'],
+        ['5 pack logo cotton Hip huger pantie M', 'vs', 1, 15, 3, 28, 35, 'W152743832'],
+        ['5 pack seamless high leg M', 'vs', 1, 15, 3, 28, 35, 'W152743832'],
+        ['5 pack seamless high leg L', 'vs', 1, 15, 3, 28, 35, 'W152743832'],
+        ['5 pack qizil stringi S', 'vs', 1, 13.5, 1.5, 28, 35, null],
+        ['5 pack qizil stringi M', 'vs', 1, 13.5, 1.5, 28, 35, null],
+        ['5 pack goluboy stringi S', 'vs', 1, 16.62, 3, 28, 35, null],
+        ['5 pack goluboy stringi M', 'vs', 1, 16.62, 3, 28, 35, null],
+        ['tease mini mist', 'vs', 1, 4.27, 2, 15, 17.5, null],
+        ['love lotion', 'vs', 1, 5.85, 4, 25, 25, null],
+        ['bare rose lotion', 'vs', 1, 7.47, 4, 25, 25, null],
+        ['bare rose mist', 'vs', 1, 7.47, 4, 25, 25, null],
+        ['very sexy mist', 'vs', 2, 6.6, 4, 25, 25, null],
+        ['very sexy lotion', 'vs', 2, 6.6, 4, 25, 25, null],
+        ['bomshell mist', 'vs', 2, 10.43, 3.5, 25, 25, null],
+        ['bomshell lotion', 'vs', 1, 5.85, 4, 25, 25, null],
+        ['bomshell seduction lotion', 'vs', 1, 5.85, 4, 25, 25, null],
+        ['pure seduction lotion', 'vs', 1, 5.5, 4, 20, 25, null],
+        ['pure seduction mist', 'vs', 1, 5.5, 4, 20, 17, null],
+        ['love spell mist', 'vs', 1, 5.5, 4, 20, 17, null],
+        ['love spell lotion', 'vs', 1, 5.5, 4, 20, 17, null],
+        ['aqua kiss mist', 'vs', 1, 0, 4, 20, 17, null],
+        ['aqua kiss lotion', 'vs', 1, 0, 4, 20, 17, null],
+        ['love spell joy shimmer mist', 'vs', 1, 4.79, 3, 20, 17, null],
+        ['love spell joy lotion', 'vs', 1, 4.79, 3, 20, 17, null],
+        ['velvet petals joy shimmer mist', 'vs', 1, 4.79, 3, 20, 17, null],
+        ['velvet petals joy lotion', 'vs', 1, 4.79, 3, 20, 17, null],
+        ['seaside surf mist', 'vs', 1, 4.3, 3, 20, 17, null],
+        ['seaside surf lotion', 'vs', 1, 4.3, 3, 20, 17, null],
+        ['bomshell midnight mist', 'vs', 1, 8.65, 4, 25, 25, null],
+        ['bomshell midnight lotion', 'vs', 1, 8.65, 4, 25, 25, null],
+        ['mango templation mist', 'vs', 1, 4.79, 3, 20, 17, null],
+        ['mango templation lotion', 'vs', 1, 4.79, 3, 20, 17, null],
+        ['vanilla orchid feel comfor mist', 'vs', 1, 10.02, 3, 23, 19, null],
+        ['vanilla orchid feel comfort body wash', 'vs', 1, 10.02, 3, 23, 19, null],
+        ['vanilla orchid feel comfort lotion', 'vs', 1, 4.26, 5, 23, 19, null],
+        ['vanilla orchid shimmer oil', 'vs', 1, 4.3, 4, 23, 19, null],
+        ['velvet petals shimmer lotion', 'vs', 1, 5, 3, 20, 17, null],
+        ['velvet petals body wash', 'vs', 1, 5.99, 4, 20, 19, null],
+        ['daring mist', 'vs', 1, 8.5, 3.5, 25, 25, null],
+        ['daring lotion', 'vs', 1, 8.5, 3.5, 25, 25, null],
+        ['bomshell soiree mist', 'vs', 1, 6.79, 3, 25, 25, null],
+        ['lotus skrab', 'vs', 1, 6, 3, 20, 17, null],
+        ['Bomshell amalfi lotion', 'vs', 1, 6.31, 3.25, 25, 25, null],
+        ['Vibrant breeze lotion', 'vs', 1, 4.3, 3, 20, 17, null],
+        ['nectur pulse mist', 'vs', 1, 6, 3, 20, 17, null],
+        ['cucumber body wash', 'vs', 1, 6, 4, 20, 19, null],
+        ['sheer love mist', 'vs', 1, 0, 4, 20, 19, null],
+        ['cocount passion mist', 'vs', 1, 0, 5, 20, 17, null],
+        ['coco chill mini scrub', 'vs', 1, 3, 2, 10, 10, null],
+        ['pineapple highlighting body oil', 'vs', 2, 5.7, 3, 20, 17, null],
+        ['cocount highlighting doy oil', 'vs', 2, 5.7, 3, 20, 17, null],
+        ['collagen blesk i karandash nabor pillow talk medium', 'cht', 1, 18.75, 2, 25, 37, null],
+        ['Kollagen trio blesk nabor', 'cht', 1, 15, 2, 25, 35, null],
+        ['Magic cream 15 ml', 'cht', 2, 15, 1, 32, 32, null],
+        ['Magic water cream 30 ml', 'cht', 2, 32.5, 2, 69, 55, null],
+        ['Lip nabor 4 pcs pillow talk medium', 'cht', 1, 37.8, 3, 54, 57, null],
+        ['Fiksator 34 ml', 'cht', 1, 0, 1.5, 25, 27, null],
+        ['fiksator 100 ml', 'cht', 2, 39, 2, 39, 49, null],
+        ['icon baby set pomada blesk', 'cht', 1, 22.4, 3, 28, 35, null],
+        ['plumper lip set', 'cht', 3, 36.4, 3, 52, 68, null],
+        ['blesk peach', 'cht', 2, 0, 2, 26, 20, null],
+        ['primer spf', 'cht', 1, 0, 2, 55, 0, null],
+        ['exagger mascara', 'cht', 1, 29, 2, 29, 35, null],
+        ['exagger mascara mini', 'cht', 1, 0, 1, 16, 10, null],
+        ['pomada matte pillow talk', 'cht', 1, 25, 2, 32, 38, null],
+        ['yengi pomada pillow tak', 'cht', 1, 0, 2, 32, 32, null],
+        ['mini set pomada i karandash pillow talk', 'cht', 1, 20.8, 2, 26, 35, null],
+        ['blesk blondie', 'cht', 1, 0, 2, 28, 0, null],
+        ['collagen blesk refresh rose', 'cht', 1, 18.5, 2, 37, 0, null],
+        ['karandash dlya gub', 'cht', 3, 0, 1, 28, 0, 'pillow talk 2 ta, iconic nude'],
+        ['karandash dlya glaz', 'cht', 1, 0, 1, 28, 0, 'pillow talk'],
+        ['Matte liquid blush', 'cht', 2, 22.12, 1, 44, 0, 'Pillow talk, pink pop'],
+        ['Blush highlighter 2 in 1', 'cht', 1, 21, 2, 44, 0, 'Peachgasm'],
+        ['Highlighter liqiuid', 'cht', 4, 11, 2, 44, 0, 'Pillow talk 2 sht., spotlight 2'],
+        ['contourwand', 'cht', 1, 22.12, 1, 42, 0, 'Fair-medium'],
+        ['ledendary mascara', 'cht', 1, 14.5, 2, 29, 25, null],
+        ['super star mascara', 'cht', 2, 15, 1, 29, 25, null],
+        ['push up lashes mascara', 'cht', 3, 0, 2, 29, 35, '2 ta qora, 1 korichneviy'],
+        ['liquid matte lipstick', 'cht', 2, 0, 2, 37, 0, '2 ta pillow talk'],
+        ['suxoy blush', 'cht', 4, 16.5, 2, 43, 0, '2 ta pillow talk, first love, ecstasy'],
+        ['suxoy highlighter', 'cht', 2, 0, 2, 50, 0, 'pillow talk, moonlight glow'],
+        ['powder', 'cht', 2, 28.37, 2, 49, 0, 'oq'],
+        ['blush & highlighter pallete', 'cht', 1, 14.5, 1, 29, 0, 'tan to deep'],
+        ['pigment', 'cht', 1, 17, 1, 34, 0, 'diamond eyes, sunlit diamond'],
+        ['magic vanish', 'cht', 3, 18, 2, 36, 0, 'fair'],
+        ['eyeshadow pallete pillow talk', 'cht', 2, 31.9, 2, 58, 0, null],
+        ['eyeshadow the goodness', 'cht', 1, 31.9, 2, 58, 0, null],
+        ['eyes to mesmerise', 'cht', 7, 20.25, 1, 35, 0, '3 ta pillow talk, 1 champangne'],
+        ['rozvaya kosmetichka', 'cht', 1, 7.91, 3, 45, 0, null],
+        ['mini rozovie teni', 'beauty creations', 1, 8.78, 2, 10, 0, null],
+        ['mini nyud teni', 'beauty creations', 2, 8.78, 2, 10, 0, null],
+        ['powder', 'beauty creations', 1, 8, 2, 10, 16.2, null],
+        ['powder set', 'beauty creations', 1, 9.6, 3, 12, 18.3, null],
+        ['brush set', 'beauty creations', 1, 8, 2, 10, 12, null],
+        ['liquid blush', 'beauty creations', 2, 6.4, 1, 8, 10, 'coral cup, pinky primrose'],
+        ['liquid bronzer', 'beauty creations', 1, 6.4, 1, 8, 0, 'toffee butter'],
+        ['fixing spray', 'huda beauty', 4, 19.76, 2, 31, 0, null],
+        ['pressed powder', 'huda beauty', 2, 15.2, 2, 40, 0, 'cupcake'],
+        ['powder', 'huda beauty', 3, 33.15, 3, 39, 0, 'cupcake, poundcake 2 ta'],
+        ['matte lipstick', 'huda beauty', 3, 16.1, 1, 25, 25, null],
+        ['mini blush & balm', 'nars', 3, 24, 3, 30, 0, null],
+        ['luqiud blush & blesk', 'nars', 1, 25.6, 2, 32, 0, null],
+        ['concelear liquid', 'nars', 3, 25.6, 1, 32, 0, 'creme brulee, 2ta vanilla'],
+        ['concelear', 'nars', 2, 27.7, 1, 36, 0, 'vanilla'],
+        ['blush', 'patrick ta', 2, 32, 2, 40, 0, 'she goes to the gym, she is that girl'],
+        ['mini set powder & stick eyeshadow', 'laura mercier', 2, 21, 1, 30, 0, null],
+        ['powder rozoviy krishka', 'laura mercier', 1, 33.6, 2, 48, 0, null],
+        ['powder set', 'laura mercier', 1, 30.1, 5.4, 43, 0, 'qora krishkali'],
+        ['mascara duo', 'ysl', 2, 40.55, 2, 46, 0, '36$ each'],
+        ['parfume libre duo set', 'ysl', 1, 31, 3, 40, 0, null],
+        ['parfume libre gift set', 'ysl', 1, 83.22, 5.5, 115, 0, null],
+        ['juicy pallete', 'tarte', 1, 20, 3, 49, 0, null],
+        ['in bloom pallete', 'tarte', 1, 39.2, 2, 49, 0, null],
+        ['mascara set', 'tarte', 1, 24.81, 3, 45, 0, null],
+        ['plumper & lip liner set', 'tarte', 2, 20.23, 1, 27, 0, 'primrose in bloom, primrose full bloom'],
+        ['plumper set of 5', 'tarte', 1, 31.79, 2, 49, 0, '5'],
+        ['tarte big set of 2', 'tarte', 2, 46.19, 4, 59, 0, '1 ta naborni ichida 1 tasi sotilgan, 1 tasida mascara sotilgan'],
+        ['plumper big set', 'tarte', 1, 79.2, 6, 99, 0, '8ta plumper, 2 lip liner'],
+        ['bej eyeliner', 'tarte', 1, 9, 1, 22, 0, null],
+        ['bronzer', 'tarte', 1, 16, 1, 32, 0, 'hotel heirees'],
+        ['blush', 'tarte', 1, 15, 1, 30, 0, 'rose'],
+        ['concealer', 'tarte', 2, 25.6, 2, 32, 0, '12N, 20B'],
+        ['mascara', 'sephora', 2, 8, 1, 16, 10, null],
+        ['blush & brush set', 'sephora', 1, 23.2, 2, 29, 0, null],
+        ['mascara set', 'sephora favorites', 1, 23.8, 1, 28, 0, '5 mascaras'],
+        ['prep set', 'sephora favorites', 1, 37.8, 9, 54, 0, null],
+        ['lip set', 'sephora favorites', 1, 29.4, 4, 42, 50, null],
+        ['spf set', 'sephora favorites', 1, 31.2, 8, 40, 55.8, null],
+        ['mist', 'rare beauty', 3, 14, 2.5, 28, 35.8, null],
+        ['lotion', 'rare beauty', 4, 14, 4, 28, 36.6, null],
+        ['blush', 'rare beauty', 2, 20, 2, 25, 32.9, 'happy, worth'],
+        ['liquid highlighter', 'rare beauty', 1, 22.95, 2, 27, 36.6, 'mesmerize'],
+        ['liquid contour', 'rare beauty', 1, 23.8, 2, 28, 37.5, 'solace'],
+        ['lip oil', 'rare beauty', 1, 15.4, 1, 22, 25, 'happy'],
+        ['eyeshadow stick', 'rare beauty', 1, 11, 1, 22, 20, 'well-being'],
+        ['blush mini trio set', 'rare beauty', 1, 28.8, 3, 36, 42, 'worth'],
+        ['mini cream duo set', 'clinique', 1, 14, 2, 14, 25.5, null],
+        ['rozovaya kosmetichka nabor', 'clinique', 1, 0, 3, 45, 37.5, null],
+        ['mosturizing lotion125 ml', 'clinique', 1, 17, 3, 34, 37.5, null],
+        ['4 pcs eye liner', 'clinique', 2, 18.98, 2, 45, 56, '1 ta pachkada faqat korichneviy qogan, 83$ value'],
+        ['clinique 5 pcs gift set', 'clinique', 1, 0, 2, 65, 37, null],
+        ['moisturise surge 30 ml', 'clinique', 1, 25.5, 1, 30, 35, null],
+        ['all about eyes 15ml', 'clinique', 1, 42, 2, 42, 39, null],
+        ['light reflecting primer', 'clinique', 1, 0, 1, 40, 30, null],
+        ['wrinkle correcting cream 5 ml', 'clinique', 1, 0, 1, 15, 0, null],
+        ['wrinkle correcting eye cream 15 ml', 'clinique', 1, 0, 1, 66, 0, null],
+        ['Your the one mist', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Your the one body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Gingham gorgeous body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['In the stars body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Covered in roses body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Japanese cherry blossom body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Thousand wishes body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Champagne toast body wash', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Strawberry poundcake body lotion', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['At the beach body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Rapunzel body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Belle body cream', 'bbw', 1, 6.9, 3.9, 20, 17, null],
+        ['Japanese cherry blossom conditioner', 'bbw', 1, 4.2, 6.4, 25, 25, null],
+        ['Thousand wishes conditioner', 'bbw', 1, 4.2, 6.4, 25, 25, null],
+        ['Thousand wishes conditioner', 'bbw', 1, 4.2, 6.4, 25, 25, null],
+        ['Skin glow', 'Shiseido', 1, 49, 2, 60, 0, null],
     ];
 
     /**
@@ -419,8 +400,8 @@ class ProductSeeder extends Seeder
     {
         DB::table('products')->delete();
 
-        // Build a lower-cased brand name => id lookup so we can resolve
-        // the canonical names produced by $brandCodeMap.
+        // Lower-cased brand name => id, to resolve the canonical names that
+        // $brandCodeMap produces.
         $brandIds = Brand::pluck('id', 'name')
             ->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])
             ->all();
@@ -433,10 +414,12 @@ class ProductSeeder extends Seeder
             return;
         }
 
-        $created = 0;
         $skippedBrands = [];
+        $receiptCount = 0;
 
-        foreach ($this->rows as [$name, $brandCode, $quantity, $purchasePrice, $deliveryCost, $websitePrice, $sellingPrice]) {
+        foreach ($this->groupedRows() as $rows) {
+            [$name, $brandCode] = $rows[0];
+
             $brandName = $this->brandCodeMap[$brandCode] ?? null;
             $brandId = $brandName ? ($brandIds[mb_strtolower($brandName)] ?? null) : null;
 
@@ -445,13 +428,14 @@ class ProductSeeder extends Seeder
             }
 
             // Catalog product. quantity and selling_price are caches that the
-            // ProductReceipt observer fills in once the initial receipt is created.
+            // ProductReceipt observer fills in from the receipts below.
             $product = Product::create([
                 'brand_id' => $brandId,
                 'category_id' => $defaultCategory->id,
                 'name' => $name,
+                'sku' => null,
                 'description' => null,
-                'comment' => null,
+                'comment' => $this->mergeComments($rows),
                 'quantity' => 0,
                 'selling_price' => 0,
                 'image' => null,
@@ -459,21 +443,23 @@ class ProductSeeder extends Seeder
                 'status' => 'in_stock',
             ]);
 
-            // Initial procurement receipt holding this row's pricing from sklad.pdf.
-            $product->receipts()->create([
-                'purchase_price' => $purchasePrice,
-                'delivery_cost' => $deliveryCost,
-                'markup' => $this->calculateMarkup($purchasePrice, $deliveryCost, $sellingPrice),
-                'selling_price' => $sellingPrice,
-                'website_price' => $websitePrice,
-                'quantity' => $quantity,
-                'received_at' => now(),
-            ]);
+            foreach ($rows as [, , $quantity, $purchasePrice, $deliveryCost, $websitePrice, $sellingPrice]) {
+                $product->receipts()->create([
+                    'purchase_price' => $purchasePrice,
+                    'delivery_cost' => $deliveryCost,
+                    'markup' => $this->calculateMarkup($purchasePrice, $deliveryCost, $sellingPrice),
+                    'selling_price' => $sellingPrice,
+                    'website_price' => $websitePrice,
+                    'quantity' => $quantity,
+                    'received_at' => self::SNAPSHOT_DATE,
+                ]);
 
-            $created++;
+                $receiptCount++;
+            }
         }
 
-        $this->command->info("Created {$created} products from sklad.pdf.");
+        $products = count($this->groupedRows());
+        $this->command->info("Created {$products} products and {$receiptCount} receipts from the 06 Oct snapshot.");
 
         if ($skippedBrands) {
             $this->command->warn('Brands not found (products left unlinked): '.implode(', ', array_keys($skippedBrands)));
@@ -481,17 +467,51 @@ class ProductSeeder extends Seeder
     }
 
     /**
+     * Group the rows by brand and name, so one product collects every receipt
+     * that was recorded for it.
+     *
+     * @return array<string, array<int, array{0: string, 1: string, 2: int, 3: float, 4: float, 5: float, 6: float, 7: ?string}>>
+     */
+    private function groupedRows(): array
+    {
+        static $grouped = null;
+
+        if ($grouped !== null) {
+            return $grouped;
+        }
+
+        $grouped = [];
+
+        foreach ($this->rows as $row) {
+            $grouped[mb_strtolower($row[1].'|'.$row[0])][] = $row;
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Keep every distinct comment recorded for a product's rows.
+     *
+     * @param  array<int, array{0: string, 1: string, 2: int, 3: float, 4: float, 5: float, 6: float, 7: ?string}>  $rows
+     */
+    private function mergeComments(array $rows): ?string
+    {
+        $comments = array_values(array_unique(array_filter(array_column($rows, 7))));
+
+        return $comments ? implode(' | ', $comments) : null;
+    }
+
+    /**
      * Derive the markup percentage from the app's own selling-price formula:
      *   selling = purchase + purchase * markup/100 + delivery
      * => markup = (selling - delivery - purchase) / purchase * 100
      *
-     * Returns 0 when it cannot be computed meaningfully: no purchase price,
-     * a blank selling price (0), a soum-valued selling price (>= 1000, filled
-     * in manually later), or a negative result (markup is an unsigned column).
+     * Returns 0 when it cannot be computed meaningfully: no purchase price, a
+     * blank selling price, or a negative result (markup is an unsigned column).
      */
     private function calculateMarkup(float $purchasePrice, float $deliveryCost, float $sellingPrice): int
     {
-        if ($purchasePrice <= 0 || $sellingPrice <= 0 || $sellingPrice >= 1000) {
+        if ($purchasePrice <= 0 || $sellingPrice <= 0) {
             return 0;
         }
 

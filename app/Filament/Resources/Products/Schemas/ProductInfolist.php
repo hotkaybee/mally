@@ -19,6 +19,9 @@ class ProductInfolist
                     ->label('Brand')
                     ->placeholder('-'),
                 TextEntry::make('name'),
+                TextEntry::make('sku')
+                    ->label(__('sku'))
+                    ->placeholder('-'),
                 TextEntry::make('description')
                     ->placeholder('-')
                     ->columnSpanFull(),

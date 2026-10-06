@@ -19,6 +19,7 @@
     "category.name": "Category",
     "brand.name": "Brand",
     "name": "Name",
+    "sku": "SKU",
     "quantity": "Quantity",
     "delivery_cost": "Delivery Cost",
     "markup": "Markup",

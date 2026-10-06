@@ -19,6 +19,7 @@
     "category.name": "Категория",
     "brand.name": "Бренд",
     "name": "Название",
+    "sku": "Артикул",
     "quantity": "Количество",
     "delivery_cost": "Сумма доставки",
     "markup": "Наценка",

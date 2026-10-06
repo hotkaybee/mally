@@ -15,6 +15,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Model;
 
 class CategoryResource extends Resource
 {
@@ -22,7 +24,36 @@ class CategoryResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static ?string $recordTitleAttribute = 'name_en';
+    /**
+     * Filament uses the record title attribute for two different things: it
+     * reads it off the model for display (accessors apply), and it puts it
+     * straight into SQL for global search (accessors do not). So it must name
+     * a real column — pointed at the active locale's one.
+     */
+    public static function getRecordTitleAttribute(): ?string
+    {
+        return Category::nameColumn();
+    }
+
+    /**
+     * Display goes through the accessor, which falls back across locales, so a
+     * half-translated category still shows a name instead of a blank.
+     */
+    public static function getRecordTitle(?Model $record): string|Htmlable|null
+    {
+        return $record?->name ?: static::getModelLabel();
+    }
+
+    /**
+     * Search every locale's column, so a category is findable by its Russian,
+     * Uzbek or English name regardless of the active locale.
+     *
+     * @return array<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return Category::nameColumns();
+    }
 
     public static function getNavigationLabel(): string
     {

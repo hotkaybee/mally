@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Categories\CategoryResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
@@ -84,6 +85,57 @@ class CategoryTranslationTest extends TestCase
 
         $this->assertSame(27, Category::count());
         $this->assertSame(0, Category::whereNull('name_ru')->orWhereNull('name_uz')->count());
+    }
+
+    public function test_record_title_follows_the_active_locale(): void
+    {
+        $category = $this->makeCategory();
+
+        app()->setLocale('ru');
+        $this->assertSame('name_ru', CategoryResource::getRecordTitleAttribute());
+        $this->assertSame('Помада', CategoryResource::getRecordTitle($category));
+
+        app()->setLocale('uz');
+        $this->assertSame('name_uz', CategoryResource::getRecordTitleAttribute());
+        $this->assertSame("Lab bo'yog'i", CategoryResource::getRecordTitle($category));
+    }
+
+    public function test_record_title_falls_back_when_the_locale_is_untranslated(): void
+    {
+        $category = $this->makeCategory(['name_ru' => null]);
+
+        app()->setLocale('ru');
+
+        // Must not render an empty title just because Russian is missing.
+        $this->assertSame('Lipstick', CategoryResource::getRecordTitle($category));
+    }
+
+    public function test_global_search_covers_every_locale(): void
+    {
+        $this->assertSame(
+            ['name_en', 'name_ru', 'name_uz'],
+            CategoryResource::getGloballySearchableAttributes(),
+        );
+    }
+
+    /**
+     * The payoff: the category is findable by any of its names, whichever
+     * locale the admin happens to be using.
+     */
+    public function test_global_search_finds_a_category_by_any_language(): void
+    {
+        $this->makeCategory();
+        app()->setLocale('ru');
+
+        foreach (['Помада', 'Lipstick', "Lab bo'yog'i"] as $term) {
+            $this->assertCount(
+                1,
+                CategoryResource::getGlobalSearchResults($term),
+                "Expected global search to find the category by \"{$term}\".",
+            );
+        }
+
+        $this->assertCount(0, CategoryResource::getGlobalSearchResults('Nothing here'));
     }
 
     /**

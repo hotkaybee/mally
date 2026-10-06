@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
+use App\Models\Category;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -16,7 +17,12 @@ class ProductForm
             ->components([
                 Select::make('category_id')
                     ->label(__('category_id'))
-                    ->relationship('category', 'name'),
+                    // `name` is a locale-aware accessor, not a column, so the
+                    // label is resolved from the record rather than queried.
+                    ->relationship('category', Category::nameColumn())
+                    ->getOptionLabelFromRecordUsing(fn (Category $record) => $record->name)
+                    ->searchable()
+                    ->preload(),
                 Select::make('brand_id')
                     ->label(__('brand_id'))
                     ->relationship('brand', 'name'),

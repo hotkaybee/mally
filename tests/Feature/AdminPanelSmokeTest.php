@@ -35,6 +35,9 @@ class AdminPanelSmokeTest extends TestCase
             'receipt create' => ['/admin/receipts/create'],
             'orders create' => ['/admin/orders/create'],
             'products list' => ['/admin/products'],
+            'products create' => ['/admin/products/create'],
+            'categories list' => ['/admin/categories'],
+            'categories create' => ['/admin/categories/create'],
         ];
     }
 }

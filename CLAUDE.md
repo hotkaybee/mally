@@ -12,7 +12,7 @@ Requires **PHP ^8.2**. The repo uses MySQL by default (`.env.example` → `DB_DA
 
 ```bash
 # Full dev loop (server + queue listener + log tail + Vite, concurrently)
-composer dev
+  composer dev
 
 # Tests — clears config first, then runs PHPUnit
 composer test

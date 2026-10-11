@@ -398,11 +398,16 @@ class ProductSeeder extends Seeder
      */
     public function run(): void
     {
+        DB::table('product_receipts')->delete();
         DB::table('products')->delete();
 
         // Lower-cased brand name => id, to resolve the canonical names that
         // $brandCodeMap produces.
         $brandIds = Brand::pluck('id', 'name')
+            ->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])
+            ->all();
+
+        $categoryIds = Category::pluck('id', 'name_en')
             ->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])
             ->all();
 
@@ -427,11 +432,13 @@ class ProductSeeder extends Seeder
                 $skippedBrands[$brandCode] = true;
             }
 
+            $categoryId = $this->resolveCategoryId($name, $categoryIds, $defaultCategory->id);
+
             // Catalog product. quantity and selling_price are caches that the
             // ProductReceipt observer fills in from the receipts below.
             $product = Product::create([
                 'brand_id' => $brandId,
-                'category_id' => $defaultCategory->id,
+                'category_id' => $categoryId,
                 'name' => $name,
                 'sku' => null,
                 'description' => null,
@@ -518,5 +525,66 @@ class ProductSeeder extends Seeder
         $markup = (int) round((($sellingPrice - $deliveryCost - $purchasePrice) / $purchasePrice) * 100);
 
         return max(0, $markup);
+    }
+
+    private function resolveCategoryId(string $name, array $categoryIds, int $defaultId): int
+    {
+        $n = mb_strtolower($name);
+
+        $rules = [
+            'lip liner' => 'lip pencil',
+            'karandash dlya gub' => 'lip pencil',
+            'eyeliner' => 'eyeliner',
+            'eye liner' => 'eyeliner',
+            'karandash dlya glaz' => 'eyeliner',
+            'mascara' => 'mascara',
+            'concelear' => 'concealer',
+            'concealer' => 'concealer',
+            'foundation' => 'foundation',
+            'powder' => 'powder',
+            'highlighter' => 'highlighter',
+            'bronzer' => 'bronzer',
+            'contour' => 'bronzer',
+            'blush' => 'blush',
+            'eyeshadow' => 'eyeshadow',
+            'pallete' => 'eyeshadow',
+            'teni' => 'eyeshadow',
+            'blesk' => 'lip gloss',
+            'plump' => 'lip gloss',
+            'lip oil' => 'lip gloss',
+            'lip balm' => 'lip gloss',
+            'pomada' => 'lipstick',
+            'lipstick' => 'lipstick',
+            'sivorotka' => 'serum',
+            'serum' => 'serum',
+            'toner' => 'toner',
+            'cleanser' => 'cleanser',
+            'spf' => 'sunscreen',
+            'mask' => 'face mask',
+            'conditioner' => 'conditioner',
+            'body wash' => 'body wash',
+            'scrub' => 'body wash',
+            'skrab' => 'body wash',
+            'lotion' => 'body lotion',
+            'butter' => 'body lotion',
+            'body cream' => 'body lotion',
+            'body oil' => 'body lotion',
+            'doy oil' => 'body lotion',
+            'atir' => 'perfume',
+            'aitr' => 'perfume',
+            'parfume' => 'perfume',
+            'mist' => 'perfume',
+            'cream' => 'moisturizer',
+            'brush' => 'wand',
+            'wand' => 'wand',
+        ];
+
+        foreach ($rules as $keyword => $catEn) {
+            if (str_contains($n, $keyword) && isset($categoryIds[$catEn])) {
+                return $categoryIds[$catEn];
+            }
+        }
+
+        return $defaultId;
     }
 }

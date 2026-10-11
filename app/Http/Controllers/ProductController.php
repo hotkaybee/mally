@@ -3,63 +3,48 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Services\StorefrontService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function __construct(
+        protected StorefrontService $storefrontService
+    ) {}
+
+    public function index(Request $request): JsonResponse
     {
-        //
+        $query = Product::with(['brand', 'category']);
+
+        if ($search = trim((string) $request->query('q', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%");
+            });
+        }
+
+        if ($categoryId = $request->query('category_id')) {
+            $query->where('category_id', $categoryId);
+        }
+
+        $products = $query->get()->map(
+            fn (Product $product) => $this->storefrontService->formatProduct($product)
+        );
+
+        return response()->json(['products' => $products]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function show(string $slug): JsonResponse
     {
-        //
-    }
+        $product = $this->storefrontService->findProductBySlugOrId($slug);
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
+        if (! $product) {
+            return response()->json(['error' => 'Товар не найден'], 404);
+        }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Product $product)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Product $product)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Product $product)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Product $product)
-    {
-        //
+        return response()->json([
+            'product' => $this->storefrontService->formatProduct($product),
+        ]);
     }
 }

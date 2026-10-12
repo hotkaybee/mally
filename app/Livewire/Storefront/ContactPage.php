@@ -20,6 +20,8 @@ class ContactPage extends Component
 
     public string $phone = '+998 ';
 
+    public string $email = '';
+
     public string $message = '';
 
     public bool $submitted = false;
@@ -47,19 +49,33 @@ class ContactPage extends Component
         if ($phone !== '') {
             $this->phone = $this->store()->normalizeAndValidateUzPhone($phone) ?? $phone;
         }
+        $rawEmail = trim((string) ($customer->email ?? ''));
+        if ($rawEmail !== '' && ! str_ends_with(strtolower($rawEmail), '@telegram.mally.local')) {
+            $this->email = $rawEmail;
+        }
     }
 
     public function submitForm(): void
     {
         $locale = $this->store()->getLocale();
         $customer = $this->store()->getAuthenticatedCustomer();
-        if ($customer && trim((string) $customer->phone_number) !== '') {
+
+        $isPhoneVerified = $customer && ! empty($customer->telegram) && trim((string) $customer->phone_number) !== '';
+        $rawCustEmail = $customer ? trim((string) ($customer->email ?? '')) : '';
+        $hasVerifiedEmail = $rawCustEmail !== '' && ! str_ends_with(strtolower($rawCustEmail), '@telegram.mally.local');
+
+        if ($isPhoneVerified) {
             $this->phone = $this->store()->normalizeAndValidateUzPhone($customer->phone_number) ?? $customer->phone_number;
+        }
+
+        if ($hasVerifiedEmail) {
+            $this->email = $rawCustEmail;
         }
 
         $firstName = trim($this->firstName);
         $lastName = trim($this->lastName);
         $normalizedPhone = $this->store()->normalizeAndValidateUzPhone($this->phone);
+        $cleanEmail = mb_strtolower(trim($this->email));
         $msg = trim($this->message);
 
         if ($firstName === '') {
@@ -95,6 +111,17 @@ class ContactPage extends Component
             return;
         }
 
+        if ($cleanEmail !== '' && filter_var($cleanEmail, FILTER_VALIDATE_EMAIL) === false) {
+            $err = match ($locale) {
+                'uz' => "Iltimos, to'g'ri elektron pochta manzilini kiriting.",
+                'en' => 'Please enter a valid email address.',
+                default => 'Пожалуйста, введите корректный адрес электронной почты (Gmail).',
+            };
+            $this->dispatch('toast', message: $err, type: 'error');
+
+            return;
+        }
+
         if (mb_strlen($msg) < 2) {
             $err = match ($locale) {
                 'uz' => 'Iltimos, xabar matnini kiriting.',
@@ -107,14 +134,31 @@ class ContactPage extends Component
         }
 
         $this->phone = $normalizedPhone;
+        $this->email = $cleanEmail;
+
+        if ($customer) {
+            $custUpdates = [];
+            if (! $isPhoneVerified && $customer->phone_number !== $normalizedPhone) {
+                $custUpdates['phone_number'] = $normalizedPhone;
+            }
+            if (! $hasVerifiedEmail && $cleanEmail !== '') {
+                $custUpdates['email'] = $cleanEmail;
+            }
+            if (! empty($custUpdates)) {
+                $customer->update($custUpdates);
+            }
+        }
+
+        $emailLine = $cleanEmail !== '' ? "📧 *Email:* {$cleanEmail}\n" : '';
 
         $telegramText = "📩 *Новое сообщение из контактной формы Mally*\n\n"
             ."👤 *Имя и Фамилия:* {$firstName} {$lastName}\n"
             ."📱 *Телефон:* {$normalizedPhone}\n"
+            .$emailLine
             .'🕒 *Дата:* '.now()->timezone('Asia/Tashkent')->format('d.m.Y H:i')."\n\n"
             ."💬 *Сообщение:*\n{$msg}";
 
-        $this->lastTelegramText = "Здравствуйте! Меня зовут {$firstName} {$lastName} ({$normalizedPhone}).\nСообщение: {$msg}";
+        $this->lastTelegramText = "Здравствуйте! Меня зовут {$firstName} {$lastName} ({$normalizedPhone}".($cleanEmail !== '' ? ", {$cleanEmail}" : '').").\nСообщение: {$msg}";
 
         $botToken = trim((string) config('services.telegram.bot_token'));
         $chatIdsRaw = (string) config('services.telegram.admin_chat_ids');
@@ -138,6 +182,7 @@ class ContactPage extends Component
             'first_name' => $firstName,
             'last_name' => $lastName,
             'phone' => $normalizedPhone,
+            'email' => $cleanEmail,
             'message' => $msg,
         ]);
 

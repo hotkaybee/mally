@@ -35,9 +35,12 @@ class OrderProductObserver
      */
     public function updating(OrderProduct $line): void
     {
+        $originalProductId = $line->getOriginal('product_id') ?? $line->product_id;
+
         $this->inventory->release(
-            $line->getOriginal('product_receipt_id'),
+            $line->getOriginal('product_receipt_id') ? (int) $line->getOriginal('product_receipt_id') : null,
             (int) $line->getOriginal('quantity'),
+            $originalProductId ? (int) $originalProductId : null,
         );
 
         $this->inventory->consume($line);
@@ -45,6 +48,10 @@ class OrderProductObserver
 
     public function deleted(OrderProduct $line): void
     {
-        $this->inventory->release($line->product_receipt_id, (int) $line->quantity);
+        $this->inventory->release(
+            $line->product_receipt_id ? (int) $line->product_receipt_id : null,
+            (int) $line->quantity,
+            $line->product_id ? (int) $line->product_id : null,
+        );
     }
 }

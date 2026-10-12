@@ -388,8 +388,48 @@
                                 </div>
                             </div>
 
-                            <!-- Номер телефона: закреплен из профиля если авторизован, иначе доступен для ввода -->
-                            @if($currentCustomer && !empty($currentCustomer->phone_number))
+                            @php
+                                $isPhoneVerified = $currentCustomer && !empty($currentCustomer->telegram) && !empty($currentCustomer->phone_number);
+                                $rawCustEmail = $currentCustomer ? trim((string) ($currentCustomer->email ?? '')) : '';
+                                $hasVerifiedEmail = $rawCustEmail !== '' && !str_ends_with(strtolower($rawCustEmail), '@telegram.mally.local');
+                            @endphp
+
+                            <!-- Email (Gmail): закреплен из профиля если подтвержден, иначе доступен для ввода -->
+                            @if($hasVerifiedEmail)
+                                <div>
+                                    <div class="flex items-center justify-between mb-1.5">
+                                        <label class="block text-xs font-bold text-[#1C1917]">
+                                            Email (Gmail)
+                                        </label>
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                            <i class="fa-solid fa-lock text-[9px]"></i>
+                                            <span>{{ $locale === 'uz' ? 'Profildan' : ($locale === 'en' ? 'From profile' : 'Из профиля') }}</span>
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="email"
+                                        disabled
+                                        readonly
+                                        value="{{ $rawCustEmail }}"
+                                        class="w-full px-4 py-3 text-xs sm:text-sm font-medium bg-emerald-50/40 border border-emerald-200/70 rounded-2xl text-emerald-950 cursor-not-allowed select-none"
+                                    />
+                                </div>
+                            @else
+                                <div>
+                                    <label class="block text-xs font-bold text-[#1C1917] mb-1.5">
+                                        Email (Gmail)
+                                    </label>
+                                    <input
+                                        type="email"
+                                        wire:model="email"
+                                        placeholder="example@gmail.com"
+                                        class="w-full px-4 py-3 text-xs sm:text-sm bg-[#FAF8F6] border border-[#E3DBD5] rounded-2xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                                    />
+                                </div>
+                            @endif
+
+                            <!-- Номер телефона: закреплен из профиля если подтвержден через Telegram, иначе доступен для ввода -->
+                            @if($isPhoneVerified)
                                 <div>
                                     <div class="flex items-center justify-between mb-1.5">
                                         <label class="block text-xs font-bold text-[#1C1917]">
@@ -397,7 +437,7 @@
                                         </label>
                                         <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
                                             <i class="fa-solid fa-lock text-[9px]"></i>
-                                            <span>{{ $locale === 'uz' ? 'Profildan' : ($locale === 'en' ? 'From profile' : 'Из профиля') }}</span>
+                                            <span>{{ $locale === 'uz' ? 'Profildan (Telegram)' : ($locale === 'en' ? 'From profile (Telegram)' : 'Из профиля (Telegram)') }}</span>
                                         </span>
                                     </div>
                                     <input

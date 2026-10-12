@@ -17,7 +17,7 @@
     $brandName = is_array($product['brand'] ?? null) ? ($product['brand']['name'] ?? 'Mally Collection') : ($product['brand'] ?? 'Mally Collection');
 @endphp
 
-<div class="group relative flex flex-col bg-white rounded-3xl p-3 sm:p-3.5 border border-[#EAE3DE] hover:border-[#C4B7AF] hover:shadow-xl transition-all duration-300 select-none">
+<div class="group relative flex flex-col bg-white rounded-3xl p-3.5 sm:p-4 border border-[#EAE3DE] hover:border-[#C4B7AF] hover:shadow-xl transition-all duration-300 select-none">
     <!-- 1. Блок фото с зумом при наведении -->
     <div class="relative aspect-square w-full rounded-2xl overflow-hidden bg-[#FAF7F5]">
         <a href="{{ $productUrl }}" wire:navigate class="block w-full h-full">
@@ -61,8 +61,8 @@
     </div>
 
     <!-- 2. Информация о товаре -->
-    <div class="flex flex-col flex-1 mt-3">
-        <div class="flex items-center justify-between gap-1 text-[11px] text-[#8C827A]">
+    <div class="flex flex-col flex-1 mt-3.5">
+        <div class="flex items-center justify-between gap-1.5 text-[11px] text-[#8C827A]">
             <span class="font-semibold uppercase tracking-wider truncate">
                 {{ $brandName }}
             </span>
@@ -74,14 +74,14 @@
         </div>
 
         <a href="{{ $productUrl }}" wire:navigate class="block mt-1">
-            <h3 class="text-xs sm:text-sm font-medium text-[#1C1917] group-hover:text-[#685F58] transition-colors line-clamp-2 min-h-[36px] leading-snug">
+            <h3 class="text-xs sm:text-sm font-medium text-[#1C1917] group-hover:text-[#685F58] transition-colors line-clamp-2 min-h-[38px] leading-snug">
                 {{ $displayTitle }}
             </h3>
         </a>
 
         <!-- Звезды рейтинга и остаток на складе -->
-        <div class="mt-1.5 flex items-center justify-between gap-1">
-            <div class="flex items-center gap-0.5 text-amber-400 text-[10px]">
+        <div class="mt-2 flex items-center justify-between gap-2 flex-nowrap">
+            <div class="flex items-center gap-0.5 text-amber-400 text-[10px] shrink-0 whitespace-nowrap">
                 <i class="fa-solid fa-star"></i>
                 <i class="fa-solid fa-star"></i>
                 <i class="fa-solid fa-star"></i>
@@ -91,9 +91,9 @@
             </div>
 
             @if(!$isOutOfStock)
-                <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full {{ $quantity <= 5 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' }}">
-                    <span class="w-1.5 h-1.5 rounded-full {{ $quantity <= 5 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500' }}"></span>
-                    <span>{{ $quantity <= 5 ? $store->t('product.remaining', 'Осталось').' '.$quantity.' '.$store->t('product.pcs', 'шт.') : $quantity.' '.$store->t('product.pcs', 'шт.') }}</span>
+                <span class="inline-flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0 {{ $quantity <= 5 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' }}">
+                    <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $quantity <= 5 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500' }}"></span>
+                    <span class="whitespace-nowrap">{{ $quantity <= 5 ? $store->t('product.remaining', 'Осталось').' '.$quantity.' '.$store->t('product.pcs', 'шт.') : $quantity.' '.$store->t('product.pcs', 'шт.') }}</span>
                 </span>
             @endif
         </div>

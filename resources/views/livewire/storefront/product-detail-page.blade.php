@@ -642,7 +642,6 @@
         :isOpen="$isAuthModalOpen"
         :step="$authStep"
         :phone="$authPhone"
-        :devCode="$authDevCode"
         :message="$authModalMessage"
     />
 </div>

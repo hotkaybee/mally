@@ -26,6 +26,8 @@ class ProfilePage extends Component
 
     public string $phone = '';
 
+    public string $email = '';
+
     public string $city = 'Ташкент';
 
     public string $address = '';
@@ -58,7 +60,12 @@ class ProfilePage extends Component
     {
         $this->firstName = (string) ($customer->first_name ?? '');
         $this->lastName = (string) ($customer->last_name ?? '');
-        $this->phone = (string) ($customer->phone_number ?? '');
+        $this->phone = (string) ($customer->phone_number ?: '+998 ');
+
+        $rawEmail = trim((string) ($customer->email ?? ''));
+        $this->email = ($rawEmail !== '' && ! str_ends_with(strtolower($rawEmail), '@telegram.mally.local'))
+            ? $rawEmail
+            : '';
 
         if ($customer->instagram && str_contains($customer->instagram, '|')) {
             [$c, $a] = array_map('trim', explode('|', $customer->instagram, 2));
@@ -79,17 +86,64 @@ class ProfilePage extends Component
         }
     }
 
+    public function startTelegramPhoneVerification(): void
+    {
+        $this->isAuthModalOpen = true;
+        $this->startTelegramAuth();
+    }
+
     public function saveSettings(): void
     {
-        $customer = app(StorefrontService::class)->getCurrentCustomer();
+        $service = app(StorefrontService::class);
+        $customer = $service->getCurrentCustomer();
         if (! $customer) {
             return;
         }
 
         if (trim($this->firstName) === '') {
-            $this->dispatch('toast', message: 'Имя обязательно', type: 'error');
+            $this->dispatch('toast', message: 'Имя обязательно для заполнения', type: 'error');
 
             return;
+        }
+
+        $isPhoneVerified = ! empty($customer->telegram);
+        $rawCustomerEmail = trim((string) ($customer->email ?? ''));
+        $hasVerifiedEmail = $rawCustomerEmail !== '' && ! str_ends_with(strtolower($rawCustomerEmail), '@telegram.mally.local');
+
+        $normalizedPhone = (string) $customer->phone_number;
+        if (! $isPhoneVerified) {
+            $validPhone = $service->normalizeAndValidateUzPhone($this->phone);
+            if (! $validPhone) {
+                $this->dispatch('toast', message: 'Введите корректный номер телефона (+998 и 9 цифр)', type: 'error');
+
+                return;
+            }
+            $normalizedPhone = $validPhone;
+            $this->phone = $normalizedPhone;
+        }
+
+        $emailToSave = $rawCustomerEmail;
+        if (! $hasVerifiedEmail && trim($this->email) !== '') {
+            $candidateEmail = mb_strtolower(trim($this->email));
+            if (filter_var($candidateEmail, FILTER_VALIDATE_EMAIL) === false) {
+                $this->dispatch('toast', message: 'Введите корректный адрес электронной почты (Gmail)', type: 'error');
+
+                return;
+            }
+
+            $currentUserId = (int) session('mally_user_id', 0);
+            $emailTaken = \App\Models\User::whereRaw('LOWER(email) = ?', [$candidateEmail])
+                ->when($currentUserId > 0, fn ($q) => $q->where('id', '!=', $currentUserId))
+                ->exists();
+
+            if ($emailTaken) {
+                $this->dispatch('toast', message: 'Этот email уже привязан к другому аккаунту.', type: 'error');
+
+                return;
+            }
+
+            $emailToSave = $candidateEmail;
+            $this->email = $candidateEmail;
         }
 
         $cityVal = trim($this->city) ?: 'Ташкент';
@@ -98,8 +152,25 @@ class ProfilePage extends Component
         $customer->update([
             'first_name' => trim($this->firstName),
             'last_name' => trim($this->lastName),
+            'phone_number' => $normalizedPhone,
+            'email' => $emailToSave,
             'instagram' => $cityVal.' | '.trim($this->address),
         ]);
+
+        $userId = (int) session('mally_user_id', 0);
+        $user = $userId > 0 ? \App\Models\User::find($userId) : null;
+        if ($user) {
+            $userUpdates = [
+                'name' => trim(trim($this->firstName).' '.trim($this->lastName)),
+                'phone' => $normalizedPhone,
+            ];
+            if (! $hasVerifiedEmail && $emailToSave !== '' && ! str_ends_with(strtolower($emailToSave), '@telegram.mally.local')) {
+                $userUpdates['email'] = $emailToSave;
+            }
+            $user->update($userUpdates);
+        }
+
+        $this->dispatch('toast', message: 'Личные данные успешно сохранены!', type: 'success');
     }
 
     public function openProductReview(string $productId, string $title, string $image, int $orderNumber): void

@@ -142,4 +142,81 @@ class InventoryTest extends TestCase
         $this->assertSame(3, $receipt->fresh()->quantity_remaining);
         $this->assertSame(0, $order->orderProducts()->count());
     }
+
+    public function test_product_without_receipt_deducts_and_restores_stock_on_line_and_order_deletion(): void
+    {
+        $product = Product::create([
+            'name' => 'No Receipt Product',
+            'sku' => 'ML-NO-RECEIPT',
+            'quantity' => 10,
+            'selling_price' => 45.00,
+            'status' => 'in_stock',
+        ]);
+
+        $order = $this->makeOrder();
+
+        $line = $order->orderProducts()->create([
+            'product_id' => $product->id,
+            'product_receipt_id' => null,
+            'quantity' => 3,
+            'price' => 45,
+            'total_price' => 135,
+        ]);
+
+        $this->assertSame('0.00', $line->fresh()->unit_cost);
+        $this->assertSame(7, $product->fresh()->quantity);
+
+        // Editing line quantity adjusts product stock
+        $line->update(['quantity' => 4, 'total_price' => 180]);
+        $this->assertSame(6, $product->fresh()->quantity);
+
+        // Deleting a single order item restores stock
+        $line->delete();
+        $this->assertSame(10, $product->fresh()->quantity);
+
+        // Creating another line and deleting the parent order restores stock
+        $order->orderProducts()->create([
+            'product_id' => $product->id,
+            'product_receipt_id' => null,
+            'quantity' => 6,
+            'price' => 45,
+            'total_price' => 270,
+        ]);
+        $this->assertSame(4, $product->fresh()->quantity);
+
+        $order->delete();
+        $this->assertSame(10, $product->fresh()->quantity);
+    }
+
+    public function test_overselling_a_product_without_receipt_is_blocked(): void
+    {
+        $product = Product::create([
+            'name' => 'Limited No Receipt Product',
+            'sku' => 'ML-LIM-NO-RECEIPT',
+            'quantity' => 2,
+            'selling_price' => 50.00,
+            'status' => 'in_stock',
+        ]);
+
+        $order = $this->makeOrder();
+
+        $threw = false;
+        try {
+            DB::transaction(function () use ($order, $product) {
+                $order->orderProducts()->create([
+                    'product_id' => $product->id,
+                    'product_receipt_id' => null,
+                    'quantity' => 5,
+                    'price' => 50,
+                    'total_price' => 250,
+                ]);
+            });
+        } catch (RuntimeException $e) {
+            $threw = true;
+        }
+
+        $this->assertTrue($threw, 'Expected a RuntimeException when overselling a product without receipts.');
+        $this->assertSame(2, $product->fresh()->quantity);
+        $this->assertSame(0, $order->orderProducts()->count());
+    }
 }

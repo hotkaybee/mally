@@ -7,13 +7,17 @@ use App\Models\Order;
 use App\Models\OrderProduct;
 use App\Models\Product;
 use App\Models\ProductReceipt;
+use App\Services\OrderNumberRetryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        private readonly OrderNumberRetryService $orderNumberRetry,
+    ) {}
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -29,7 +33,7 @@ class OrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        $order = $this->orderNumberRetry->run(function (int $orderNumber) use ($validated): Order {
             $parts = explode(' ', trim($validated['customerName']), 2);
             $customer = Customer::firstOrCreate(
                 ['phone_number' => trim($validated['customerPhone'])],
@@ -37,12 +41,10 @@ class OrderController extends Controller
                     'first_name' => $parts[0] ?: 'Покупатель',
                     'last_name' => $parts[1] ?? '',
                     'email' => 'tg_'.Str::random(6).'@mally.uz',
-                    'source' => 'telegram',
+                    'source' => 'instagram',
                 ]
             );
 
-            $maxNum = (int) (Order::max('order_number') ?: 1000);
-            $orderNumber = $maxNum + 1;
             $secureHash = bin2hex(random_bytes(16));
 
             $rawPromo = strtoupper(trim((string) ($validated['promoCode'] ?? '')));
@@ -90,13 +92,9 @@ class OrderController extends Controller
                     'product_receipt_id' => $receipt?->id,
                     'quantity' => $qty,
                     'price' => $unitPrice,
-                    'unit_cost' => $receipt?->purchase_price ?? 0,
+                    'unit_cost' => $receipt?->unit_cost ?? 0,
                     'total_price' => $lineTotal,
                 ]);
-
-                if (! $receipt) {
-                    $product->decrement('quantity', $qty);
-                }
 
                 $subtotalAmount += $lineTotal;
             }
@@ -109,49 +107,14 @@ class OrderController extends Controller
                 'amount' => $totalAmount,
             ]);
 
-            return response()->json([
-                'success' => true,
-                'orderNumber' => $order->order_number,
-                'orderHash' => $order->secure_hash,
-                'totalAmount' => $totalAmount,
-            ], 201);
+            return $order;
         });
-    }
-
-    public function track(Request $request): JsonResponse
-    {
-        $query = trim((string) $request->query('q', $request->query('order', '')));
-
-        if ($query === '') {
-            return response()->json(['error' => 'Укажите номер заказа'], 400);
-        }
-
-        $order = Order::with(['orderProducts.product'])
-            ->where('order_number', $query)
-            ->orWhere('id', is_numeric($query) ? (int) $query : 0)
-            ->latest('id')
-            ->first();
-
-        if (! $order) {
-            return response()->json(['error' => 'Заказ не найден'], 404);
-        }
 
         return response()->json([
             'success' => true,
-            'order' => [
-                'orderNumber' => $order->order_number ?: $order->id,
-                'status' => $order->status,
-                'paymentStatus' => $order->payment_status,
-                'totalAmount' => (float) $order->amount,
-                'city' => $order->city,
-                'createdAt' => $order->created_at?->toIso8601String(),
-                'items' => $order->orderProducts->map(fn (OrderProduct $op) => [
-                    'productId' => $op->product_id,
-                    'name' => $op->product?->name,
-                    'quantity' => $op->quantity,
-                    'price' => (float) $op->price,
-                ]),
-            ],
-        ]);
+            'orderNumber' => $order->order_number,
+            'orderHash' => $order->secure_hash,
+            'totalAmount' => (float) $order->amount,
+        ], 201);
     }
 }

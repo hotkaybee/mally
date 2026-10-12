@@ -23,4 +23,3 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{slug}', [ProductController::class, 'show']);
 
 Route::post('/orders', [OrderController::class, 'store']);
-Route::get('/orders/track', [OrderController::class, 'track']);

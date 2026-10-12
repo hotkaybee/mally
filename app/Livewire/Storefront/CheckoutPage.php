@@ -3,16 +3,13 @@
 namespace App\Livewire\Storefront;
 
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
-use App\Models\Brand;
-use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderProduct;
 use App\Models\Product;
 use App\Models\ProductReceipt;
+use App\Services\OrderNumberRetryService;
 use App\Services\StorefrontService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -30,6 +27,8 @@ class CheckoutPage extends Component
     public string $address = '';
 
     public string $phoneBilling = '+998 ';
+
+    public string $email = '';
 
     public string $comment = '';
 
@@ -84,6 +83,11 @@ class CheckoutPage extends Component
         $this->phoneBilling = $phone !== ''
             ? (app(StorefrontService::class)->normalizeAndValidateUzPhone($phone) ?? $phone)
             : '+998 ';
+
+        $rawEmail = trim((string) ($customer->email ?? ''));
+        $this->email = ($rawEmail !== '' && ! str_ends_with(strtolower($rawEmail), '@telegram.mally.local'))
+            ? $rawEmail
+            : '';
 
         if ($customer->instagram && str_contains($customer->instagram, '|')) {
             [$c, $a] = array_map('trim', explode('|', $customer->instagram, 2));
@@ -143,28 +147,10 @@ class CheckoutPage extends Component
             return;
         }
 
-        // Перепроверяем актуальность цен и остатков товаров на сервере перед оформлением
-        $validation = $service->validateAndSyncCart();
-        $cartDetails = $validation['cart'];
-        $this->appliedPromo = $cartDetails['promo_code'];
-        $this->discountUsd = (float) ($cartDetails['discount_usd'] ?? 0.0);
+        $cart = $service->getCart();
+        $this->appliedPromo = $service->getPromoCode();
 
-        if (! $validation['valid']) {
-            $detailsMsg = implode(' ', $validation['messages']);
-            $this->dispatch(
-                'toast',
-                message: ($detailsMsg ? $detailsMsg.' ' : '').'Пожалуйста, проверьте обновлённые данные заказа и подтвердите его снова.',
-                type: 'error'
-            );
-
-            if (empty($cartDetails['items'])) {
-                $this->redirect(route('cart'));
-            }
-
-            return;
-        }
-
-        if (empty($cartDetails['items'])) {
+        if (empty($cart)) {
             $this->dispatch('toast', message: 'Ваша корзина пуста', type: 'error');
             $this->redirect(route('cart'));
 
@@ -177,9 +163,15 @@ class CheckoutPage extends Component
             return;
         }
 
-        // Всегда закрепляем номер телефона из профиля авторизованного клиента
-        $rawPhone = trim((string) ($customer->phone_number ?: $this->phoneBilling));
-        $formattedPhone = $service->normalizeAndValidateUzPhone($rawPhone) ?? ($rawPhone !== '' ? $rawPhone : null);
+        $isPhoneVerified = ! empty($customer->telegram) && trim((string) $customer->phone_number) !== '';
+        $rawCustEmail = trim((string) ($customer->email ?? ''));
+        $hasVerifiedEmail = $rawCustEmail !== '' && ! str_ends_with(strtolower($rawCustEmail), '@telegram.mally.local');
+
+        $rawPhone = $isPhoneVerified
+            ? trim((string) $customer->phone_number)
+            : trim((string) ($this->phoneBilling ?: $customer->phone_number));
+
+        $formattedPhone = $service->normalizeAndValidateUzPhone($rawPhone) ?? ($rawPhone !== '' && $rawPhone !== '+998' ? $rawPhone : null);
         if (! $formattedPhone) {
             $this->dispatch('toast', message: 'Введите корректный номер телефона Узбекистана (+998 и 9 цифр)', type: 'error');
 
@@ -187,13 +179,27 @@ class CheckoutPage extends Component
         }
         $this->phoneBilling = $formattedPhone;
 
+        $emailToSave = $rawCustEmail;
+        if (! $hasVerifiedEmail && trim($this->email) !== '') {
+            $candEmail = mb_strtolower(trim($this->email));
+            if (filter_var($candEmail, FILTER_VALIDATE_EMAIL) === false) {
+                $this->dispatch('toast', message: 'Введите корректный адрес электронной почты (Gmail)', type: 'error');
+
+                return;
+            }
+            $emailToSave = $candEmail;
+            $this->email = $candEmail;
+        }
+
         try {
             $rate = $service->getExchangeRate();
             if ($rate <= 0) {
                 throw new \RuntimeException('Курс валют временно недоступен. Пожалуйста, попробуйте чуть позже.');
             }
 
-            $order = DB::transaction(function () use ($cartDetails, $customer, $rate, $formattedPhone) {
+            $retryService = app(OrderNumberRetryService::class);
+
+            $order = $retryService->run(function (int $orderNumber) use ($cart, $customer, $rate, $formattedPhone, $emailToSave, $service) {
                 $fullAddress = trim($this->address);
                 $customerCity = trim($this->city);
                 if ($customerCity === '' && $customer->instagram && str_contains($customer->instagram, '|')) {
@@ -206,14 +212,17 @@ class CheckoutPage extends Component
 
                 $customerFullName = trim($this->firstName.' '.$this->lastName) ?: 'Покупатель';
 
-                $customer->update([
+                $customerUpdates = [
                     'first_name' => trim($this->firstName) ?: $customer->first_name,
                     'last_name' => trim($this->lastName) ?: $customer->last_name,
+                    'phone_number' => $formattedPhone,
                     'instagram' => $customerCity.' | '.$fullAddress,
-                ]);
+                ];
+                if ($emailToSave !== '') {
+                    $customerUpdates['email'] = $emailToSave;
+                }
+                $customer->update($customerUpdates);
 
-                $maxNum = (int) (Order::max('order_number') ?: 1000);
-                $orderNumber = $maxNum + 1;
                 $secureHash = bin2hex(random_bytes(16));
 
                 $newOrder = Order::create([
@@ -236,11 +245,11 @@ class CheckoutPage extends Component
 
                 $verifiedSubtotalUsd = 0.0;
 
-                foreach ($cartDetails['items'] as $item) {
-                    $prodData = $item['product'] ?? [];
-                    $prodId = $prodData['id'] ?? null;
-                    $sku = trim((string) ($prodData['sku'] ?? ''));
-                    $title = trim((string) ($prodData['title'] ?? $prodData['name'] ?? 'Mally Product'));
+                foreach ($cart as $item) {
+                    $prodData = $item['product'] ?? $item;
+                    $prodId = $prodData['id'] ?? $item['id'] ?? null;
+                    $sku = trim((string) ($prodData['sku'] ?? $item['sku'] ?? ''));
+                    $title = trim((string) ($prodData['title'] ?? $prodData['name'] ?? $item['title'] ?? $item['name'] ?? 'Mally Product'));
                     $qty = (int) ($item['quantity'] ?? 0);
 
                     if ($qty <= 0) {
@@ -256,51 +265,21 @@ class CheckoutPage extends Component
                     }
 
                     if (! $productModel) {
-                        $availStock = max(0, (int) ($prodData['stock'] ?? $prodData['quantity'] ?? 0));
-                        if ($availStock < $qty || ! ($prodData['inStock'] ?? true)) {
-                            throw new \RuntimeException("Недостаточно товара «{$title}» на складе (доступно: {$availStock} шт.).");
-                        }
-
-                        $brandName = trim((string) ($prodData['brand'] ?? 'Mally Collection')) ?: 'Mally Collection';
-                        $brand = Brand::firstOrCreate(['name' => $brandName]);
-
-                        $catName = trim((string) ($prodData['category'] ?? 'Косметика')) ?: 'Косметика';
-                        $category = Category::where('name_ru', $catName)
-                            ->orWhere('name_en', $catName)
-                            ->orWhere('name_uz', $catName)
-                            ->first()
-                            ?? Category::first()
-                            ?? Category::create([
-                                'name_ru' => $catName,
-                                'name_en' => $prodData['category_en'] ?? $catName,
-                                'name_uz' => $prodData['category_uz'] ?? $catName,
-                            ]);
-
-                        $productModel = Product::create([
-                            'brand_id' => $brand->id,
-                            'category_id' => $category->id,
-                            'name' => $title,
-                            'sku' => $sku !== '' ? $sku : ('ML-'.Str::upper(Str::random(6))),
-                            'description' => $prodData['description'] ?? null,
-                            'quantity' => $availStock,
-                            'selling_price' => (float) ($prodData['price'] ?? 35),
-                            'image' => $prodData['image'] ?? null,
-                            'status' => 'in_stock',
-                        ]);
-                    } else {
-                        $dbStock = max(0, (int) $productModel->quantity);
-                        if ($productModel->status === 'out_of_stock' || $dbStock < $qty) {
-                            throw new \RuntimeException("Недостаточно товара «{$productModel->name}» на складе (доступно: {$dbStock} шт.).");
-                        }
+                        throw new \RuntimeException("Товар «{$title}» больше не доступен. Обновите корзину.");
                     }
 
-                    $dbNumPrice = (float) $productModel->selling_price;
-                    $unitPriceUsd = ($dbNumPrice > 1000 && $rate > 0)
-                        ? round($dbNumPrice / $rate, 2)
-                        : ($dbNumPrice > 0 ? $dbNumPrice : (float) ($prodData['price'] ?? 35));
+                    $dbStock = max(0, (int) $productModel->quantity);
+                    if ($productModel->status === 'out_of_stock' || $dbStock < $qty) {
+                        throw new \RuntimeException("Недостаточно товара «{$productModel->name}» на складе (доступно: {$dbStock} шт.).");
+                    }
+
+                    $unitPriceUsd = (float) $productModel->selling_price;
+                    if ($unitPriceUsd <= 0) {
+                        throw new \RuntimeException("Некорректная цена для товара «{$productModel->name}».");
+                    }
 
                     $verifiedSubtotalUsd += round($unitPriceUsd * $qty, 2);
-                    $unitPriceUzs = round($unitPriceUsd * $rate);
+                    $unitPriceUzs = $service->convertUsdToUzs($unitPriceUsd);
                     $lineTotalUzs = $unitPriceUzs * $qty;
 
                     $receipt = ProductReceipt::where('product_id', $productModel->id)
@@ -314,13 +293,9 @@ class CheckoutPage extends Component
                         'product_receipt_id' => $receipt?->id,
                         'quantity' => $qty,
                         'price' => $unitPriceUzs,
-                        'unit_cost' => $receipt?->purchase_price ?? 0,
+                        'unit_cost' => $receipt?->unit_cost ?? 0,
                         'total_price' => $lineTotalUzs,
                     ]);
-
-                    if (! $receipt) {
-                        $productModel->decrement('quantity', $qty);
-                    }
                 }
 
                 $discountUsd = $this->appliedPromo === 'MALLY10'
@@ -328,7 +303,7 @@ class CheckoutPage extends Component
                     : 0.0;
                 $finalUsd = max(0.0, round($verifiedSubtotalUsd - $discountUsd, 2));
                 $finalUzs = round(($finalUsd * $rate) / 1000) * 1000;
-                $discountUzs = round($discountUsd * $rate);
+                $discountUzs = $service->convertUsdToUzs($discountUsd);
 
                 $newOrder->update([
                     'discount_amount' => $discountUzs,

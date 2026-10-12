@@ -206,6 +206,9 @@
             @php
                 $displayName = trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')) ?: $pt['default_name'];
                 $avatarLetter = mb_strtoupper(mb_substr($displayName, 0, 1)) ?: 'M';
+                $rawCustomerEmail = trim((string) ($customer->email ?? ''));
+                $hasVerifiedEmail = $rawCustomerEmail !== '' && ! str_ends_with(strtolower($rawCustomerEmail), '@telegram.mally.local');
+                $isPhoneVerified = ! empty($customer->telegram);
             @endphp
             <!-- LOGGED IN USER PROFILE -->
             <div class="space-y-6">
@@ -222,11 +225,24 @@
                                 </h1>
                             </div>
                             <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                                <span class="text-xs text-[#78716C] font-mono">{{ $customer->phone_number }}</span>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                    <i class="fa-solid fa-shield-halved text-[9px]"></i>
-                                    <span>{{ $pt['device_bound'] }}</span>
-                                </span>
+                                @if(!empty($customer->phone_number))
+                                    <span class="text-xs text-[#78716C] font-mono">{{ $customer->phone_number }}</span>
+                                @endif
+                                @if($hasVerifiedEmail)
+                                    <span class="text-xs text-[#78716C] font-medium">{{ $rawCustomerEmail }}</span>
+                                @endif
+                                @if($isPhoneVerified)
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                        <i class="fa-brands fa-telegram text-[10px]"></i>
+                                        <span>Telegram подтверждён</span>
+                                    </span>
+                                @endif
+                                @if($hasVerifiedEmail)
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                        <i class="fa-solid fa-envelope-circle-check text-[9px]"></i>
+                                        <span>Почта подтверждена</span>
+                                    </span>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -319,10 +335,9 @@
                                         ? route('checkout.receipt', ['orderNumber' => $orderNum, 'orderHash' => $order->secure_hash])
                                         : route('checkout.receipt', ['orderNumber' => $orderNum]);
                                     $st = $statusMap[$order->status] ?? ['label' => $order->status, 'bg' => '#F3F4F6', 'color' => '#374151', 'border' => '#E5E7EB'];
-                                    $rate = $exchangeRate ?: 12850;
-                                    $rawAmount = (float) $order->amount;
-                                    $amountUzs = $rawAmount > 1000 ? round($rawAmount) : round($rawAmount * $rate);
-                                    $amountUsd = $rawAmount > 1000 ? round($rawAmount / $rate, 2) : $rawAmount;
+                                    $rate = (float) ($exchangeRate ?? 0);
+                                    $amountUzs = (int) round((float) $order->amount);
+                                    $amountUsd = $rate > 0 ? round($amountUzs / $rate, 2) : null;
                                     $isDelivered = in_array($order->status, ['delivered', 'DELIVERED', 'ARCHIVED'], true);
                                 @endphp
                                 <div class="bg-white rounded-3xl p-6 border border-[#EAE3DE] shadow-sm space-y-4 hover:border-[#D5CCC7] transition">
@@ -371,9 +386,11 @@
                                             <div class="font-bold text-base text-[#1C1917]">
                                                 {{ number_format($amountUzs, 0, '.', ' ') }} {{ $pt['sum_unit'] }}
                                             </div>
-                                            <div class="text-[11px] text-emerald-600 font-medium">
-                                                ≈ ${{ number_format($amountUsd, 1, '.', '') }} USD
-                                            </div>
+                                            @if($amountUsd !== null)
+                                                <div class="text-[11px] text-emerald-600 font-medium">
+                                                    ≈ ${{ number_format($amountUsd, 1, '.', '') }} USD
+                                                </div>
+                                            @endif
                                         </div>
                                     </div>
 
@@ -398,8 +415,7 @@
                                                         $img = $prod?->image
                                                             ? (str_starts_with($prod->image, 'http') ? $prod->image : asset($prod->image))
                                                             : 'https://findy.uz/cdn/shop/files/sample.jpg';
-                                                        $itemPriceRaw = (float) $item->price;
-                                                        $itemPriceUzs = $itemPriceRaw > 1000 ? round($itemPriceRaw) : round($itemPriceRaw * $rate);
+                                                        $itemPriceUzs = (int) round((float) $item->price);
                                                     @endphp
                                                     <div class="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between gap-4">
                                                         <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -515,22 +531,105 @@
                                 </div>
                             </div>
 
+                            <!-- Поле Email (Gmail): закреплено если подтверждено, иначе доступно для заполнения -->
                             <div>
                                 <div class="flex items-center justify-between mb-1">
                                     <label class="block text-xs font-semibold text-[#78716C]">
-                                        {{ $pt['phone'] }}
+                                        Email (Gmail)
                                     </label>
-                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
-                                        <i class="fa-solid fa-check text-[10px]"></i>
-                                        <span>{{ $pt['verified'] }}</span>
-                                    </span>
+                                    @if($hasVerifiedEmail)
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-check text-[10px]"></i>
+                                            <span>{{ $pt['verified'] }}</span>
+                                        </span>
+                                    @else
+                                        <span class="text-[11px] text-[#8C827A]">Необязательно</span>
+                                    @endif
                                 </div>
-                                <input
-                                    type="tel"
-                                    disabled
-                                    value="{{ $phone }}"
-                                    class="w-full px-4 py-2.5 bg-emerald-50/40 border border-emerald-200/70 rounded-xl text-xs font-mono font-bold text-emerald-950"
-                                />
+                                @if($hasVerifiedEmail)
+                                    <input
+                                        type="email"
+                                        disabled
+                                        readonly
+                                        value="{{ $rawCustomerEmail }}"
+                                        class="w-full px-4 py-2.5 bg-emerald-50/40 border border-emerald-200/70 rounded-xl text-xs font-medium text-emerald-950 cursor-not-allowed select-none"
+                                    />
+                                @else
+                                    <input
+                                        type="email"
+                                        wire:model="email"
+                                        placeholder="example@gmail.com"
+                                        class="w-full px-4 py-2.5 bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl text-xs focus:outline-none focus:border-[#1C1917]"
+                                    />
+                                @endif
+                            </div>
+
+                            <!-- Поле Номер телефона: закреплено если подтверждено через Telegram, иначе доступно для редактирования -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1 flex-wrap gap-1">
+                                    <label class="block text-xs font-semibold text-[#78716C]">
+                                        {{ $pt['phone'] }} *
+                                    </label>
+                                    @if($isPhoneVerified)
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                                            <i class="fa-brands fa-telegram text-[11px]"></i>
+                                            <span>{{ $pt['verified'] }} (Telegram)</span>
+                                        </span>
+                                    @else
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
+                                                <span>Не подтверждён в Telegram</span>
+                                            </span>
+                                            <button
+                                                type="button"
+                                                wire:click="startTelegramPhoneVerification"
+                                                class="inline-flex items-center gap-1 text-[11px] font-bold text-[#0088cc] hover:underline cursor-pointer"
+                                            >
+                                                <i class="fa-brands fa-telegram"></i>
+                                                <span>Подтвердить</span>
+                                            </button>
+                                        </div>
+                                    @endif
+                                </div>
+                                @if($isPhoneVerified)
+                                    <input
+                                        type="tel"
+                                        disabled
+                                        readonly
+                                        value="{{ $phone }}"
+                                        class="w-full px-4 py-2.5 bg-emerald-50/40 border border-emerald-200/70 rounded-xl text-xs font-mono font-bold text-emerald-950 cursor-not-allowed select-none"
+                                    />
+                                @else
+                                    <div
+                                        x-data="{
+                                            formatUzPhone(e) {
+                                                let digits = (e.target.value || '').replace(/\D/g, '');
+                                                if (digits.startsWith('998')) {
+                                                    digits = digits.slice(3);
+                                                }
+                                                digits = digits.slice(0, 9);
+                                                let formatted = '+998';
+                                                if (digits.length > 0) formatted += ' ' + digits.slice(0, 2);
+                                                if (digits.length > 2) formatted += ' ' + digits.slice(2, 5);
+                                                if (digits.length > 5) formatted += ' ' + digits.slice(5, 7);
+                                                if (digits.length > 7) formatted += ' ' + digits.slice(7, 9);
+                                                e.target.value = formatted;
+                                                $wire.set('phone', formatted, false);
+                                            }
+                                        }"
+                                    >
+                                        <input
+                                            type="tel"
+                                            wire:model="phone"
+                                            maxlength="17"
+                                            placeholder="+998 90 123 45 67"
+                                            required
+                                            @input="formatUzPhone($event)"
+                                            @focus="if (!$event.target.value || !$event.target.value.startsWith('+998')) { $event.target.value = '+998 '; $wire.set('phone', '+998 ', false); }"
+                                            class="w-full px-4 py-2.5 bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl text-xs font-mono font-medium focus:outline-none focus:border-[#1C1917]"
+                                        />
+                                    </div>
+                                @endif
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

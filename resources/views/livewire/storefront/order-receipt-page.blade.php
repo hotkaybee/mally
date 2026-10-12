@@ -1,12 +1,10 @@
 @php
     $orderNum = $order->order_number ?: $order->id;
-    $rate = $exchangeRate ?: 12850;
-    $rawAmount = (float) $order->amount;
-    $totalAmountUzs = $rawAmount > 1000 ? round($rawAmount) : round($rawAmount * $rate);
-    $usdEquiv = number_format($totalAmountUzs / $rate, 2, '.', '');
+    $rate = (float) ($exchangeRate ?? 0);
+    $totalAmountUzs = (int) round((float) $order->amount);
+    $usdEquiv = $rate > 0 ? number_format($totalAmountUzs / $rate, 2, '.', '') : null;
 
-    $rawDiscount = (float) ($order->discount_amount ?? 0);
-    $discountUzs = $rawDiscount > 1000 ? round($rawDiscount) : round($rawDiscount * $rate);
+    $discountUzs = (int) round((float) ($order->discount_amount ?? 0));
 
     $statusNormalized = match ($order->status) {
         'processing', 'new', 'NEW' => 'NEW',
@@ -422,9 +420,11 @@
                             <i class="fa-solid text-sm" :class="copiedAmount ? 'fa-check text-emerald-600' : 'fa-copy'"></i>
                         </button>
                     </div>
-                    <span class="text-xs text-emerald-600 font-medium font-mono">
-                        ≈ ${{ $usdEquiv }} USD ({{ $rt['usd_rate_note'] }})
-                    </span>
+                    @if($usdEquiv !== null)
+                        <span class="text-xs text-emerald-600 font-medium font-mono">
+                            ≈ ${{ $usdEquiv }} USD ({{ $rt['usd_rate_note'] }})
+                        </span>
+                    @endif
                 </div>
             </div>
 
@@ -566,8 +566,7 @@
                             $img = $prod?->image
                                 ? (str_starts_with($prod->image, 'http') ? $prod->image : asset($prod->image))
                                 : 'https://findy.uz/cdn/shop/files/sample.jpg';
-                            $itemPriceRaw = (float) $item->price;
-                            $itemPriceUzs = $itemPriceRaw > 1000 ? round($itemPriceRaw) : round($itemPriceRaw * $rate);
+                            $itemPriceUzs = (int) round((float) $item->price);
                         @endphp
                         <div class="py-3.5 first:pt-0 flex items-center gap-4">
                             <div class="w-16 h-16 rounded-2xl bg-[#FAF7F5] border border-[#EAE3DE] overflow-hidden flex-shrink-0">

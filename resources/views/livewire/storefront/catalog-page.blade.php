@@ -140,7 +140,7 @@
                 </button>
             </div>
         @else
-            <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5 mt-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5 lg:gap-6 mt-6">
                 @foreach($paginatedProducts as $p)
                     <x-storefront.product-card :product="$p" :store="$store" />
                 @endforeach
@@ -185,7 +185,6 @@
         :isOpen="$isAuthModalOpen"
         :step="$authStep"
         :phone="$authPhone"
-        :devCode="$authDevCode"
         :message="$authModalMessage"
     />
 </div>

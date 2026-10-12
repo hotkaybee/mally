@@ -123,14 +123,23 @@ class StorefrontService
         return (float) ($this->getExchangeRateData()['rate'] ?? 0.0);
     }
 
+    public function convertUsdToUzs(float $usdAmount): int
+    {
+        $rate = $this->getExchangeRate();
+        if ($rate <= 0) {
+            throw new \RuntimeException('Курс валют временно недоступен. Пожалуйста, попробуйте чуть позже.');
+        }
+
+        return (int) round($usdAmount * $rate);
+    }
+
     public function formatPrice(float|int|string|null $priceVal, ?string $forceCurrency = null): string
     {
-        $num = (float) ($priceVal ?? 0);
-        $rate = $this->getExchangeRate();
-        $usd = ($num > 1000 && $rate > 0) ? ($num / $rate) : $num;
+        $usd = (float) ($priceVal ?? 0);
         $currency = $forceCurrency ?? $this->getCurrency();
 
         if ($currency === 'UZS') {
+            $rate = $this->getExchangeRate();
             if ($rate <= 0) {
                 return '-';
             }
@@ -211,15 +220,10 @@ class StorefrontService
         $dbProducts = Product::with(['brand', 'category'])->get();
         $initials = $this->getRichInitialProducts();
         $formatted = [];
-        $liveRate = $this->getExchangeRate();
 
         foreach ($initials as $init) {
-            $usdPrice = (isset($init['price']) && (float) $init['price'] > 1000 && $liveRate > 0)
-                ? round(((float) $init['price']) / $liveRate, 2)
-                : (float) ($init['price'] ?? 45.0);
-            $usdOldPrice = (isset($init['oldPrice']) && (float) $init['oldPrice'] > 1000 && $liveRate > 0)
-                ? round(((float) $init['oldPrice']) / $liveRate, 2)
-                : (isset($init['oldPrice']) ? (float) $init['oldPrice'] : null);
+            $usdPrice = isset($init['price']) ? (float) $init['price'] : 45.0;
+            $usdOldPrice = isset($init['oldPrice']) ? (float) $init['oldPrice'] : null;
 
             $images = is_array($init['images'] ?? null) && count($init['images']) > 0
                 ? $init['images']
@@ -267,8 +271,7 @@ class StorefrontService
             $catNameEn = $p->category?->name_en ?: $catNameRu;
             $catNameUz = $p->category?->name_uz ?: $catNameRu;
 
-            $numPrice = (float) $p->selling_price;
-            $priceInUsd = ($numPrice > 1000 && $liveRate > 0) ? round($numPrice / $liveRate, 2) : $numPrice;
+            $priceInUsd = (float) $p->selling_price;
             if ($priceInUsd <= 0) {
                 $priceInUsd = 35.00;
             }
@@ -391,9 +394,7 @@ class StorefrontService
         }
 
         if ($dbProduct) {
-            $liveRate = $this->getExchangeRate();
-            $numPrice = (float) $dbProduct->selling_price;
-            $priceInUsd = ($numPrice > 1000 && $liveRate > 0) ? round($numPrice / $liveRate, 2) : $numPrice;
+            $priceInUsd = (float) $dbProduct->selling_price;
             if ($priceInUsd <= 0) {
                 $priceInUsd = (float) ($productData['price'] ?? 35.00);
             }
@@ -943,9 +944,7 @@ class StorefrontService
     {
         $brandName = $p->brand?->name ?: 'Mally Collection';
         $catNameRu = $p->category?->name_ru ?: ($p->category?->name ?: 'Косметика');
-        $numPrice = (float) $p->selling_price;
-        $liveRate = $this->getExchangeRate();
-        $priceInUsd = ($numPrice > 1000 && $liveRate > 0) ? round($numPrice / $liveRate, 2) : $numPrice;
+        $priceInUsd = (float) $p->selling_price;
         if ($priceInUsd <= 0) {
             $priceInUsd = 35.00;
         }
@@ -1129,7 +1128,6 @@ class StorefrontService
             'status.cancelled' => 'Отменён',
             'footer.rights' => 'Все права защищены.',
             'footer.returns' => 'Политика и регламент',
-            'footer.tracking' => 'Отследить доставку',
         ],
         'uz' => [
             'nav.catalog' => 'Katalog',
@@ -1232,7 +1230,6 @@ class StorefrontService
             'status.cancelled' => 'Bekor qilingan',
             'footer.rights' => 'Barcha huquqlar himoyalangan.',
             'footer.returns' => 'Qaytarish va almashtirish',
-            'footer.tracking' => 'Buyurtmani kuzatish',
         ],
         'en' => [
             'nav.catalog' => 'Catalog',
@@ -1335,7 +1332,6 @@ class StorefrontService
             'status.cancelled' => 'Cancelled',
             'footer.rights' => 'All rights reserved.',
             'footer.returns' => 'Returns & Exchanges',
-            'footer.tracking' => 'Track Order',
         ],
     ];
 }

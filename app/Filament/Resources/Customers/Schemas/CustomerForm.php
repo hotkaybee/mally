@@ -34,7 +34,8 @@ class CustomerForm
                     ->options([
                         'word_of_mouth' => __('Word of mouth'),
                         'friend' => __('Friend'),
-                        'instagram' => __('Instagram')
+                        'instagram' => __('Instagram'),
+                        'telegram' => __('Telegram'),
                     ])
                     ->required(),
             ]);

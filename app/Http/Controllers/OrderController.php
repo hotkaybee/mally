@@ -53,14 +53,6 @@ class OrderController extends Controller
         }
         $idempotencyCacheKey = $idempotencyKey !== '' ? 'api-order-idempotency:'.hash('sha256', $idempotencyKey) : null;
 
-        if ($idempotencyCacheKey && ! Cache::add($idempotencyCacheKey, 'pending', now()->addDay())) {
-            $existing = Order::find((int) Cache::get($idempotencyCacheKey));
-
-            return $existing
-                ? $this->orderCreatedResponse($existing, 200)
-                : response()->json(['error' => __('This order is already being processed.')], 409);
-        }
-
         $name = trim($validated['customerName']);
         $quantities = [];
         foreach ($validated['items'] as $item) {
@@ -82,6 +74,17 @@ class OrderController extends Controller
                 'email' => 'tg_'.Str::lower(Str::random(12)).'@mally.uz',
                 'source' => 'telegram',
             ]);
+        }
+
+        // Claimed right before placing the order, so every failure below
+        // releases it. The stored value is 'pending' or the order id.
+        if ($idempotencyCacheKey && ! Cache::add($idempotencyCacheKey, 'pending', now()->addDay())) {
+            $orderId = Cache::get($idempotencyCacheKey);
+            $existing = is_numeric($orderId) ? Order::find((int) $orderId) : null;
+
+            return $existing
+                ? $this->orderCreatedResponse($existing, 200)
+                : response()->json(['error' => __('This order is already being processed.')], 409);
         }
 
         try {

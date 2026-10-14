@@ -1,0 +1,34 @@
+<?php
+
+/*
+ * `composer dev`: server + queue listener + log tail + Vite, side by side.
+ *
+ * Windows needs two exceptions (macOS/Linux run exactly as before):
+ * - Pail requires the pcntl extension, which PHP on Windows doesn't have; it
+ *   would exit at once and --kill-others would stop everything else.
+ * - `artisan serve` without --no-reload starts PHP with a stripped
+ *   environment and then fails with "Failed to listen ... (reason: ?)".
+ */
+
+$windows = PHP_OS_FAMILY === 'Windows';
+
+$processes = [
+    'server' => $windows ? 'php artisan serve --no-reload' : 'php artisan serve',
+    'queue' => 'php artisan queue:listen --tries=1',
+    'logs' => $windows ? null : 'php artisan pail --timeout=0',
+    'vite' => 'npm run dev',
+];
+$colors = ['server' => '#93c5fd', 'queue' => '#c4b5fd', 'logs' => '#fb7185', 'vite' => '#fdba74'];
+
+$processes = array_filter($processes);
+
+$command = sprintf(
+    'npx concurrently -c "%s" %s --names=%s --kill-others',
+    implode(',', array_intersect_key($colors, $processes)),
+    implode(' ', array_map(fn (string $cmd) => '"'.$cmd.'"', $processes)),
+    implode(',', array_keys($processes)),
+);
+
+passthru($command, $exitCode);
+
+exit($exitCode);

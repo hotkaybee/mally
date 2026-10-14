@@ -19,6 +19,11 @@ php artisan make:filament-user && php artisan admin:grant you@example.com
 composer dev            # server + queue listener + logs + Vite
 ```
 
+`composer dev` runs `scripts/dev.php`. On Windows it leaves out the Pail log
+tail (needs the `pcntl` extension) and starts `artisan serve --no-reload`
+(without it the server fails with "Failed to listen ... (reason: ?)"); after
+editing `.env` restart it by hand.
+
 ## Routes
 
 | Path | What |
@@ -55,7 +60,9 @@ don't belong to a storefront account. Statuses today: `processing`,
 **Stock.** Stock lives in product receipts (`quantity_remaining`), sold FIFO by
 `received_at`, `id`. `products.quantity` is only a cache. Order lines draw and
 return stock through `OrderProductObserver` → `InventoryService`; deleting an
-order returns its stock. Customers only ever see "In stock" / "Sold out": the
+order returns its stock. Customers never see a stock count; a product that
+can be added to the cart is available, and only sold-out products are
+labelled "Sold out" (there is no "In stock" label). The
 cart's + button and quantity changes are checked on the server against live
 receipts (capped at 50), asking for more keeps the current quantity, and
 availability is checked again at checkout and inside the order transaction.

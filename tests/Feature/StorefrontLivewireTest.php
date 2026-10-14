@@ -16,9 +16,11 @@ use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Services\ExchangeRateService;
+use App\Services\OrderService;
 use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -208,6 +210,72 @@ class StorefrontLivewireTest extends TestCase
             $this->assertStringNotContainsString('765 43 21', $snapshot, $class);
             $this->assertStringNotContainsString('Victim', $snapshot, $class);
         }
+    }
+
+    public function test_catalog_render_does_not_query_per_product_card(): void
+    {
+        for ($i = 1; $i <= 18; $i++) {
+            $this->product('Product '.$i, 'SKU-'.$i, 10 + $i, 5);
+        }
+        $service = app(StorefrontService::class);
+        $service->toggleFavorite('SKU-1');
+        $service->getAllProducts(); // warm the catalogue cache
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        Livewire::test(CatalogPage::class)->assertSee('Product 18');
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(10, $queries, "Catalog render ran {$queries} queries");
+    }
+
+    public function test_catalog_page_size_is_limited_to_the_offered_options(): void
+    {
+        for ($i = 1; $i <= 20; $i++) {
+            $this->product('Product '.$i, 'SKU-'.$i, 10 + $i, 1);
+        }
+
+        foreach ([1000, -5, 0] as $size) {
+            $this->assertCount(18, Livewire::test(CatalogPage::class)->set('pageSize', $size)->viewData('paginatedProducts'));
+        }
+        $this->assertCount(20, Livewire::test(CatalogPage::class)->set('pageSize', 36)->viewData('paginatedProducts'));
+    }
+
+    public function test_quantity_requests_never_reveal_the_stock_or_exceed_the_order_limit(): void
+    {
+        $this->product(qty: 7);
+        $big = $this->product('Big batch', 'ML-BIG', 5.0, 80);
+        $service = app(StorefrontService::class);
+
+        // Asking for far more than is in stock keeps the current quantity.
+        $service->addToCart('ML-HG-BRUSH');
+        $result = $service->updateCartQuantity('ML-HG-BRUSH', 999);
+        $this->assertFalse($result['success']);
+        $this->assertSame(1, $service->getItemQuantityInCart('ML-HG-BRUSH'));
+
+        // The cart never allows more than one order line accepts.
+        $service->addToCart('ML-BIG');
+        $service->updateCartQuantity('ML-BIG', OrderService::MAX_QUANTITY_PER_LINE + 10);
+        $this->assertSame(1, $service->getItemQuantityInCart('ML-BIG'));
+        $service->updateCartQuantity('ML-BIG', OrderService::MAX_QUANTITY_PER_LINE);
+        $this->assertSame(OrderService::MAX_QUANTITY_PER_LINE, $service->getItemQuantityInCart('ML-BIG'));
+        $this->assertFalse($service->canIncrease('ML-BIG'));
+        $this->assertTrue($service->validateAndSyncCart()['valid']);
+        $this->assertSame((string) $big->id, $service->getCart()[1]['id']);
+    }
+
+    public function test_session_only_stores_bounded_client_input(): void
+    {
+        $this->product();
+        $service = app(StorefrontService::class);
+
+        $service->toggleFavorite(str_repeat('x', 5000));
+        $this->assertSame([], $service->getFavoriteKeys());
+        $this->assertTrue($service->toggleFavorite('ML-HG-BRUSH'));
+
+        Livewire::test(CartPage::class)->set('orderNote', str_repeat('a', 5000));
+        $this->assertSame(1000, mb_strlen(session('mally_order_note')));
     }
 
     public function test_currency_switch_only_changes_display(): void

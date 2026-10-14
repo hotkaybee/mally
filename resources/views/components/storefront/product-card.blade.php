@@ -4,7 +4,7 @@
     $store = $store ?? app(\App\Services\StorefrontService::class);
     $prodKey = (string) ($product['sku'] ?? $product['id'] ?? 'prod');
     $qtyInCart = $store->getItemQuantityInCart($prodKey);
-    $favorited = $store->isFavorite($prodKey);
+    $favorited = $store->isFavoriteProduct($product);
     $displayTitle = $product['title'] ?? $product['name'] ?? 'Косметика Mally';
     $isOutOfStock = empty($product['inStock']);
     $canIncrease = $qtyInCart > 0 && $store->canIncrease($prodKey);

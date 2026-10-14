@@ -27,6 +27,9 @@ class CatalogPage extends Component
 
     public int $currentPage = 1;
 
+    /** Only the sizes offered in the page-size select; anything else falls back to the first. */
+    private const PAGE_SIZES = [18, 36, 72];
+
     public int $pageSize = 18;
 
     public function mount(): void
@@ -78,6 +81,10 @@ class CatalogPage extends Component
 
     public function render()
     {
+        if (! in_array($this->pageSize, self::PAGE_SIZES, true)) {
+            $this->pageSize = self::PAGE_SIZES[0];
+        }
+
         $store = $this->store();
         $allProducts = $store->getAllProducts();
 

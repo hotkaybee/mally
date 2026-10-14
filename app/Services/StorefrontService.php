@@ -15,6 +15,8 @@ class StorefrontService
 {
     public const PRODUCTS_CACHE_KEY = 'mally_storefront_products_v3';
 
+    public const MAX_FAVORITES = 200;
+
     private ?array $cachedExchangeRate = null;
 
     private ?array $cachedAllProducts = null;
@@ -206,8 +208,8 @@ class StorefrontService
     }
 
     /**
-     * Units that can still be sold, read live from the receipts. Never shown
-     * to customers.
+     * Units a customer may put in the cart: read live from the receipts and
+     * capped at what one order line accepts. Never shown to customers.
      */
     public function availableQuantity(Product $product): int
     {
@@ -215,7 +217,9 @@ class StorefrontService
             return 0;
         }
 
-        return max(0, (int) $product->receipts()->sum('quantity_remaining'));
+        $remaining = (int) $product->receipts()->sum('quantity_remaining');
+
+        return max(0, min($remaining, OrderService::MAX_QUANTITY_PER_LINE));
     }
 
     public function getDatabaseReviewsForProduct(?int $productId): array
@@ -363,12 +367,15 @@ class StorefrontService
                     continue;
                 }
 
-                if ($qty > $available) {
-                    $qty = $available;
+                $newQty = $qty;
+                if ($newQty > $available) {
+                    // Keep the current amount rather than jumping to the
+                    // available stock, which would reveal the exact count.
+                    $newQty = min(max(1, (int) ($item['quantity'] ?? 1)), $available);
                     $warning = __('No more units of this product are available.');
                 }
 
-                $item['quantity'] = $qty;
+                $item['quantity'] = $newQty;
                 $item['price'] = (float) $product->selling_price;
             }
 
@@ -503,21 +510,18 @@ class StorefrontService
         return is_array($favs) ? array_values(array_unique($favs)) : [];
     }
 
-    public function isFavorite(string $productKey): bool
+    /**
+     * Whether a formatted product (see formatProduct) is a favourite. Matches
+     * on the id and sku already in the array, so product cards cost no query.
+     */
+    public function isFavoriteProduct(array $product): bool
     {
         $keys = $this->getFavoriteKeys();
-        if (empty($keys)) {
-            return false;
-        }
-        if (in_array($productKey, $keys, true)) {
-            return true;
-        }
-        $product = $this->findProduct($productKey);
-        if ($product) {
-            return in_array((string) $product['id'], $keys, true) || in_array((string) $product['sku'], $keys, true);
-        }
 
-        return false;
+        return $keys !== [] && (
+            in_array((string) ($product['id'] ?? ''), $keys, true)
+            || in_array((string) ($product['sku'] ?? ''), $keys, true)
+        );
     }
 
     public function toggleFavorite(string $productKey): bool
@@ -527,10 +531,16 @@ class StorefrontService
         $altKey = $product ? (string) ($product['id'] ?? $productKey) : $productKey;
 
         $keys = $this->getFavoriteKeys();
+
         if (in_array($canonicalKey, $keys, true) || in_array($altKey, $keys, true) || in_array($productKey, $keys, true)) {
             $keys = array_values(array_filter($keys, fn ($k) => $k !== $canonicalKey && $k !== $altKey && $k !== $productKey));
             session(['mally_favorites' => $keys]);
 
+            return false;
+        }
+
+        // Only real products are stored, and only a bounded number of them.
+        if (! $product || count($keys) >= self::MAX_FAVORITES) {
             return false;
         }
 

@@ -17,7 +17,7 @@
     $brandName = is_array($currentProduct['brand'] ?? null) ? ($currentProduct['brand']['name'] ?? 'Mally Beauty') : ($currentProduct['brand'] ?? 'Mally Beauty');
     $categoryName = is_array($currentProduct['category'] ?? null) ? ($currentProduct['category']['name_ru'] ?? $currentProduct['category']['name'] ?? 'Каталог') : ($currentProduct['category'] ?? 'Каталог');
     $skuCode = $currentProduct['sku'] ?? $prodKey;
-    $favorited = $store->isFavorite($prodKey);
+    $favorited = $store->isFavoriteProduct($currentProduct);
 @endphp
 
 <div

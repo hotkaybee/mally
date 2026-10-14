@@ -21,9 +21,17 @@ class CartPage extends Component
         }
     }
 
+    /** Same limit as the checkout comment. */
+    private const MAX_NOTE_LENGTH = 1000;
+
     public function updatedOrderNote(string $value): void
     {
-        $trimmed = trim($value);
+        $this->rememberNote($value);
+    }
+
+    private function rememberNote(string $value): void
+    {
+        $trimmed = mb_substr(trim($value), 0, self::MAX_NOTE_LENGTH);
         if ($trimmed !== '') {
             session(['mally_order_note' => $trimmed]);
         } else {
@@ -36,28 +44,23 @@ class CartPage extends Component
         $service = $this->store();
         $customer = $service->getCurrentCustomer();
         if (! $customer) {
-            $this->openAuthModal('Войдите или зарегистрируйтесь для оформления заказа');
+            $this->openAuthModal(__('Please sign in or register to place an order'));
 
             return;
         }
 
-        $trimmedNote = trim($this->orderNote);
-        if ($trimmedNote !== '') {
-            session(['mally_order_note' => $trimmedNote]);
-        } else {
-            session()->forget('mally_order_note');
-        }
+        $this->rememberNote($this->orderNote);
 
         $validation = $service->validateAndSyncCart();
         if (! $validation['valid']) {
             $msg = implode(' ', $validation['messages']);
-            $this->dispatch('toast', message: $msg ?: 'Данные корзины были обновлены в соответствии с актуальным наличием и ценами.', type: 'error');
+            $this->dispatch('toast', message: $msg ?: __('Please review your order and confirm it again.'), type: 'error');
 
             return;
         }
 
         if (empty($validation['cart']['items'])) {
-            $this->dispatch('toast', message: 'Ваша корзина пуста', type: 'error');
+            $this->dispatch('toast', message: __('Your cart is empty.'), type: 'error');
 
             return;
         }

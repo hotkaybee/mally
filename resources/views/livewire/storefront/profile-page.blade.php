@@ -363,7 +363,7 @@
                                                 </a>
                                             </div>
                                             <span class="text-[11px] text-[#A8A29E] mt-1 block">
-                                                {{ $pt['date_from'] }} {{ $order->created_at?->format('d.m.Y H:i') }}
+                                                {{ $pt['date_from'] }} {{ $order->created_at?->timezone('Asia/Tashkent')->format('d.m.Y H:i') }}
                                             </span>
                                         </div>
 

@@ -385,7 +385,7 @@
                 <div class="pt-2 flex flex-wrap justify-center items-center gap-2 text-xs">
                     <span class="px-3 py-1 bg-white/85 rounded-full text-[#78716C] border border-[#EAE3DE] flex items-center gap-1.5">
                         <i class="fa-regular fa-calendar text-[11px]"></i>
-                        <span>{{ $order->created_at?->format('d.m.Y, H:i') }}</span>
+                        <span>{{ $order->created_at?->timezone('Asia/Tashkent')->format('d.m.Y, H:i') }}</span>
                     </span>
                     <span class="px-3 py-1 bg-white/85 rounded-full text-emerald-700 border border-emerald-200 font-medium flex items-center gap-1.5">
                         <i class="fa-solid fa-shield-halved text-[11px]"></i>

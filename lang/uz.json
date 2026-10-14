@@ -160,5 +160,7 @@
     "This order is already being processed.": "Bu buyurtma allaqachon qayta ishlanmoqda.",
     "Sign up with Telegram": "Telegram orqali ro'yxatdan o'tish",
     "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.": "Raqamingiz Telegram orqali tasdiqlandi. Parol kerak emas: siz doim bot orqali kirasiz.",
-    "Please wait, the bot will reply in a few seconds…": "Kuting, bot bir necha soniyada javob beradi…"
+    "Please wait, the bot will reply in a few seconds…": "Kuting, bot bir necha soniyada javob beradi…",
+    "Payments received": "Qabul qilingan to'lovlar",
+    "Calculated from the order lines": "Buyurtma mahsulotlaridan hisoblanadi"
 }

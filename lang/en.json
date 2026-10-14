@@ -160,5 +160,7 @@
     "This order is already being processed.": "This order is already being processed.",
     "Sign up with Telegram": "Sign up with Telegram",
     "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.": "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.",
-    "Please wait, the bot will reply in a few seconds…": "Please wait, the bot will reply in a few seconds…"
+    "Please wait, the bot will reply in a few seconds…": "Please wait, the bot will reply in a few seconds…",
+    "Payments received": "Payments received",
+    "Calculated from the order lines": "Calculated from the order lines"
 }

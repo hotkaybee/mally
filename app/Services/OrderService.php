@@ -95,6 +95,19 @@ class OrderService
     }
 
     /**
+     * Recomputes the order total from its saved lines (for orders edited in
+     * the admin): Σ line totals − the stored discount. amount_uzs follows at
+     * the order's own rate (OrderObserver).
+     */
+    public function recalculateAmount(Order $order): void
+    {
+        $subtotal = (float) $order->orderProducts()->sum('total_price');
+
+        $order->amount = max(0.0, round($subtotal - (float) $order->discount_amount, 2));
+        $order->save();
+    }
+
+    /**
      * Announces the order in the admin bot. With the sync queue the job would
      * run inside the shopper's request, so it waits until the response is
      * sent; a Telegram problem never fails the order.

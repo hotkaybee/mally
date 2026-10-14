@@ -160,5 +160,7 @@
     "This order is already being processed.": "Этот заказ уже обрабатывается.",
     "Sign up with Telegram": "Регистрация через Telegram",
     "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.": "Ваш номер подтверждён через Telegram. Пароль не нужен: входить вы будете через бота.",
-    "Please wait, the bot will reply in a few seconds…": "Подождите, бот ответит через несколько секунд…"
+    "Please wait, the bot will reply in a few seconds…": "Подождите, бот ответит через несколько секунд…",
+    "Payments received": "Получено оплат",
+    "Calculated from the order lines": "Считается по товарам заказа"
 }

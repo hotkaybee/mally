@@ -10,7 +10,8 @@ use Filament\Widgets\TableWidget as BaseWidget;
 class RecentOrdersWidget extends BaseWidget
 {
     protected static ?int $sort = 2;
-    protected int | string | array $columnSpan = 'full';
+
+    protected int|string|array $columnSpan = 'full';
 
     public function getHeading(): ?string
     {
@@ -32,7 +33,7 @@ class RecentOrdersWidget extends BaseWidget
                     ->sortable(),
                 TextColumn::make('customer.first_name')
                     ->label(__('Customer'))
-                    ->formatStateUsing(fn ($record) => $record->customer->first_name . ' ' . $record->customer->last_name),
+                    ->formatStateUsing(fn ($record) => $record->customer->first_name.' '.$record->customer->last_name),
                 TextColumn::make('amount')
                     ->money('USD')
                     ->sortable(),

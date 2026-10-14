@@ -5,11 +5,14 @@ namespace Database\Seeders;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use Database\Seeders\Concerns\ProtectsLiveCatalog;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class ProductSeeder extends Seeder
 {
+    use ProtectsLiveCatalog;
+
     /**
      * The warehouse snapshot this catalogue was taken from. Receipts are dated
      * with it rather than "today", so re-seeding stays deterministic.
@@ -398,6 +401,10 @@ class ProductSeeder extends Seeder
      */
     public function run(): void
     {
+        if ($this->wouldWipeLiveCatalog()) {
+            return;
+        }
+
         DB::table('product_receipts')->delete();
         DB::table('products')->delete();
 

@@ -14,18 +14,26 @@ class OrdersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with('customer'))
             ->columns([
+                TextColumn::make('order_number')
+                    ->label(__('Order number'))
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('customer.first_name')
                     ->label(__('Customer'))
-                    ->formatStateUsing(fn ($record) => $record->customer->first_name . ' ' . $record->customer->last_name)
+                    // The customer may have been deleted; the order keeps the recipient name.
+                    ->formatStateUsing(fn ($record) => $record->customer
+                        ? $record->customer->first_name.' '.$record->customer->last_name
+                        : $record->customer_name)
                     ->searchable(['customer.first_name', 'customer.last_name']),
                 TextColumn::make('amount')
                     ->label(__('amount'))
-                    ->numeric()
+                    ->money('USD')
                     ->sortable(),
                 TextColumn::make('amount_paid')
                     ->label(__('amount_paid'))
-                    ->numeric()
+                    ->money('USD')
                     ->sortable(),
                 TextColumn::make('status')
                     ->label(__('status'))

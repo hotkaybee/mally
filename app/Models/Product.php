@@ -41,6 +41,10 @@ class Product extends Model
     {
         static::saved(fn () => StorefrontService::forgetProductsCache());
         static::deleted(fn () => StorefrontService::forgetProductsCache());
+
+        // A product that was sold stays: deleting it would strip the name
+        // from past orders. Mark it out of stock instead.
+        static::deleting(fn (Product $product) => ! OrderProduct::where('product_id', $product->id)->exists());
     }
 
     public function brand(): BelongsTo

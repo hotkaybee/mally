@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\TelegramLoginRequest;
 use App\Models\User;
+use App\Services\EmailAuthService;
 use App\Services\TelegramAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -114,9 +115,8 @@ class TelegramAuthTest extends TestCase
             ->call('verifyTelegramCode')
             ->assertSet('authStep', 'telegram-register')
             ->assertSet('authPhone', self::PHONE)
+            ->assertDontSeeHtml('wire:model="authPassword"')
             ->set('authName', 'Ali Valiev')
-            ->set('authPassword', 'TelegramPass123')
-            ->set('authPasswordConfirmation', 'TelegramPass123')
             ->call('completeTelegramRegistration')
             ->assertSet('isAuthModalOpen', false);
 
@@ -125,7 +125,9 @@ class TelegramAuthTest extends TestCase
         $this->assertSame(self::PHONE, $user->phone);
         $this->assertNotNull($user->phone_verified_at);
         $this->assertFalse($user->is_admin);
-        $this->assertTrue(Hash::check('TelegramPass123', $user->password));
+        // No password was asked for: phone + password can't sign into this account.
+        $this->assertFalse(Hash::check('', $user->password));
+        $this->assertFalse(app(EmailAuthService::class)->attemptLogin(self::PHONE, 'Password123', '10.1.1.1')['success']);
 
         $customer = Customer::sole();
         $this->assertSame($user->id, $customer->user_id);
@@ -276,8 +278,6 @@ class TelegramAuthTest extends TestCase
         $this->emailUser(['phone' => '901234567']);
 
         $component->set('authName', 'Intruder')
-            ->set('authPassword', 'TelegramPass123')
-            ->set('authPasswordConfirmation', 'TelegramPass123')
             ->call('completeTelegramRegistration')
             ->assertSet('authStep', 'login');
 
@@ -299,8 +299,6 @@ class TelegramAuthTest extends TestCase
             ->set('authTelegramCode', $this->codeSentByBot())
             ->call('verifyTelegramCode')
             ->set('authName', 'Ali')
-            ->set('authPassword', 'TelegramPass123')
-            ->set('authPasswordConfirmation', 'TelegramPass123')
             ->call('completeTelegramRegistration');
 
         $mine = Customer::where('user_id', User::sole()->id)->sole();

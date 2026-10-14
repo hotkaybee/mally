@@ -17,8 +17,10 @@ $processes = [
     'queue' => 'php artisan queue:listen --tries=1',
     'logs' => $windows ? null : 'php artisan pail --timeout=0',
     'vite' => 'npm run dev',
+    // Answers the Telegram login bot at once (idles when a webhook is set).
+    'bot' => 'php artisan telegram:auth-poll',
 ];
-$colors = ['server' => '#93c5fd', 'queue' => '#c4b5fd', 'logs' => '#fb7185', 'vite' => '#fdba74'];
+$colors = ['server' => '#93c5fd', 'queue' => '#c4b5fd', 'logs' => '#fb7185', 'vite' => '#fdba74', 'bot' => '#86efac'];
 
 $processes = array_filter($processes);
 

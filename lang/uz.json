@@ -157,5 +157,8 @@
     "Code from Telegram": "Telegramdan kelgan kod",
     "Enter the 6-digit code the bot has just sent you. Never share it with anyone.": "Bot yuborgan 6 xonali kodni kiriting. Uni hech kimga aytmang.",
     "Confirm": "Tasdiqlash",
-    "This order is already being processed.": "Bu buyurtma allaqachon qayta ishlanmoqda."
+    "This order is already being processed.": "Bu buyurtma allaqachon qayta ishlanmoqda.",
+    "Sign up with Telegram": "Telegram orqali ro'yxatdan o'tish",
+    "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.": "Raqamingiz Telegram orqali tasdiqlandi. Parol kerak emas: siz doim bot orqali kirasiz.",
+    "Please wait, the bot will reply in a few seconds…": "Kuting, bot bir necha soniyada javob beradi…"
 }

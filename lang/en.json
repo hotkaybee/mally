@@ -157,5 +157,8 @@
     "Code from Telegram": "Code from Telegram",
     "Enter the 6-digit code the bot has just sent you. Never share it with anyone.": "Enter the 6-digit code the bot has just sent you. Never share it with anyone.",
     "Confirm": "Confirm",
-    "This order is already being processed.": "This order is already being processed."
+    "This order is already being processed.": "This order is already being processed.",
+    "Sign up with Telegram": "Sign up with Telegram",
+    "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.": "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.",
+    "Please wait, the bot will reply in a few seconds…": "Please wait, the bot will reply in a few seconds…"
 }

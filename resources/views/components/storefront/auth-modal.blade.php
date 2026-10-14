@@ -732,7 +732,7 @@
 
             @elseif($step === 'telegram-wait')
                 <!-- TELEGRAM: ШАГ 1 — ОТКРЫТЬ БОТА И ПОДЕЛИТЬСЯ КОНТАКТОМ -->
-                <div @if($this->authTelegramBotUrl) wire:poll.2s="checkTelegramAuthStatus" @endif class="space-y-4">
+                <div @if($this->authTelegramBotUrl) wire:poll.2s.keep-alive="checkTelegramAuthStatus" @endif class="space-y-4">
                     <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
                         {{ __('Sign in with Telegram') }}
                     </h2>
@@ -763,7 +763,7 @@
 
                         <div class="flex items-center justify-center gap-2 py-1 text-[11px] text-[#78716C]">
                             <i class="fa-solid fa-spinner fa-spin text-[#0088CC]"></i>
-                            <span>{{ ($this->authTelegramStatus ?? 'pending') === 'contact_requested' ? __('Waiting for your contact in the bot…') : __('Waiting for the bot…') }}</span>
+                            <span>{{ ($this->authTelegramStatus ?? 'pending') === 'contact_requested' ? __('Waiting for your contact in the bot…') : __('Please wait, the bot will reply in a few seconds…') }}</span>
                         </div>
                     @else
                         <button
@@ -831,13 +831,13 @@
                 </div>
 
             @elseif($step === 'telegram-register')
-                <!-- ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ ЧЕРЕЗ TELEGRAM (ТЕЛЕФОН УЖЕ ПОДТВЕРЖДЁН, ПАРОЛЬ ОБЯЗАТЕЛЕН, GMAIL НЕ ОБЯЗАТЕЛЕН) -->
-                <div x-data="{ showPassword: false, showPasswordConfirm: false }">
+                <!-- ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ ЧЕРЕЗ TELEGRAM: номер уже подтверждён ботом, пароль не нужен — вход всегда через Telegram -->
+                <div>
                     <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
-                        Регистрация через Telegram
+                        {{ __('Sign up with Telegram') }}
                     </h2>
                     <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
-                        Ваш номер подтверждён через Telegram. Задайте пароль, чтобы входить и по номеру телефона.
+                        {{ __('Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.') }}
                     </p>
 
                     <div class="mb-4 px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
@@ -866,66 +866,6 @@
                                 class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
                             />
                             @error('authName')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Пароль (ОБЯЗАТЕЛЬНО) -->
-                        <div>
-                            <label for="mally-tg-reg-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ $txt['new_pass_label'] }}
-                            </label>
-                            <div class="relative">
-                                <input
-                                    id="mally-tg-reg-password"
-                                    :type="showPassword ? 'text' : 'password'"
-                                    type="password"
-                                    wire:model="authPassword"
-                                    minlength="8"
-                                    placeholder="Минимум 8 символов"
-                                    autocomplete="new-password"
-                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showPassword = !showPassword"
-                                    :aria-label="showPassword ? '{{ $txt['hide_pass'] }}' : '{{ $txt['show_pass'] }}'"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
-                                >
-                                    <i class="fa-regular text-xs" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                            @error('authPassword')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Подтверждение пароля (ОБЯЗАТЕЛЬНО) -->
-                        <div>
-                            <label for="mally-tg-reg-password-confirm" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ $txt['confirm_pass_label'] }}
-                            </label>
-                            <div class="relative">
-                                <input
-                                    id="mally-tg-reg-password-confirm"
-                                    :type="showPasswordConfirm ? 'text' : 'password'"
-                                    type="password"
-                                    wire:model="authPasswordConfirmation"
-                                    minlength="8"
-                                    placeholder="Повторите пароль"
-                                    autocomplete="new-password"
-                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showPasswordConfirm = !showPasswordConfirm"
-                                    :aria-label="showPasswordConfirm ? '{{ $txt['hide_pass'] }}' : '{{ $txt['show_pass'] }}'"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
-                                >
-                                    <i class="fa-regular text-xs" :class="showPasswordConfirm ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                            @error('authPasswordConfirmation')
                                 <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
                             @enderror
                         </div>

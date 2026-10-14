@@ -77,7 +77,16 @@ request bound to the browser session and opens `t.me/<bot>?start=login_<token>`
 → the bot asks the user to share **their own** contact (a forwarded contact is
 refused) → the bot sends a 6-digit code (hashed, 5 min, 5 attempts) → the user
 types it on the site → login, registration, or linking to the signed-in
-account.
+account. An account already linked to that Telegram signs in without a
+password; a new one only gives a name (no password — it always signs in
+through the bot). If the phone belongs to an account not yet linked to this
+Telegram, its password is asked once and Telegram is linked.
+
+The bot answers only while updates are fetched: either Telegram calls the
+webhook, or the `telegram:auth-poll` worker long-polls (it runs in
+`composer dev` and in the Docker supervisor, and idles when a webhook secret
+is set). Without either, the bot replies only when an open login window polls
+the site, which stalls as soon as the browser goes to the background.
 
 **Reviews** need a delivered order of your own containing the product, one per
 order and product, and wait for moderation in the admin.
@@ -104,9 +113,9 @@ real bot:
 
 1. Set the token/username. Either register the webhook
    (`setWebhook?url=<APP_URL>/api/telegram/webhook&secret_token=<secret>`) or,
-   without a secret, run `php artisan telegram:auth-poll`.
+   without a secret, make sure `php artisan telegram:auth-poll` is running.
 2. On the site: "Continue with Telegram" → bot opens → share contact → code
-   arrives → type it → you are signed in (new account asks for a name/password).
+   arrives → type it → you are signed in (a new account only asks for a name).
 3. Negative cases: forward someone else's contact (refused), use the same link
    twice or after 10 min (refused), enter 5 wrong codes (request burned), open
    the link from a different browser session (code is useless there).

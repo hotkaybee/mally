@@ -90,13 +90,14 @@ class CustomerAccountService
 
     /**
      * New account from a Telegram identity verified by TelegramAuthService.
+     * It has no usable password: the owner always signs in through the bot.
      *
      * @param  array{telegram_user_id: string, telegram_username: string, phone: string}  $identity
      * @return array{result: string, user?: User}
      */
-    public function registerFromTelegram(array $identity, string $name, string $password): array
+    public function registerFromTelegram(array $identity, string $name): array
     {
-        return $this->withPhoneLock($identity['phone'], function () use ($identity, $name, $password) {
+        return $this->withPhoneLock($identity['phone'], function () use ($identity, $name) {
             if ($this->findByTelegram($identity['telegram_user_id'])) {
                 return ['result' => self::TELEGRAM_TAKEN];
             }
@@ -111,7 +112,8 @@ class CustomerAccountService
                 'phone' => $identity['phone'],
                 'telegram_id' => $identity['telegram_user_id'],
                 'phone_verified_at' => now(),
-                'password' => $password,
+                // Random and never shown: phone + password login can't match it.
+                'password' => Str::random(64),
             ]);
 
             $customer = $this->customerFor($user);

@@ -781,7 +781,8 @@ trait InteractsWithStore
     }
 
     /**
-     * Step 3 (new customers): name + password for the Telegram-verified phone.
+     * Step 3 (new customers): just a name. The phone is verified by Telegram
+     * and these accounts always sign in through the bot, so no password.
      */
     public function completeTelegramRegistration(): void
     {
@@ -802,21 +803,7 @@ trait InteractsWithStore
             return;
         }
 
-        if (mb_strlen($this->authPassword) < 8) {
-            $this->failAuth('authPassword', 'Пароль обязателен и должен содержать минимум 8 символов.');
-
-            return;
-        }
-
-        if ($this->authPassword !== $this->authPasswordConfirmation) {
-            $this->failAuth('authPasswordConfirmation', 'Пароли не совпадают.');
-
-            return;
-        }
-
-        $res = $this->accounts()->registerFromTelegram($identity, $name, $this->authPassword);
-        $this->authPassword = '';
-        $this->authPasswordConfirmation = '';
+        $res = $this->accounts()->registerFromTelegram($identity, $name);
         session()->forget(self::VERIFIED_TELEGRAM);
 
         if ($res['result'] !== CustomerAccountService::OK) {

@@ -4,22 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Mally is a Laravel 12 + Filament 4 admin/back-office app. The public site is just the default Laravel welcome page; all real functionality lives in the Filament admin panel at `/admin`. Domain is small-scale e-commerce: Customers, Brands, Categories, Products, Orders (with `OrderProduct` pivot).
+Mally is a Laravel 12 + Filament 4 + Livewire 3 small-scale e-commerce app (cosmetics shop, Uzbekistan). Two halves:
 
-Requires **PHP ^8.2**. The repo uses MySQL by default (`.env.example` → `DB_DATABASE=mally`), with sessions / cache / queues all backed by the database (`SESSION_DRIVER=database`, `CACHE_STORE=database`, `QUEUE_CONNECTION=database`).
+- **Admin / back-office** — Filament panel at `/admin`: Customers, Brands, Categories, Products, Product receipts (stock batches), Orders (with `OrderProduct` lines).
+- **Storefront** — public Livewire pages in `app/Livewire/Storefront` (catalog, product, cart, checkout, receipt, profile, contact), routed in `routes/web.php`.
+
+`routes/api.php` holds a small JSON API used by the Telegram bot (`OrderController`, `ProductController`, `CategoryController`).
+
+Requires **PHP ^8.2**. MySQL by default (`.env.example` → `DB_DATABASE=mally`), with sessions / cache / queues all backed by the database.
 
 ## Commands
 
 ```bash
 # Full dev loop (server + queue listener + log tail + Vite, concurrently)
-  composer dev
+composer dev
 
 # Tests — clears config first, then runs PHPUnit
 composer test
 php artisan test --filter=SomeTest          # single test class
 php artisan test tests/Feature/ExampleTest.php::test_method  # single method
 
-# Code style (Pint, configured via Laravel defaults)
+# Code style (Pint, Laravel defaults) — run before every push
 ./vendor/bin/pint
 
 # Create an admin user for the Filament panel (required to log in)
@@ -29,61 +34,70 @@ php artisan make:filament-user
 php artisan optimize:clear
 ```
 
-`composer dev` is the canonical entry point — it runs `php artisan serve`, `queue:listen`, `pail` (live log tail), and `npm run dev` together. Don't run `php artisan serve` standalone unless you know you don't need the others.
-
 ## Architecture
 
-### Filament panel is the application
+### Admin panel
 
-`app/Providers/Filament/AdminPanelProvider.php` is the central wiring point. It:
-- Mounts the panel at `/admin` with login enabled.
-- Auto-discovers resources from `app/Filament/Resources` and widgets from `app/Filament/Widgets`.
-- Explicitly registers the four dashboard widgets (`SalesOverviewWidget`, `MonthlyRevenueChart`, `RecentOrdersWidget`, `LowStockWidget`) — adding a new dashboard widget requires editing this provider, not just dropping a file.
+`app/Providers/Filament/AdminPanelProvider.php` mounts the panel at `/admin`, auto-discovers resources and widgets, and **explicitly registers dashboard widgets** — a new widget must be added to `->widgets([...])` there.
 
-There are **no controllers and no API routes** for the admin functionality. `routes/web.php` only renders `welcome`. CRUD, validation, and presentation all live inside Filament Resource classes.
+Each model's resource lives in `app/Filament/Resources/<Plural>/` split into `Pages/`, `Schemas/` (form + infolist), `Tables/`; the `*Resource.php` class stays thin. Mirror `Products/` when adding a resource.
 
-### Resource layout convention
+### Storefront
 
-Each domain model has a Filament resource under `app/Filament/Resources/<Plural>/`. The pattern (see `Products/` as the reference) splits a resource across four sibling folders:
+- Livewire page components + Blade views in `resources/views/livewire/storefront` and `resources/views/components/storefront`.
+- Shared session state (cart, favorites, locale, currency, logged-in customer) goes through `App\Services\StorefrontService`; components use it via the `InteractsWithStore` trait.
+- Exchange rate (USD→UZS, from cbu.uz) comes from `App\Services\ExchangeRateService` and is cached.
 
-```
-Products/
-  ProductResource.php          # registration, navigation label, page map
-  Pages/                       # ListX, CreateX, EditX, ViewX
-  Schemas/                     # ProductForm, ProductInfolist (form + view layouts)
-  Tables/                      # ProductsTable (columns, filters, actions)
-```
+### Stock
 
-`ProductResource` is thin — it just wires `Pages`, `Schemas`, and `Tables` together. Changes to form fields go in `Schemas/`; changes to table columns/filters go in `Tables/`. When adding a new resource, mirror this folder shape rather than putting everything in the resource class.
+Stock lives in **product receipts** (`product_receipts.quantity_remaining`). `products.quantity` is only a cached total recalculated by `InventoryService::syncProductCaches()`. Creating/updating/deleting an `OrderProduct` consumes/releases receipt stock through `OrderProductObserver` → `InventoryService`. See `tests/Feature/InventoryTest.php`.
 
-### i18n is load-bearing — translate every label
+### i18n
 
-The app ships English / Russian / Uzbek, with **Russian as the default locale**. See `LANGUAGE_SETUP.md` for the full story. The rule when writing any user-visible string:
+English / Russian / Uzbek, **Russian is the default**. Every user-visible string: `__('Key')` + the key in **all three** of `lang/en.json`, `lang/ru.json`, `lang/uz.json`. Filament's own strings come from `lang/vendor/filament/*` — don't put app labels there. Don't introduce new parallel translation mechanisms (PHP arrays, `match ($locale)`, `$texts` in Blade). See `LANGUAGE_SETUP.md`.
 
-1. Wrap it in `__('Key')`.
-2. Add the key to **all three** of `lang/en.json`, `lang/ru.json`, `lang/uz.json` — missing a file means that locale falls back to the raw key.
-3. Filament's own UI strings come from published vendor files under `lang/vendor/filament/{en,ru,uz}/`; don't edit those for your own labels.
+House style is in `guidelines.md`: business logic in models/services (not in Filament resources or Livewire components), eager-load relations used by tables.
 
-This applies to navigation labels, model labels, column/field labels, widget headings, and enum/status display values. See `ProductResource::getNavigationLabel()` for the standard pattern.
+## Rules — do NOT
 
-Switch locale via `APP_LOCALE=en|ru|uz` in `.env`, then `php artisan optimize:clear`.
+**Money**
+- Prices and all stored order amounts are **USD** (admin uses `->money('USD')`). UZS is display-only, converted from the cached rate. Never store UZS in a USD column, never guess the currency from the size of a number, never recompute historical orders at today's rate.
+- Totals, prices and discounts are computed on the server from the DB. Ignore any price/total sent by the client.
 
-### Frontend build
+**Stock**
+- Never decrement `products.quantity` by hand; stock is taken from receipts via `OrderProductObserver`/`InventoryService`.
+- Never show customers the exact quantity — only "In stock" / "Sold out". Re-check availability on the server at add-to-cart, quantity change and order placement.
 
-Vite + Tailwind 4 exist only to compile the assets Filament needs (`resources/css/app.css`, `resources/js/app.js`). There is no SPA, no React/Vue, no custom Blade UI beyond `welcome.blade.php`. `npm run dev` / `npm run build` are the only meaningful npm scripts.
+**Storefront / orders**
+- The storefront only reads the catalog. Never create `Product`, `Brand` or `Category` from checkout or any customer action.
+- Don't generate order numbers with `max + 1`.
+- Don't write addresses or anything else into `customers.instagram`.
+- Don't let anyone see an order they don't own (no lookups by bare order number or phone).
 
-## Conventions from `guidelines.md`
+**Security**
+- Every `public` Livewire property and method is client-controllable. Mark server-owned state `#[Locked]` and re-verify on the server before acting.
+- No hardcoded / universal / "dev" login codes. OTP codes: random, hashed server-side, expiring, rate-limited, single-use, never rendered or logged outside `local`.
+- Registration with an existing phone or email is rejected. Never merge accounts or auto-link Telegram/email to an existing account.
+- Never use `withoutVerifying()` / `verify => false`. Tests use `Http::fake()`.
+- Never show `$e->getMessage()` to customers — show a generic message and `report($e)`.
+- No custom `server.php` in the project root (it can serve `.env`).
+- Public write endpoints need validation and rate limiting.
 
-The repo has a `guidelines.md` capturing house style. The non-obvious / project-specific points:
+**Scope / config**
+- Don't bring back React or add new UI frameworks, API layers or admin sections beyond the ticket.
+- Don't change shared settings (`composer dev` script, `vite.config.js`, `config/app.php` timezone — stays UTC, convert to `Asia/Tashkent` only when displaying) without team agreement.
+- Don't commit secrets, `.env`, local DBs or diagnostic dumps.
 
-- **Fat models, skinny controllers** — but in practice this app has no controllers; business logic belongs on the model or a Service class, not in the Filament Resource.
-- **Move validation out of controllers into Request classes** when controllers do appear.
-- **Prefer `chunk()` over `get()`** for data-heavy operations.
-- **Eager-load with `with()`** to avoid N+1, especially in Filament tables that render related fields.
+**Tests**
+- Tests never hit the network (`Http::fake()`), and call `$this->withoutVite()` in `setUp()`.
+- Don't claim a fix works until a test for it passes.
+
+**Git**
+- Branch from current `main`, one ticket per PR, PR title `MAL-<n>: <ticket title>`.
+- No `git reset --hard`, force push, history rewrites, branch deletion or PR merges without explicit permission. Don't run destructive migrations or wipe data.
 
 ## Gotchas
 
-- `composer install` will fail on PHP < 8.2 — check `php -v` before debugging weird Composer errors.
-- After editing `config/app.php`, translation JSON, or any Filament resource registration, run `php artisan optimize:clear` — stale caches will silently serve old labels.
-- Sessions/cache/queue all live in MySQL, so `migrate` must run before the app boots. The `post-create-project-cmd` script touches a SQLite file, but real config points at MySQL — don't trust it.
-- New dashboard widget = also register it in `AdminPanelProvider::panel()->widgets([...])`, not just discovery.
+- `composer install` fails on PHP < 8.2.
+- After editing `config/*`, translation JSON or Filament resource registration, run `php artisan optimize:clear` — stale caches silently serve old values.
+- Sessions/cache/queue live in MySQL, so `migrate` must run before the app boots.

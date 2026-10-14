@@ -156,5 +156,6 @@
     "Start again": "Начать заново",
     "Code from Telegram": "Код из Telegram",
     "Enter the 6-digit code the bot has just sent you. Never share it with anyone.": "Введите 6-значный код, который прислал бот. Никому его не сообщайте.",
-    "Confirm": "Подтвердить"
+    "Confirm": "Подтвердить",
+    "This order is already being processed.": "Этот заказ уже обрабатывается."
 }

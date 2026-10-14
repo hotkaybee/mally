@@ -342,6 +342,26 @@ class EmailAuthTest extends TestCase
         $this->assertNull(session('mally_user_id'));
     }
 
+    public function test_password_spraying_across_many_accounts_from_one_ip_is_throttled(): void
+    {
+        User::factory()->create([
+            'email' => 'victim@example.com',
+            'password' => Hash::make('CorrectPass123'),
+        ]);
+        $auth = app(EmailAuthService::class);
+
+        // One wrong guess per account: never trips the per-account limit.
+        for ($i = 1; $i <= EmailAuthService::MAX_LOGIN_FAILURES_PER_IP; $i++) {
+            $this->assertFalse($auth->attemptLogin("guess{$i}@example.com", 'Password1', '10.0.0.9')['success']);
+        }
+
+        $blocked = $auth->attemptLogin('victim@example.com', 'CorrectPass123', '10.0.0.9');
+        $this->assertSame('rate_limit', $blocked['error'] ?? null);
+
+        // Another IP is not affected.
+        $this->assertTrue($auth->attemptLogin('victim@example.com', 'CorrectPass123', '10.0.0.10')['success']);
+    }
+
     public function test_registration_sends_hashed_code_and_rejects_wrong_code_without_changing_step(): void
     {
         Mail::fake();

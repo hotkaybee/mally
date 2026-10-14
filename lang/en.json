@@ -156,5 +156,6 @@
     "Start again": "Start again",
     "Code from Telegram": "Code from Telegram",
     "Enter the 6-digit code the bot has just sent you. Never share it with anyone.": "Enter the 6-digit code the bot has just sent you. Never share it with anyone.",
-    "Confirm": "Confirm"
+    "Confirm": "Confirm",
+    "This order is already being processed.": "This order is already being processed."
 }

@@ -31,6 +31,11 @@ class EmailAuthService
 
     public const LOGIN_DECAY_SECONDS = 60;
 
+    /** Generous, because mobile carriers in UZ put many people behind one IP. */
+    public const MAX_LOGIN_FAILURES_PER_IP = 30;
+
+    public const LOGIN_IP_DECAY_SECONDS = 900;
+
     public const GENERIC_LOGIN_ERROR = 'Неверный email или пароль.';
 
     public function normalizeEmail(string $rawEmail): string
@@ -105,7 +110,7 @@ class EmailAuthService
             }
 
             $loginKey = $this->loginRateKey($normalizedPhone, $ipAddress);
-            if (RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)) {
+            if ($this->loginThrottled($loginKey, $ipAddress)) {
                 return [
                     'success' => false,
                     'error' => 'rate_limit',
@@ -116,7 +121,7 @@ class EmailAuthService
 
             $user = User::wherePhone($normalizedPhone)->first();
             if (! $user) {
-                RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
+                $this->recordFailedLogin($loginKey, $ipAddress);
 
                 return [
                     'success' => false,
@@ -127,7 +132,7 @@ class EmailAuthService
             }
 
             if (! Hash::check($password, (string) $user->password)) {
-                RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
+                $this->recordFailedLogin($loginKey, $ipAddress);
 
                 return [
                     'success' => false,
@@ -168,7 +173,7 @@ class EmailAuthService
         }
 
         $loginKey = $this->loginRateKey($email, $ipAddress);
-        if (RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)) {
+        if ($this->loginThrottled($loginKey, $ipAddress)) {
             return [
                 'success' => false,
                 'error' => 'rate_limit',
@@ -179,7 +184,7 @@ class EmailAuthService
         $user = $this->findUserByEmail($email);
 
         if (! $user) {
-            RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
+            $this->recordFailedLogin($loginKey, $ipAddress);
 
             return [
                 'success' => false,
@@ -189,7 +194,7 @@ class EmailAuthService
         }
 
         if (! Hash::check($password, (string) $user->password)) {
-            RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
+            $this->recordFailedLogin($loginKey, $ipAddress);
 
             return [
                 'success' => false,
@@ -542,6 +547,24 @@ class EmailAuthService
     public function loginRateKey(string $rawEmail, string $ip): string
     {
         return 'auth_login_attempts:'.sha1($this->normalizeEmail($rawEmail).'|'.trim($ip));
+    }
+
+    /** Failed logins from one IP across all emails/phones (stops password spraying). */
+    public function loginIpRateKey(string $ip): string
+    {
+        return 'auth_login_failures_ip:'.sha1(trim($ip));
+    }
+
+    private function loginThrottled(string $loginKey, string $ip): bool
+    {
+        return RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)
+            || RateLimiter::tooManyAttempts($this->loginIpRateKey($ip), self::MAX_LOGIN_FAILURES_PER_IP);
+    }
+
+    private function recordFailedLogin(string $loginKey, string $ip): void
+    {
+        RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
+        RateLimiter::hit($this->loginIpRateKey($ip), self::LOGIN_IP_DECAY_SECONDS);
     }
 
     /**

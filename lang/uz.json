@@ -156,5 +156,6 @@
     "Start again": "Qaytadan boshlash",
     "Code from Telegram": "Telegramdan kelgan kod",
     "Enter the 6-digit code the bot has just sent you. Never share it with anyone.": "Bot yuborgan 6 xonali kodni kiriting. Uni hech kimga aytmang.",
-    "Confirm": "Tasdiqlash"
+    "Confirm": "Tasdiqlash",
+    "This order is already being processed.": "Bu buyurtma allaqachon qayta ishlanmoqda."
 }

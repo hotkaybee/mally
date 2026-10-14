@@ -10,7 +10,9 @@ use App\Services\OrderService;
 use App\Services\StorefrontService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Throwable;
 
 class OrderController extends Controller
 {
@@ -41,6 +43,22 @@ class OrderController extends Controller
         $phone = $this->storefront->normalizeAndValidateUzPhone($validated['customerPhone']);
         if (! $phone) {
             return response()->json(['error' => __('Please enter a valid phone number (+998 followed by 9 digits)')], 422);
+        }
+
+        // Optional Idempotency-Key: a retried request (e.g. after a timeout)
+        // returns the order created by the first one instead of a new order.
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        if (strlen($idempotencyKey) > 100) {
+            return response()->json(['error' => 'Idempotency-Key is too long.'], 422);
+        }
+        $idempotencyCacheKey = $idempotencyKey !== '' ? 'api-order-idempotency:'.hash('sha256', $idempotencyKey) : null;
+
+        if ($idempotencyCacheKey && ! Cache::add($idempotencyCacheKey, 'pending', now()->addDay())) {
+            $existing = Order::find((int) Cache::get($idempotencyCacheKey));
+
+            return $existing
+                ? $this->orderCreatedResponse($existing, 200)
+                : response()->json(['error' => __('This order is already being processed.')], 409);
         }
 
         $name = trim($validated['customerName']);
@@ -77,16 +95,31 @@ class OrderController extends Controller
                 'payment_method' => $validated['paymentMethod'] ?? 'card_fast',
             ]);
         } catch (CheckoutException $e) {
+            $idempotencyCacheKey && Cache::forget($idempotencyCacheKey);
+
             return response()->json(['error' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            $idempotencyCacheKey && Cache::forget($idempotencyCacheKey);
+
+            throw $e;
         }
 
+        if ($idempotencyCacheKey) {
+            Cache::put($idempotencyCacheKey, $order->id, now()->addDay());
+        }
+
+        return $this->orderCreatedResponse($order, 201);
+    }
+
+    private function orderCreatedResponse(Order $order, int $status): JsonResponse
+    {
         return response()->json([
             'success' => true,
             'orderNumber' => $order->order_number,
             'orderHash' => $order->secure_hash,
             'totalAmount' => (float) $order->amount,
             'currency' => 'USD',
-        ], 201);
+        ], $status);
     }
 
     /**

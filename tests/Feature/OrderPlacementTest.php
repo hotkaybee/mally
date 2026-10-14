@@ -321,6 +321,31 @@ class OrderPlacementTest extends TestCase
         $this->assertCount(0, Livewire::test(ProfilePage::class)->viewData('orders'));
     }
 
+    public function test_api_retry_with_the_same_idempotency_key_places_one_order(): void
+    {
+        config(['services.store.orders_api_token' => 'secret-token']);
+        $product = $this->product(57.15, [5]);
+        $payload = [
+            'customerName' => 'Ali Valiev', 'customerPhone' => '+998 93 555 44 33',
+            // Client-sent money is ignored.
+            'items' => [['id' => $product->id, 'quantity' => 2, 'price' => 0.01]],
+            'totalAmount' => 1, 'discount' => 79,
+        ];
+        $headers = ['X-Api-Token' => 'secret-token', 'Idempotency-Key' => 'bot-msg-4711'];
+
+        $first = $this->postJson('/api/orders', $payload, $headers)->assertCreated();
+        $retry = $this->postJson('/api/orders', $payload, $headers)->assertOk();
+
+        $this->assertSame($first->json('orderNumber'), $retry->json('orderNumber'));
+        $this->assertSame(1, Order::count());
+        $this->assertEquals(114.30, (float) Order::sole()->amount);
+        $this->assertSame(3, $product->fresh()->quantity);
+
+        // A different key is a different order.
+        $this->postJson('/api/orders', $payload, ['Idempotency-Key' => 'bot-msg-4712'] + $headers)->assertCreated();
+        $this->assertSame(2, Order::count());
+    }
+
     public function test_api_rejects_unknown_products_without_creating_them(): void
     {
         config(['services.store.orders_api_token' => 'secret-token']);

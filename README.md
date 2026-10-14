@@ -1,61 +1,130 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Mally
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Small cosmetics shop for Uzbekistan: Laravel 12 + Livewire 3 storefront and a
+Filament 4 back office. No React, no separate SPA — pages are Livewire
+components rendered by Blade. Project rules for contributors (and AI agents)
+are in `CLAUDE.md`; code style in `guidelines.md`; translations in
+`LANGUAGE_SETUP.md`.
 
-## About Laravel
+## Setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Requires PHP ^8.2, Composer, Node, MySQL (sessions, cache and queue live in
+the database, so `migrate` must run before the app boots).
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+```bash
+composer install && npm ci
+cp .env.example .env && php artisan key:generate
+php artisan migrate
+php artisan make:filament-user && php artisan admin:grant you@example.com
+composer dev            # server + queue listener + logs + Vite
+```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Routes
 
-## Learning Laravel
+| Path | What |
+|------|------|
+| `/` `/catalog` `/products/{slug}` | Home, catalogue (filters, 18/36/72 per page), product page |
+| `/cart` `/checkout` | Session cart; checkout needs a signed-in shopper |
+| `/checkout/{orderNumber}/{orderHash?}` | Receipt: visible to the owner or with the secret hash |
+| `/favorites` `/profile` `/returns` `/contact` | Favourites, orders + settings + reviews, static returns page, contact form |
+| `/admin` | Filament panel, only for `users.is_admin` |
+| `GET /api/exchange-rate`, `/api/categories`, `/api/products(/{slug})` | Read-only JSON for the Telegram bot (60/min) |
+| `POST /api/orders` | Bot orders: `X-Api-Token: ORDERS_API_TOKEN`, 10/min, optional `Idempotency-Key` |
+| `GET /api/orders/track?order=&hash=` | Order status, needs the order's secret hash (20/min) |
+| `POST /api/telegram/webhook` | Login bot updates, needs `X-Telegram-Bot-Api-Secret-Token` |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Key flows
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+**Money.** Prices and every stored order amount are USD (`selling_price`,
+`orders.amount`, `order_product.price`). UZS is display-only, converted with
+the CBU rate (`ExchangeRateService`, cached, refreshed hourly by
+`exchange-rate:refresh`). Each order stores `exchange_rate` and `amount_uzs` as
+a snapshot; correcting `amount` later recomputes `amount_uzs` at that stored
+rate, never today's. Totals, discounts and prices are always computed on the
+server from the DB; anything the browser or bot sends is ignored. The promo
+code comes from `STORE_PROMO_CODE` / `STORE_PROMO_PERCENT`.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+**Orders.** Checkout (`CheckoutPage`) and the bot API (`OrderController`) both
+call `OrderService::placeOrder()`: one transaction, product and receipt rows
+locked, max 50 units per line, order number = 1000 + id. A double submit of one
+checkout page is ignored (locked per-page token); a bot retry with the same
+`Idempotency-Key` returns the first order. Bot orders reuse only customers that
+don't belong to a storefront account. Statuses today: `processing`,
+`awaiting_delivery`, `delivered`; payment is manual (card transfer).
 
-## Laravel Sponsors
+**Stock.** Stock lives in product receipts (`quantity_remaining`), sold FIFO by
+`received_at`, `id`. `products.quantity` is only a cache. Order lines draw and
+return stock through `OrderProductObserver` → `InventoryService`; deleting an
+order returns its stock. Customers only ever see "In stock" / "Sold out": the
+cart's + button and quantity changes are checked on the server against live
+receipts (capped at 50), asking for more keeps the current quantity, and
+availability is checked again at checkout and inside the order transaction.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+**Accounts.** A shopper is a `users` row (`is_admin = false`) owning one
+`customers` row. Sign-in: email or phone + password (email confirmed by a
+code), or Telegram. Accounts are never merged; an existing phone/email blocks
+registration. Failed logins are limited per account+IP and per IP.
 
-### Premium Partners
+**Telegram login** (`TelegramAuthService`): the site creates a one-time
+request bound to the browser session and opens `t.me/<bot>?start=login_<token>`
+→ the bot asks the user to share **their own** contact (a forwarded contact is
+refused) → the bot sends a 6-digit code (hashed, 5 min, 5 attempts) → the user
+types it on the site → login, registration, or linking to the signed-in
+account.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+**Reviews** need a delivered order of your own containing the product, one per
+order and product, and wait for moderation in the admin.
 
-## Contributing
+## Environment
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+| Variable | Purpose |
+|----------|---------|
+| `TELEGRAM_AUTH_BOT_TOKEN`, `TELEGRAM_AUTH_BOT_USERNAME` | Customer login bot |
+| `TELEGRAM_AUTH_WEBHOOK_SECRET` | Webhook secret; leave empty to use `php artisan telegram:auth-poll` |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_IDS`, `TELEGRAM_ADMIN_USERNAME` | Admin bot (contact form messages, shop contact) |
+| `ORDERS_API_TOKEN` | Shared secret of the ordering bot; empty = `POST /api/orders` closed |
+| `STORE_CARD_NUMBER`, `STORE_CARD_HOLDER` | Payment details on the receipt |
+| `STORE_PROMO_CODE`, `STORE_PROMO_PERCENT` | The single promo code |
+| `MAIL_*` | SMTP for email codes |
 
-## Code of Conduct
+Contact-form messages go through the queue: run a worker in production.
+Never commit `.env`, local databases or diagnostic dumps.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Telegram bot: manual check
 
-## Security Vulnerabilities
+Automated tests fake Telegram (`Http::fake()`); before release check with the
+real bot:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. Set the token/username. Either register the webhook
+   (`setWebhook?url=<APP_URL>/api/telegram/webhook&secret_token=<secret>`) or,
+   without a secret, run `php artisan telegram:auth-poll`.
+2. On the site: "Continue with Telegram" → bot opens → share contact → code
+   arrives → type it → you are signed in (new account asks for a name/password).
+3. Negative cases: forward someone else's contact (refused), use the same link
+   twice or after 10 min (refused), enter 5 wrong codes (request burned), open
+   the link from a different browser session (code is useless there).
+4. In the profile of an email account: "Confirm via Telegram" links Telegram
+   and locks the phone.
 
-## License
+## Tests and checks
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+composer test                                   # full suite (SQLite in memory)
+php artisan test --filter=OrderPlacementTest    # one class
+./vendor/bin/pint --test                        # code style
+npm run build
+```
+
+Tests never hit the network and run on SQLite, where `lockForUpdate` is a
+no-op: concurrency (two buyers for the last unit) is protected by row locks
+on MySQL but is not exercised by the test suite.
+
+## Known limitations
+
+- No order cancellation status or payment confirmation flow; deleting an order
+  is the only way to return its stock.
+- Login/registration messages and some storefront texts are still Russian-only
+  or come from `StorefrontService::t()` (see `LANGUAGE_SETUP.md`).
+- An unverified phone typed at email registration counts as "taken" until its
+  owner confirms it — the real owner of that number can't register with it.
+- No SMS provider; phone numbers are verified only through Telegram.

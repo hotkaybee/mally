@@ -80,11 +80,17 @@ Then clear the cache:
 php artisan optimize:clear
 ```
 
-### Method 2: Per-User Language (Future Enhancement)
-To allow users to switch languages dynamically, you can:
-1. Install a language switcher plugin
-2. Store user language preference in the database
-3. Set the locale in middleware based on user preference
+### Method 2: Storefront language switcher (implemented)
+On the storefront, shoppers switch RU / UZ / EN in the header. The choice is
+kept in the session (`mally_locale`) by `StorefrontService::setLocale()` and
+applied on every request; it is not stored in the database. The admin panel
+keeps using `APP_LOCALE`.
+
+Known debt: some storefront texts still bypass `__()` — the
+`StorefrontService::t()` dictionary, `HomePage` `match ($locale)` arrays and
+Russian-only messages in the login/registration flow (`EmailAuthService`,
+`InteractsWithStore`). New strings must use `__()` with keys in all three
+`lang/*.json` files; moving the old ones is a separate task.
 
 ## Adding New Translations
 

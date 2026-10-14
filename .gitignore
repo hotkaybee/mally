@@ -24,3 +24,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Local diagnostic dumps (databases: see database/.gitignore)
+mally-diagnostic-*.txt

@@ -734,11 +734,6 @@ class StorefrontService
         ];
     }
 
-    public function getFeaturedProducts(int $limit = 4): array
-    {
-        return array_slice($this->getAllProducts(), 0, $limit);
-    }
-
     /**
      * Customer-facing product data. Exposes availability only, never the
      * stock count.

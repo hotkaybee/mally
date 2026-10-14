@@ -57,3 +57,12 @@ Dockerfile
 # OS
 .DS_Store
 Thumbs.db
+
+# Local databases, diagnostics and agent files (never ship them in the image)
+database/*.sqlite
+database/*.sqlite-journal
+mally-diagnostic-*.txt
+logic.md
+report.md
+.claude
+.agents

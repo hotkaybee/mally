@@ -130,11 +130,6 @@ trait InteractsWithStore
         }
     }
 
-    public function updateCartQty(string|int $productKey, int $qty): void
-    {
-        $this->updateCartQuantity((string) $productKey, $qty);
-    }
-
     public function removeFromCart(string|int $productKey): void
     {
         $this->store()->removeFromCart((string) $productKey);
@@ -216,11 +211,6 @@ trait InteractsWithStore
             'mally_verified_register_email',
             'mally_verified_reset_email',
         ]);
-    }
-
-    public function backToEmailStep(): void
-    {
-        $this->backToLogin(true);
     }
 
     /**
@@ -354,11 +344,6 @@ trait InteractsWithStore
         $this->authCode = '';
         $this->authCooldownSeconds = (int) ($res['cooldown'] ?? EmailAuthService::COOLDOWN_SECONDS);
         $this->authStep = 'register-code';
-    }
-
-    public function submitAuthEmail(): void
-    {
-        $this->sendRegisterCode();
     }
 
     /**

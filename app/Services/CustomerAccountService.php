@@ -47,13 +47,6 @@ class CustomerAccountService
         return $byUser || $byCustomer;
     }
 
-    public function emailTaken(string $email, ?int $exceptUserId = null): bool
-    {
-        return User::whereRaw('LOWER(email) = ?', [mb_strtolower(trim($email))])
-            ->when($exceptUserId, fn ($q) => $q->whereKeyNot($exceptUserId))
-            ->exists();
-    }
-
     /** The user's own customer row, created on first use. */
     public function customerFor(User $user): Customer
     {

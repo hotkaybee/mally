@@ -151,6 +151,41 @@ class StorefrontLivewireTest extends TestCase
         $this->assertArrayHasKey('inStock', $api[0]);
     }
 
+    public function test_no_public_page_or_endpoint_exposes_the_stock_count(): void
+    {
+        $this->product(qty: 437);
+        $this->product('Sold Out Tint', 'ML-SOLD', 20, 0);
+        $customer = Customer::create([
+            'first_name' => 'Ali', 'last_name' => 'Valiev', 'email' => 'ali@example.com', 'phone_number' => '+998 90 111 22 33',
+            'city' => 'Ташкент', 'address' => 'Navoi 1', 'source' => 'website',
+        ]);
+        session(['mally_customer_id' => $customer->id]);
+        app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
+
+        // The count must not appear as a number next to a unit, nor in any snapshot.
+        $pages = [
+            CatalogPage::class => [],
+            ProductDetailPage::class => ['slug' => 'ML-HG-BRUSH'],
+            CartPage::class => [],
+            CheckoutPage::class => [],
+        ];
+        foreach ($pages as $class => $params) {
+            $component = Livewire::test($class, $params);
+            $this->assertDoesNotMatchRegularExpression('/\b437\b/', strip_tags($component->html()), $class);
+            $this->assertStringNotContainsString('437', json_encode($component->snapshot['data']), $class);
+        }
+
+        $this->get(route('catalog'))->assertSee('Sold Out Tint')->assertSee('Распродано');
+
+        foreach (['/api/products' => 'products.0', '/api/products/ML-HG-BRUSH' => 'product'] as $url => $path) {
+            $json = $this->getJson($url)->assertOk();
+            $json->assertJsonPath($path.'.inStock', true);
+            foreach (['quantity', 'stock', 'quantity_remaining', 'maxQuantity', 'available'] as $key) {
+                $json->assertJsonMissingPath($path.'.'.$key);
+            }
+        }
+    }
+
     public function test_plus_button_stops_at_available_stock(): void
     {
         $product = $this->product(qty: 2);

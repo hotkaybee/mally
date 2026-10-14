@@ -19,6 +19,7 @@ use App\Services\OrderService;
 use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -74,6 +75,19 @@ class OrderPlacementTest extends TestCase
             'address' => 'ул. Регистан 10',
             'source' => 'instagram',
         ], $attrs));
+    }
+
+    private function assertLocked(\Closure $attempt): void
+    {
+        try {
+            $attempt();
+        } catch (CannotUpdateLockedPropertyException) {
+            $this->addToAssertionCount(1);
+
+            return;
+        }
+
+        $this->fail('Expected the property to be #[Locked].');
     }
 
     private function place(Customer $customer, array $quantities, ?string $promo = null): Order
@@ -156,12 +170,10 @@ class OrderPlacementTest extends TestCase
 
         $component = Livewire::test(CheckoutPage::class);
 
-        // Locked: the browser can't set a discount.
-        try {
-            $component->set('discountUsd', 79.0);
-            $this->fail('discountUsd must be locked');
-        } catch (\Throwable) {
-        }
+        // Locked: the browser can't set a discount, promo or a fresh submit token.
+        $this->assertLocked(fn () => $component->set('discountUsd', 79.0));
+        $this->assertLocked(fn () => $component->set('appliedPromo', 'MALLY10'));
+        $this->assertLocked(fn () => $component->set('checkoutToken', 'forged'));
 
         // First attempt reports the price change, the second one places the order at the DB price.
         $component->call('placeOrder');
@@ -384,6 +396,8 @@ class OrderPlacementTest extends TestCase
         $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number, 'orderHash' => $order->secure_hash]))
             ->assertOk()->assertSeeLivewire(OrderReceiptPage::class);
         $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number]))->assertForbidden();
+        $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number, 'orderHash' => 'wrong']))->assertForbidden();
+        $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number, 'orderHash' => substr($order->secure_hash, 0, 16)]))->assertForbidden();
 
         // Another account with the same phone number is not the owner.
         $samePhone = $this->customer(['email' => 'other@example.com']);
@@ -394,6 +408,30 @@ class OrderPlacementTest extends TestCase
         session(['mally_customer_id' => $owner->id]);
         $this->get(route('checkout.receipt', ['orderNumber' => $order->id]))->assertNotFound();
         $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number]))->assertOk();
+    }
+
+    public function test_profile_cannot_take_another_accounts_phone_or_admin_rights(): void
+    {
+        $other = User::factory()->create(['phone' => '+998 91 222 33 44']);
+        $this->customer(['user_id' => $other->id, 'phone_number' => '+998 91 222 33 44', 'email' => 'other@example.com']);
+        $me = User::factory()->create(['phone' => '+998 90 123 45 67']);
+        $mine = $this->customer(['user_id' => $me->id]);
+        session(['mally_customer_id' => $mine->id, 'mally_user_id' => $me->id]);
+
+        Livewire::test(ProfilePage::class)
+            ->set('phone', '+998 91 222 33 44')
+            ->call('saveSettings');
+
+        $this->assertSame('+998 90 123 45 67', $mine->fresh()->phone_number);
+        $this->assertSame('+998 90 123 45 67', $me->fresh()->phone);
+        $this->assertSame('+998 91 222 33 44', $other->fresh()->phone);
+
+        // is_admin is never mass-assignable.
+        $this->assertFalse((bool) User::create([
+            'name' => 'x', 'email' => 'x@example.com', 'password' => 'Secret123', 'is_admin' => true,
+        ])->fresh()->is_admin);
+        $me->update(['is_admin' => true]);
+        $this->assertFalse((bool) $me->fresh()->is_admin);
     }
 
     public function test_profile_lists_only_the_customers_own_orders(): void
@@ -455,11 +493,7 @@ class OrderPlacementTest extends TestCase
         session(['mally_customer_id' => $me->id]);
 
         $component = Livewire::test(ProfilePage::class);
-        try {
-            $component->set('reviewTarget', ['productId' => '1', 'orderNumber' => 1]);
-            $this->fail('reviewTarget must be locked');
-        } catch (\Throwable) {
-        }
+        $this->assertLocked(fn () => $component->set('reviewTarget', ['productId' => '1', 'orderNumber' => 1]));
 
         $component->call('openProductReview', (string) $product->id, 'forged title', 'https://x', (int) $order->order_number)
             ->set('reviewComment', 'Great brush')

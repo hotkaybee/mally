@@ -21,7 +21,7 @@ class ProductDetailPage extends Component
     public function render()
     {
         $store = $this->store();
-        $product = $store->findProduct($this->slug);
+        $product = $store->findProduct($this->slug, withReviews: true);
         if (! $product) {
             abort(404);
         }

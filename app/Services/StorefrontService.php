@@ -7,11 +7,12 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Review;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class StorefrontService
 {
+    public const PRODUCTS_CACHE_KEY = 'mally_storefront_products_v3';
+
     private ?array $cachedExchangeRate = null;
 
     private ?array $cachedAllProducts = null;
@@ -123,20 +124,21 @@ class StorefrontService
         return (float) ($this->getExchangeRateData()['rate'] ?? 0.0);
     }
 
-    public function formatPrice(float|int|string|null $priceVal, ?string $forceCurrency = null): string
+    /**
+     * All prices in the database are USD. UZS is only a display conversion.
+     */
+    public function formatPrice(float|int|string|null $priceUsd, ?string $forceCurrency = null): string
     {
-        $num = (float) ($priceVal ?? 0);
-        $rate = $this->getExchangeRate();
-        $usd = ($num > 1000 && $rate > 0) ? ($num / $rate) : $num;
+        $usd = (float) ($priceUsd ?? 0);
         $currency = $forceCurrency ?? $this->getCurrency();
 
         if ($currency === 'UZS') {
+            $rate = $this->getExchangeRate();
             if ($rate <= 0) {
-                return '-';
+                return '—';
             }
-            $uzs = (int) round($usd * $rate);
 
-            return number_format($uzs, 0, '.', ' ').' сум';
+            return number_format((int) round($usd * $rate), 0, '.', ' ').' сум';
         }
 
         return '$'.number_format($usd, 2, '.', ',');
@@ -180,303 +182,94 @@ class StorefrontService
         });
     }
 
-    public function getRichInitialProducts(): array
-    {
-        $path = base_path('database/data/initial-products.json');
-        if (file_exists($path)) {
-            $decoded = json_decode((string) file_get_contents($path), true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
-        }
-
-        return [];
-    }
-
+    /**
+     * Storefront catalogue: real products from the database only.
+     * Cached briefly for listings; cart and checkout always read live rows.
+     */
     public function getAllProducts(): array
     {
         if ($this->cachedAllProducts !== null) {
             return $this->cachedAllProducts;
         }
 
-        $this->cachedAllProducts = Cache::remember('mally_all_products_v2', 120, function () {
-            return $this->buildAllProductsArray();
+        return $this->cachedAllProducts = Cache::remember(self::PRODUCTS_CACHE_KEY, 120, function () {
+            return Product::with(['brand', 'category'])
+                ->orderBy('id')
+                ->get()
+                ->map(fn (Product $p) => $this->formatProduct($p))
+                ->all();
         });
-
-        return $this->cachedAllProducts;
     }
 
-    private function buildAllProductsArray(): array
+    public static function forgetProductsCache(): void
     {
-        $dbProducts = Product::with(['brand', 'category'])->get();
-        $initials = $this->getRichInitialProducts();
-        $formatted = [];
-        $liveRate = $this->getExchangeRate();
-
-        foreach ($initials as $init) {
-            $usdPrice = (isset($init['price']) && (float) $init['price'] > 1000 && $liveRate > 0)
-                ? round(((float) $init['price']) / $liveRate, 2)
-                : (float) ($init['price'] ?? 45.0);
-            $usdOldPrice = (isset($init['oldPrice']) && (float) $init['oldPrice'] > 1000 && $liveRate > 0)
-                ? round(((float) $init['oldPrice']) / $liveRate, 2)
-                : (isset($init['oldPrice']) ? (float) $init['oldPrice'] : null);
-
-            $images = is_array($init['images'] ?? null) && count($init['images']) > 0
-                ? $init['images']
-                : [$init['image'] ?? 'https://findy.uz/cdn/shop/files/sample.jpg'];
-
-            $qty = (int) ($init['quantity'] ?? 10);
-
-            $formatted[] = [
-                'id' => (string) ($init['id'] ?? $init['sku']),
-                'sku' => (string) ($init['sku'] ?? 'ML-'.Str::upper(Str::random(6))),
-                'slug' => (string) ($init['slug'] ?? Str::slug($init['title'] ?? 'product')),
-                'title' => (string) ($init['title'] ?? 'Mally Product'),
-                'name' => (string) ($init['title'] ?? 'Mally Product'),
-                'brand' => (string) ($init['brand'] ?? 'Mally Collection'),
-                'category' => (string) ($init['category'] ?? 'Макияж'),
-                'category_en' => (string) ($init['category'] ?? 'Makeup'),
-                'category_uz' => (string) ($init['category'] ?? 'Makiyaj'),
-                'price' => $usdPrice,
-                'selling_price' => $usdPrice,
-                'oldPrice' => $usdOldPrice,
-                'old_price' => $usdOldPrice,
-                'quantity' => $qty,
-                'inStock' => $qty > 0 && ($init['status'] ?? 'ACTIVE') !== 'OUT_OF_STOCK',
-                'status' => $init['status'] ?? ($qty > 0 ? 'ACTIVE' : 'OUT_OF_STOCK'),
-                'isNew' => (bool) ($init['isNew'] ?? true),
-                'images' => $images,
-                'image' => $images[0],
-                'description' => (string) ($init['description'] ?? ''),
-                'features' => is_array($init['features'] ?? null) ? $init['features'] : [],
-                'howToUse' => (string) ($init['howToUse'] ?? ''),
-                'reviews' => is_array($init['reviews'] ?? null) ? $init['reviews'] : [],
-            ];
-        }
-
-        $existingTitles = array_map('mb_strtolower', array_column($formatted, 'title'));
-
-        foreach ($dbProducts as $p) {
-            $title = (string) $p->name;
-            if (in_array(mb_strtolower($title), $existingTitles, true)) {
-                continue;
-            }
-
-            $brandName = $p->brand?->name ?: 'Mally Collection';
-            $catNameRu = $p->category?->name_ru ?: ($p->category?->name ?: 'Косметика');
-            $catNameEn = $p->category?->name_en ?: $catNameRu;
-            $catNameUz = $p->category?->name_uz ?: $catNameRu;
-
-            $numPrice = (float) $p->selling_price;
-            $priceInUsd = ($numPrice > 1000 && $liveRate > 0) ? round($numPrice / $liveRate, 2) : $numPrice;
-            if ($priceInUsd <= 0) {
-                $priceInUsd = 35.00;
-            }
-
-            $images = [];
-            if ($p->image) {
-                $images[] = str_starts_with($p->image, 'http') ? $p->image : asset($p->image);
-            } else {
-                $images[] = 'https://findy.uz/cdn/shop/files/sample.jpg';
-            }
-
-            $qty = (int) $p->quantity;
-            $inStock = $qty > 0 && $p->status !== 'out_of_stock';
-            $sku = $p->sku ?: 'ML-P-'.$p->id;
-
-            $formatted[] = [
-                'id' => (string) $p->id,
-                'sku' => $sku,
-                'slug' => Str::slug($p->name).'-'.$p->id,
-                'title' => $p->name,
-                'name' => $p->name,
-                'brand' => $brandName,
-                'category' => $catNameRu,
-                'category_en' => $catNameEn,
-                'category_uz' => $catNameUz,
-                'price' => $priceInUsd,
-                'selling_price' => $priceInUsd,
-                'oldPrice' => null,
-                'old_price' => null,
-                'quantity' => $qty,
-                'inStock' => $inStock,
-                'status' => $inStock ? 'ACTIVE' : 'OUT_OF_STOCK',
-                'isNew' => $p->created_at && $p->created_at->gt(now()->subDays(30)),
-                'images' => $images,
-                'image' => $images[0],
-                'description' => $p->description ?: ($p->comment ?: 'Премиальная оригинальная продукция из США.'),
-                'features' => ['100% Оригинал из США', 'Сертифицированная косметика'],
-                'howToUse' => 'Наносите в соответствии с рекомендациями производителя.',
-                'reviews' => [],
-            ];
-        }
-
-        $this->cachedAllProducts = $formatted;
-
-        return $this->cachedAllProducts;
+        Cache::forget(self::PRODUCTS_CACHE_KEY);
     }
 
-    public function findProduct(string $slugOrSku): ?array
+    public function findProduct(string $slugOrSku, bool $withReviews = false): ?array
     {
-        $target = mb_strtolower(trim(urldecode($slugOrSku)));
-        if ($target === '') {
-            return null;
-        }
+        $product = $this->findProductBySlugOrId($slugOrSku);
 
-        $targetAlpha = preg_replace('/[^a-z0-9]/i', '', $target);
-        $all = $this->getAllProducts();
-        $matched = null;
-
-        foreach ($all as $p) {
-            $pSku = mb_strtolower(trim((string) ($p['sku'] ?? '')));
-            $pId = mb_strtolower(trim((string) ($p['id'] ?? '')));
-            $pSlug = mb_strtolower(trim((string) ($p['slug'] ?? '')));
-            $pTitle = mb_strtolower(trim((string) ($p['title'] ?? '')));
-
-            if ($pSku === $target || $pId === $target || 'ml-p-'.$pId === $target || $pSlug === $target) {
-                $matched = $p;
-                break;
-            }
-            if ($targetAlpha !== '' && $pSku !== '' && preg_replace('/[^a-z0-9]/i', '', $pSku) === $targetAlpha) {
-                $matched = $p;
-                break;
-            }
-            if ($pTitle !== '' && $pTitle === $target) {
-                $matched = $p;
-                break;
-            }
-        }
-
-        if (! $matched && preg_match('/(?:ML-P-|-)(\d+)$/i', $target, $m)) {
-            $idMatch = $m[1];
-            foreach ($all as $p) {
-                if ((string) $p['id'] === (string) $idMatch) {
-                    $matched = $p;
-                    break;
-                }
-            }
-        }
-
-        if (! $matched) {
-            $dbProd = $this->findProductBySlugOrId($slugOrSku);
-            if ($dbProd) {
-                return $this->formatProduct($dbProd);
-            }
-
-            return null;
-        }
-
-        return $this->overlayLiveDatabaseState($matched);
+        return $product ? $this->formatProduct($product, $withReviews) : null;
     }
 
     /**
-     * Refresh price, stock quantity, availability, and customer reviews from the
-     * database so stale cache or session data cannot mask server-side changes.
+     * Whether the product can be sold at all (has stock, a price and isn't
+     * switched off in the admin).
      */
-    private function overlayLiveDatabaseState(array $productData): array
+    public function isSellable(Product $product): bool
     {
-        $id = $productData['id'] ?? null;
-        $sku = trim((string) ($productData['sku'] ?? ''));
-        $title = trim((string) ($productData['title'] ?? $productData['name'] ?? ''));
-
-        $dbProduct = null;
-        if (is_numeric($id)) {
-            $dbProduct = Product::find((int) $id);
-        }
-        if (! $dbProduct && $sku !== '') {
-            $dbProduct = Product::where('sku', $sku)->first();
-        }
-        if (! $dbProduct && $title !== '') {
-            $dbProduct = Product::where('name', $title)->first();
-        }
-
-        if ($dbProduct) {
-            $liveRate = $this->getExchangeRate();
-            $numPrice = (float) $dbProduct->selling_price;
-            $priceInUsd = ($numPrice > 1000 && $liveRate > 0) ? round($numPrice / $liveRate, 2) : $numPrice;
-            if ($priceInUsd <= 0) {
-                $priceInUsd = (float) ($productData['price'] ?? 35.00);
-            }
-
-            $qty = max(0, (int) $dbProduct->quantity);
-            $inStock = $qty > 0 && ! in_array(strtolower((string) $dbProduct->status), ['out_of_stock'], true);
-
-            $productData['id'] = (string) $dbProduct->id;
-            if ($dbProduct->sku) {
-                $productData['sku'] = (string) $dbProduct->sku;
-                $sku = (string) $dbProduct->sku;
-            }
-            $productData['price'] = $priceInUsd;
-            $productData['selling_price'] = $priceInUsd;
-            $productData['quantity'] = $qty;
-            $productData['inStock'] = $inStock;
-            $productData['status'] = $inStock ? 'ACTIVE' : 'OUT_OF_STOCK';
-        }
-
-        $dbReviews = $this->getDatabaseReviewsForProduct(
-            $dbProduct?->id ?? (is_numeric($id) ? (int) $id : null),
-            $sku !== '' ? $sku : null,
-            $title !== '' ? $title : null
-        );
-        $initialReviews = is_array($productData['reviews'] ?? null) ? $productData['reviews'] : [];
-        $productData['reviews'] = array_merge($dbReviews, $initialReviews);
-
-        return $productData;
+        return (int) $product->quantity > 0
+            && $product->status !== 'out_of_stock'
+            && (float) $product->selling_price > 0;
     }
 
-    public function getDatabaseReviewsForProduct(?int $productId, ?string $sku, ?string $title): array
+    /**
+     * Units that can still be sold, read live from the receipts. Never shown
+     * to customers.
+     */
+    public function availableQuantity(Product $product): int
     {
-        if (! Schema::hasTable('reviews')) {
+        if ($product->status === 'out_of_stock' || (float) $product->selling_price <= 0) {
+            return 0;
+        }
+
+        return max(0, (int) $product->receipts()->sum('quantity_remaining'));
+    }
+
+    public function getDatabaseReviewsForProduct(?int $productId): array
+    {
+        if (! $productId) {
             return [];
         }
 
-        $query = Review::query()->where('is_approved', true);
-        $hasCondition = false;
-
-        $query->where(function ($q) use ($productId, $sku, $title, &$hasCondition) {
-            if ($productId !== null && $productId > 0) {
-                $q->orWhere('product_id', $productId);
-                $hasCondition = true;
-            }
-            if ($sku !== null && trim($sku) !== '') {
-                $q->orWhere('product_sku', trim($sku));
-                $hasCondition = true;
-            }
-            if ($title !== null && trim($title) !== '') {
-                $q->orWhere('product_title', trim($title));
-                $hasCondition = true;
-            }
-        });
-
-        if (! $hasCondition) {
-            return [];
-        }
-
-        return $query->latest('id')->get()->map(function (Review $rev) {
-            return [
+        return Review::query()
+            ->where('is_approved', true)
+            ->where('product_id', $productId)
+            ->latest('id')
+            ->get()
+            ->map(fn (Review $rev) => [
                 'id' => 'db_rev_'.$rev->id,
                 'author' => $rev->author_name,
                 'city' => $rev->city ?: 'Ташкент',
                 'rating' => (int) $rev->rating,
-                'date' => $rev->created_at ? $rev->created_at->format('d.m.Y') : now()->format('d.m.Y'),
+                'date' => $rev->created_at?->timezone('Asia/Tashkent')->format('d.m.Y'),
                 'title' => $rev->product_title ?: '',
                 'comment' => $rev->comment,
                 'text' => $rev->comment,
                 'photos' => is_array($rev->photos) ? $rev->photos : [],
-            ];
-        })->all();
+            ])
+            ->all();
     }
 
     public function getRecommendedProducts(array $currentProduct, int $limit = 4): array
     {
         $all = $this->getAllProducts();
-        $curSku = mb_strtolower((string) ($currentProduct['sku'] ?? $currentProduct['id'] ?? ''));
+        $curId = (string) ($currentProduct['id'] ?? '');
         $brandName = mb_strtolower((string) ($currentProduct['brand'] ?? ''));
         $catName = mb_strtolower((string) ($currentProduct['category'] ?? ''));
 
-        $available = array_values(array_filter($all, function ($p) use ($curSku) {
-            return mb_strtolower((string) ($p['sku'] ?? $p['id'] ?? '')) !== $curSku;
-        }));
+        $available = array_values(array_filter($all, fn ($p) => (string) $p['id'] !== $curId));
 
         $sameBrand = array_values(array_filter($available, fn ($p) => mb_strtolower((string) ($p['brand'] ?? '')) === $brandName));
         $sameCat = array_values(array_filter($available, fn ($p) => mb_strtolower((string) ($p['category'] ?? '')) === $catName && mb_strtolower((string) ($p['brand'] ?? '')) !== $brandName));
@@ -514,39 +307,31 @@ class StorefrontService
 
     public function addToCart(string $productKey): array
     {
-        $product = $this->findProduct($productKey);
+        $product = $this->findProductBySlugOrId($productKey);
         if (! $product) {
-            return ['success' => false, 'message' => 'Товар не найден', 'type' => 'error'];
+            return ['success' => false, 'message' => __('This product is no longer available.'), 'type' => 'error'];
         }
 
-        $stockCount = max(0, (int) ($product['quantity'] ?? 0));
-        if (! ($product['inStock'] ?? true) || $stockCount <= 0) {
-            return ['success' => false, 'message' => 'Товар распродан на складе', 'type' => 'warning'];
+        $available = $this->availableQuantity($product);
+        if ($available <= 0) {
+            return ['success' => false, 'message' => __('This product is sold out.'), 'type' => 'warning'];
         }
 
         $cart = $this->getCart();
-        $sku = (string) ($product['sku'] ?? $product['id']);
-        $id = (string) ($product['id'] ?? $sku);
+        $id = (string) $product->id;
         $found = false;
 
         foreach ($cart as &$item) {
-            if ((string) $item['id'] === $id || (string) $item['sku'] === $sku || (string) $item['sku'] === $productKey) {
+            if ((string) ($item['id'] ?? '') === $id) {
                 $currentQty = max(0, (int) ($item['quantity'] ?? 0));
-                if ($currentQty >= $stockCount) {
-                    $item['quantity'] = $stockCount;
-                    $item['maxQuantity'] = $stockCount;
-                    $item['price'] = (float) $product['price'];
+                if ($currentQty + 1 > $available) {
+                    $item['quantity'] = min($currentQty, $available);
                     $this->saveCart($cart);
 
-                    return [
-                        'success' => false,
-                        'message' => "Нельзя добавить больше: на складе доступно всего {$stockCount} шт.",
-                        'type' => 'warning',
-                    ];
+                    return ['success' => false, 'message' => __('No more units of this product are available.'), 'type' => 'warning'];
                 }
-                $item['quantity'] = min($stockCount, $currentQty + 1);
-                $item['maxQuantity'] = $stockCount;
-                $item['price'] = (float) $product['price'];
+                $item['quantity'] = $currentQty + 1;
+                $item['price'] = (float) $product->selling_price;
                 $found = true;
                 break;
             }
@@ -554,16 +339,15 @@ class StorefrontService
         unset($item);
 
         if (! $found) {
+            $formatted = $this->formatProduct($product);
             $cart[] = [
                 'id' => $id,
-                'sku' => $sku,
-                'title' => $product['title'],
-                'brand' => $product['brand'],
-                'price' => (float) $product['price'],
-                'oldPrice' => $product['oldPrice'] ?? null,
-                'image' => $product['image'] ?? ($product['images'][0] ?? 'https://findy.uz/cdn/shop/files/sample.jpg'),
+                'sku' => $formatted['sku'],
+                'title' => $formatted['title'],
+                'brand' => $formatted['brand'],
+                'price' => $formatted['price'],
+                'image' => $formatted['image'],
                 'quantity' => 1,
-                'maxQuantity' => $stockCount,
             ];
         }
 
@@ -581,31 +365,30 @@ class StorefrontService
         if ($qty <= 0) {
             $this->removeFromCart($key);
 
-            return ['success' => true, 'message' => 'Товар удален из корзины', 'type' => 'info'];
+            return ['success' => true];
         }
 
+        $product = $this->findProductBySlugOrId($key);
         $cart = $this->getCart();
         $warning = null;
         $updatedCart = [];
 
         foreach ($cart as $item) {
-            if ((string) ($item['id'] ?? '') === $key || (string) ($item['sku'] ?? '') === $key) {
-                $liveProduct = $this->findProduct((string) ($item['sku'] ?? $item['id'] ?? $key));
-                if (! $liveProduct || ! ($liveProduct['inStock'] ?? true) || (int) ($liveProduct['quantity'] ?? 0) <= 0) {
-                    $warning = 'Товар закончился на складе и был удален из корзины.';
+            if ($this->cartItemMatches($item, $key, $product)) {
+                $available = $product ? $this->availableQuantity($product) : 0;
+                if ($available <= 0) {
+                    $warning = __('This product is sold out and was removed from your cart.');
 
                     continue;
                 }
 
-                $maxLimit = max(0, (int) $liveProduct['quantity']);
-                if ($qty > $maxLimit) {
-                    $qty = $maxLimit;
-                    $warning = "На складе доступно максимум {$maxLimit} шт.";
+                if ($qty > $available) {
+                    $qty = $available;
+                    $warning = __('No more units of this product are available.');
                 }
 
-                $item['quantity'] = max(1, $qty);
-                $item['maxQuantity'] = $maxLimit;
-                $item['price'] = (float) $liveProduct['price'];
+                $item['quantity'] = $qty;
+                $item['price'] = (float) $product->selling_price;
             }
 
             $updatedCart[] = $item;
@@ -613,11 +396,26 @@ class StorefrontService
 
         $this->saveCart($updatedCart);
 
-        if ($warning) {
-            return ['success' => false, 'message' => $warning, 'type' => 'warning'];
+        return $warning
+            ? ['success' => false, 'message' => $warning, 'type' => 'warning']
+            : ['success' => true];
+    }
+
+    /** Whether one more unit of this product may be added to the cart. */
+    public function canIncrease(string $productKey): bool
+    {
+        $product = $this->findProductBySlugOrId($productKey);
+
+        return $product !== null && $this->getItemQuantityInCart($productKey) < $this->availableQuantity($product);
+    }
+
+    private function cartItemMatches(array $item, string $key, ?Product $product): bool
+    {
+        if ($product && (string) ($item['id'] ?? '') === (string) $product->id) {
+            return true;
         }
 
-        return ['success' => true];
+        return (string) ($item['id'] ?? '') === $key || (string) ($item['sku'] ?? '') === $key;
     }
 
     public function removeFromCart(string $key): void
@@ -645,70 +443,49 @@ class StorefrontService
     }
 
     /**
-     * Revalidate session cart items against live server product price and stock.
-     * Synchronizes the session cart and reports any discrepancies so checkout
-     * cannot proceed on stale data.
+     * Revalidate the session cart against live price and stock. Unavailable
+     * items are removed, quantities are capped, and the caller is told
+     * whether anything changed so checkout can't proceed on stale data.
      */
     public function validateAndSyncCart(): array
     {
         $cart = $this->getCart();
+        $products = $this->productsForCart($cart);
         $syncedCart = [];
         $messages = [];
-        $priceChanged = false;
-        $stockChanged = false;
 
         foreach ($cart as $item) {
-            $key = (string) ($item['sku'] ?? $item['id'] ?? '');
-            $title = (string) ($item['title'] ?? 'Товар');
+            $title = (string) ($item['title'] ?? '');
             $rawQty = (int) ($item['quantity'] ?? 0);
+            $product = $products[(int) ($item['id'] ?? 0)] ?? null;
 
-            if ($rawQty <= 0) {
-                $stockChanged = true;
-                $messages[] = "Некорректное количество для товара «{$title}». Позиция удалена.";
-
-                continue;
-            }
-
-            $liveProduct = $this->findProduct($key);
-            if (! $liveProduct) {
-                $stockChanged = true;
-                $messages[] = "Товар «{$title}» больше недоступен и был удален из корзины.";
+            if (! $product || $rawQty <= 0) {
+                $messages[] = __('":title" is no longer available and was removed from your cart.', ['title' => $title]);
 
                 continue;
             }
 
-            $liveTitle = (string) ($liveProduct['title'] ?? $title);
-            $liveStock = max(0, (int) ($liveProduct['quantity'] ?? 0));
-            $inStock = (bool) ($liveProduct['inStock'] ?? ($liveStock > 0)) && $liveStock > 0;
-            $livePrice = round((float) ($liveProduct['price'] ?? 0), 2);
-            $sessionPrice = round((float) ($item['price'] ?? $livePrice), 2);
-
-            if (! $inStock) {
-                $stockChanged = true;
-                $messages[] = "Товар «{$liveTitle}» закончился на складе и был удален из корзины.";
+            $available = $this->availableQuantity($product);
+            if ($available <= 0) {
+                $messages[] = __('":title" is sold out and was removed from your cart.', ['title' => $product->name]);
 
                 continue;
             }
 
-            if (abs($sessionPrice - $livePrice) >= 0.01) {
-                $priceChanged = true;
-                $messages[] = "Цена товара «{$liveTitle}» изменилась ({$this->formatPrice($livePrice)}).";
+            $livePrice = round((float) $product->selling_price, 2);
+            if (abs(round((float) ($item['price'] ?? $livePrice), 2) - $livePrice) >= 0.01) {
+                $messages[] = __('The price of ":title" has changed to :price.', ['title' => $product->name, 'price' => $this->formatPrice($livePrice)]);
             }
 
-            $finalQty = $rawQty;
-            if ($rawQty > $liveStock) {
-                $stockChanged = true;
-                $finalQty = $liveStock;
-                $messages[] = "Остаток товара «{$liveTitle}» уменьшился: доступно максимум {$liveStock} шт.";
+            if ($rawQty > $available) {
+                $rawQty = $available;
+                $messages[] = __('Fewer units of ":title" are available now; the quantity was reduced.', ['title' => $product->name]);
             }
 
-            $item['id'] = (string) ($liveProduct['id'] ?? $item['id']);
-            $item['sku'] = (string) ($liveProduct['sku'] ?? $item['sku']);
-            $item['title'] = $liveTitle;
-            $item['brand'] = $liveProduct['brand'] ?? ($item['brand'] ?? 'Mally Collection');
+            $item['title'] = $product->name;
             $item['price'] = $livePrice;
-            $item['quantity'] = $finalQty;
-            $item['maxQuantity'] = $liveStock;
+            $item['quantity'] = $rawQty;
+            unset($item['maxQuantity']);
 
             $syncedCart[] = $item;
         }
@@ -716,12 +493,22 @@ class StorefrontService
         $this->saveCart($syncedCart);
 
         return [
-            'valid' => ! $priceChanged && ! $stockChanged && empty($messages),
-            'price_changed' => $priceChanged,
-            'stock_changed' => $stockChanged,
+            'valid' => empty($messages),
             'messages' => $messages,
             'cart' => $this->getCartItemsWithProducts(),
         ];
+    }
+
+    /**
+     * @return array<int, Product> keyed by product id
+     */
+    private function productsForCart(array $cart): array
+    {
+        $ids = array_filter(array_map(fn ($item) => (int) ($item['id'] ?? 0), $cart));
+
+        return $ids === []
+            ? []
+            : Product::with(['brand', 'category'])->whereIn('id', $ids)->get()->keyBy('id')->all();
     }
 
     // =========================================================================
@@ -848,7 +635,7 @@ class StorefrontService
     public function getPromoCode(): ?string
     {
         $code = session('mally_promo_code');
-        if (! is_string($code) || strtoupper(trim($code)) !== 'MALLY10') {
+        if (! is_string($code) || $this->promoPercent($code) === 0) {
             if ($code !== null) {
                 session()->forget('mally_promo_code');
             }
@@ -856,23 +643,33 @@ class StorefrontService
             return null;
         }
 
-        return 'MALLY10';
+        return strtoupper(trim($code));
+    }
+
+    /** Discount percent for a promo code, 0 if the code isn't valid. */
+    public function promoPercent(?string $code): int
+    {
+        $configured = strtoupper(trim((string) config('services.store.promo_code')));
+        $clean = strtoupper(trim((string) $code));
+
+        return $configured !== '' && $clean === $configured
+            ? (int) config('services.store.promo_percent', 0)
+            : 0;
     }
 
     public function applyPromoCode(string $code, ?float $totalAmountUsd = null): array|bool
     {
         $clean = strtoupper(trim($code));
+        $percent = $this->promoPercent($clean);
         $subtotal = $totalAmountUsd ?? $this->getCartTotalUsd();
 
-        if ($clean === 'MALLY10') {
+        if ($percent > 0) {
             session(['mally_promo_code' => $clean]);
-            $disc = round($subtotal * 0.10, 2);
 
             return $totalAmountUsd === null ? true : [
                 'success' => true,
                 'code' => $clean,
-                'discountUsd' => $disc,
-                'message' => 'Промокод на скидку 10% успешно применен!',
+                'discountUsd' => round($subtotal * $percent / 100, 2),
             ];
         }
 
@@ -880,51 +677,44 @@ class StorefrontService
 
         return $totalAmountUsd === null ? false : [
             'success' => false,
-            'error' => 'Недействительный промокод',
+            'error' => __('Invalid promo code'),
         ];
     }
 
+    /**
+     * Cart lines with live product data. Prices are USD from the database;
+     * lines whose product no longer exists are skipped.
+     */
     public function getCartItemsWithProducts(): array
     {
         $cart = $this->getCart();
+        $products = $this->productsForCart($cart);
         $items = [];
         $subtotalUsd = 0.0;
 
         foreach ($cart as $c) {
-            $key = (string) ($c['sku'] ?? $c['id'] ?? '');
-            $found = $this->findProduct($key);
+            $product = $products[(int) ($c['id'] ?? 0)] ?? null;
+            if (! $product) {
+                continue;
+            }
 
-            // Всегда берем актуальную серверную цену и остаток товара, а не устаревшие данные из сессии
-            $price = $found ? (float) $found['price'] : (float) ($c['price'] ?? 35);
-            $stock = $found ? max(0, (int) ($found['quantity'] ?? 0)) : max(0, (int) ($c['maxQuantity'] ?? 0));
+            $formatted = $this->formatProduct($product);
             $qty = max(1, (int) ($c['quantity'] ?? 1));
-            $lineTotal = round($price * $qty, 2);
+            $lineTotal = round($formatted['price'] * $qty, 2);
             $subtotalUsd += $lineTotal;
 
             $items[] = [
                 'quantity' => $qty,
                 'line_total_usd' => $lineTotal,
-                'product' => [
-                    'id' => $found['id'] ?? $c['id'] ?? $key,
-                    'sku' => $found['sku'] ?? $c['sku'] ?? $key,
-                    'slug' => $found['slug'] ?? $c['sku'] ?? $key,
-                    'name' => $found['name'] ?? $c['title'] ?? 'Mally Product',
-                    'title' => $found['title'] ?? $c['title'] ?? 'Mally Product',
-                    'brand' => $found['brand'] ?? $c['brand'] ?? 'Mally Collection',
-                    'category' => $found['category'] ?? 'Косметика',
-                    'image' => $found['image'] ?? $c['image'] ?? 'https://findy.uz/cdn/shop/files/sample.jpg',
-                    'price' => $price,
-                    'stock' => $stock,
-                    'inStock' => $found ? (bool) ($found['inStock'] ?? ($stock > 0)) : ($stock > 0),
-                ],
+                'product' => array_merge($formatted, [
+                    'canIncrease' => $qty < $this->availableQuantity($product),
+                ]),
             ];
         }
 
         $promoCode = $this->getPromoCode();
-        $discountPercent = $promoCode === 'MALLY10' ? 10 : 0;
-        $discountUsd = $discountPercent > 0 ? round($subtotalUsd * ($discountPercent / 100), 2) : 0.0;
-        $shippingUsd = ($subtotalUsd >= 50 || $subtotalUsd <= 0) ? 0.0 : 2.5;
-        $totalUsd = max(0.0, round($subtotalUsd - $discountUsd + $shippingUsd, 2));
+        $discountPercent = $this->promoPercent($promoCode);
+        $discountUsd = round($subtotalUsd * $discountPercent / 100, 2);
 
         return [
             'items' => $items,
@@ -932,8 +722,7 @@ class StorefrontService
             'discount_usd' => $discountUsd,
             'discount_percent' => $discountPercent,
             'promo_code' => $promoCode,
-            'shipping_usd' => $shippingUsd,
-            'total_usd' => $totalUsd,
+            'total_usd' => max(0.0, round($subtotalUsd - $discountUsd, 2)),
         ];
     }
 
@@ -942,18 +731,17 @@ class StorefrontService
         return array_slice($this->getAllProducts(), 0, $limit);
     }
 
-    public function formatProduct(Product $p): array
+    /**
+     * Customer-facing product data. Exposes availability only, never the
+     * stock count.
+     */
+    public function formatProduct(Product $p, bool $withReviews = false): array
     {
-        $brandName = $p->brand?->name ?: 'Mally Collection';
-        $catNameRu = $p->category?->name_ru ?: ($p->category?->name ?: 'Косметика');
-        $numPrice = (float) $p->selling_price;
-        $liveRate = $this->getExchangeRate();
-        $priceInUsd = ($numPrice > 1000 && $liveRate > 0) ? round($numPrice / $liveRate, 2) : $numPrice;
-        if ($priceInUsd <= 0) {
-            $priceInUsd = 35.00;
-        }
+        $category = $p->category;
+        $catNameRu = $category?->name_ru ?: ($category?->name ?: 'Косметика');
+        $price = round((float) $p->selling_price, 2);
         $img = $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset($p->image)) : 'https://findy.uz/cdn/shop/files/sample.jpg';
-        $qty = max(0, (int) $p->quantity);
+        $inStock = $this->isSellable($p);
 
         return [
             'id' => (string) $p->id,
@@ -961,29 +749,38 @@ class StorefrontService
             'slug' => Str::slug($p->name).'-'.$p->id,
             'title' => $p->name,
             'name' => $p->name,
-            'brand' => $brandName,
+            'brand' => $p->brand?->name ?: 'Mally Collection',
             'category' => $catNameRu,
-            'price' => $priceInUsd,
-            'selling_price' => $priceInUsd,
-            'quantity' => $qty,
-            'inStock' => $qty > 0 && $p->status !== 'out_of_stock',
+            'category_en' => $category?->name_en ?: $catNameRu,
+            'category_uz' => $category?->name_uz ?: $catNameRu,
+            'price' => $price,
+            'selling_price' => $price,
+            'oldPrice' => null,
+            'old_price' => null,
+            'inStock' => $inStock,
+            'status' => $inStock ? 'ACTIVE' : 'OUT_OF_STOCK',
+            'isNew' => $p->created_at && $p->created_at->gt(now()->subDays(30)),
             'image' => $img,
             'images' => [$img],
             'description' => $p->description ?: ($p->comment ?: 'Премиальная оригинальная продукция из США.'),
             'features' => ['100% Оригинал из США', 'Сертифицированная косметика'],
             'howToUse' => 'Наносите в соответствии с рекомендациями производителя.',
-            'reviews' => $this->getDatabaseReviewsForProduct($p->id, $p->sku, $p->name),
+            'reviews' => $withReviews ? $this->getDatabaseReviewsForProduct($p->id) : [],
         ];
     }
 
     public function findProductBySlugOrId(string $slug): ?Product
     {
-        $decoded = urldecode($slug);
+        $decoded = trim(urldecode($slug));
+        if ($decoded === '') {
+            return null;
+        }
 
-        $product = Product::with(['brand', 'category'])
-            ->where('sku', $decoded)
-            ->orWhere('id', is_numeric($decoded) ? (int) $decoded : 0)
-            ->first();
+        $product = Product::with(['brand', 'category'])->where('sku', $decoded)->first();
+
+        if (! $product && ctype_digit($decoded)) {
+            $product = Product::with(['brand', 'category'])->find((int) $decoded);
+        }
 
         if (! $product && preg_match('/(?:ML-P-|-)(\d+)$/i', $decoded, $m)) {
             $product = Product::with(['brand', 'category'])->find((int) $m[1]);

@@ -42,4 +42,14 @@ return [
         'admin_username' => env('TELEGRAM_ADMIN_USERNAME', 'mallyuz'),
     ],
 
+    'store' => [
+        'card_number' => env('STORE_CARD_NUMBER', ''),
+        'card_holder' => env('STORE_CARD_HOLDER', ''),
+        'promo_code' => env('STORE_PROMO_CODE', 'MALLY10'),
+        'promo_percent' => (int) env('STORE_PROMO_PERCENT', 10),
+        // Shared secret for POST /api/orders (sent as X-Api-Token). The
+        // endpoint is closed while this is empty.
+        'orders_api_token' => env('ORDERS_API_TOKEN', ''),
+    ],
+
 ];

@@ -88,6 +88,15 @@ webhook, or the `telegram:auth-poll` worker long-polls (it runs in
 is set). Without either, the bot replies only when an open login window polls
 the site, which stalls as soon as the browser goes to the background.
 
+**Admin bot** (`AdminTelegramBot`, token `TELEGRAM_BOT_TOKEN`, must differ
+from the login bot): every order placed by checkout or the bot API is sent to
+each chat in `TELEGRAM_ADMIN_CHAT_IDS` with buttons that change the order
+status. In those chats an admin can send an order number (`1042`, `#1042`,
+`/order 1042`) for the order card, a SKU (`/sku 618313`) for the product card
+with photo, exact stock and average cost, or part of a product name. Every
+other chat only gets its own chat id. It answers through the
+`telegram:admin-poll` worker (in `composer dev` and the Docker supervisor).
+
 **Reviews** need a delivered order of your own containing the product, one per
 order and product, and wait for moderation in the admin.
 
@@ -97,7 +106,7 @@ order and product, and wait for moderation in the admin.
 |----------|---------|
 | `TELEGRAM_AUTH_BOT_TOKEN`, `TELEGRAM_AUTH_BOT_USERNAME` | Customer login bot |
 | `TELEGRAM_AUTH_WEBHOOK_SECRET` | Webhook secret; leave empty to use `php artisan telegram:auth-poll` |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_IDS`, `TELEGRAM_ADMIN_USERNAME` | Admin bot (contact form messages, shop contact) |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_IDS`, `TELEGRAM_ADMIN_USERNAME` | Admin bot (new orders, order/SKU lookup, contact form messages, shop contact) |
 | `ORDERS_API_TOKEN` | Shared secret of the ordering bot; empty = `POST /api/orders` closed |
 | `STORE_CARD_NUMBER`, `STORE_CARD_HOLDER` | Payment details on the receipt |
 | `STORE_PROMO_CODE`, `STORE_PROMO_PERCENT` | The single promo code |

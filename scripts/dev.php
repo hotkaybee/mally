@@ -19,8 +19,10 @@ $processes = [
     'vite' => 'npm run dev',
     // Answers the Telegram login bot at once (idles when a webhook is set).
     'bot' => 'php artisan telegram:auth-poll',
+    // Admin bot: order alerts, order/SKU lookups (idles when not configured).
+    'admin' => 'php artisan telegram:admin-poll',
 ];
-$colors = ['server' => '#93c5fd', 'queue' => '#c4b5fd', 'logs' => '#fb7185', 'vite' => '#fdba74', 'bot' => '#86efac'];
+$colors = ['server' => '#93c5fd', 'queue' => '#c4b5fd', 'logs' => '#fb7185', 'vite' => '#fdba74', 'bot' => '#86efac', 'admin' => '#fde047'];
 
 $processes = array_filter($processes);
 

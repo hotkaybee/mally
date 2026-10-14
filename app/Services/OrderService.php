@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Exceptions\CheckoutException;
+use App\Jobs\NotifyAdminsAboutOrder;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderProduct;
 use App\Models\Product;
 use App\Models\ProductReceipt;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Places an order for the storefront checkout and the bot API.
@@ -47,7 +49,7 @@ class OrderService
         $rate = (float) ($this->rates->getUsdRate()['rate'] ?? 0);
         $promoPercent = $this->storefront->promoPercent($details['promo_code'] ?? null);
 
-        return DB::transaction(function () use ($customer, $quantities, $details, $rate, $promoPercent) {
+        $order = DB::transaction(function () use ($customer, $quantities, $details, $rate, $promoPercent) {
             $order = Order::create([
                 'customer_id' => $customer->id,
                 'secure_hash' => bin2hex(random_bytes(16)),
@@ -86,6 +88,28 @@ class OrderService
 
             return $order;
         });
+
+        $this->notifyAdmins($order);
+
+        return $order;
+    }
+
+    /**
+     * Announces the order in the admin bot. With the sync queue the job would
+     * run inside the shopper's request, so it waits until the response is
+     * sent; a Telegram problem never fails the order.
+     */
+    private function notifyAdmins(Order $order): void
+    {
+        try {
+            $job = new NotifyAdminsAboutOrder($order->id);
+
+            config('queue.default') === 'sync'
+                ? dispatch($job)->afterResponse()
+                : dispatch($job)->afterCommit();
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     /**

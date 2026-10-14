@@ -27,8 +27,13 @@ php artisan test tests/Feature/ExampleTest.php::test_method  # single method
 # Code style (Pint, Laravel defaults) — run before every push
 ./vendor/bin/pint
 
-# Create an admin user for the Filament panel (required to log in)
+# Create an admin for the Filament panel (shoppers share the users table,
+# so a new user can open /admin only after admin:grant)
 php artisan make:filament-user
+php artisan admin:grant you@example.com
+
+# Telegram login bot without a webhook (local development)
+php artisan telegram:auth-poll
 
 # After changing locale, translation files, or Filament config:
 php artisan optimize:clear
@@ -47,6 +52,10 @@ Each model's resource lives in `app/Filament/Resources/<Plural>/` split into `Pa
 - Livewire page components + Blade views in `resources/views/livewire/storefront` and `resources/views/components/storefront`.
 - Shared session state (cart, favorites, locale, currency, logged-in customer) goes through `App\Services\StorefrontService`; components use it via the `InteractsWithStore` trait.
 - Exchange rate (USD→UZS, from cbu.uz) comes from `App\Services\ExchangeRateService` and is cached.
+
+### Storefront accounts
+
+Shoppers are `users` rows (`is_admin = false`) that own exactly one `customers` row via `customers.user_id`. Login: email + password (email confirmed by a code, `EmailAuthService`), phone + password, or Telegram (`TelegramAuthService`: one-time request bound to the session → bot asks for the user's own contact → bot sends a 6-digit code → code entered on the site). `CustomerAccountService` owns registration/linking rules. No SMS provider is connected.
 
 ### Stock
 
@@ -76,8 +85,9 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 
 **Security**
 - Every `public` Livewire property and method is client-controllable. Mark server-owned state `#[Locked]` and re-verify on the server before acting.
-- No hardcoded / universal / "dev" login codes. OTP codes: random, hashed server-side, expiring, rate-limited, single-use, never rendered or logged outside `local`.
-- Registration with an existing phone or email is rejected. Never merge accounts or auto-link Telegram/email to an existing account.
+- No hardcoded / universal / "dev" login codes. Codes are random, hashed server-side, expiring, rate-limited, single-use and never rendered or logged.
+- Registration with an existing phone or email is rejected. Never merge accounts, move orders between customers or link a customer by matching phone/email. Telegram is linked only to an account whose owner is signed in (or just proved the password).
+- Admin access is `users.is_admin` (`User::canAccessPanel`); never make it mass-assignable.
 - Never use `withoutVerifying()` / `verify => false`. Tests use `Http::fake()`.
 - Never show `$e->getMessage()` to customers — show a generic message and `report($e)`.
 - No custom `server.php` in the project root (it can serve `.env`).

@@ -206,9 +206,10 @@
             @php
                 $displayName = trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')) ?: $pt['default_name'];
                 $avatarLetter = mb_strtoupper(mb_substr($displayName, 0, 1)) ?: 'M';
-                $rawCustomerEmail = trim((string) ($customer->email ?? ''));
-                $hasVerifiedEmail = $rawCustomerEmail !== '' && ! str_ends_with(strtolower($rawCustomerEmail), '@telegram.mally.local');
-                $isPhoneVerified = ! empty($customer->telegram);
+                // Flags come from the signed-in User (ProfilePage::render), not from guesses on the customer row.
+                $rawCustomerEmail = (string) ($accountEmail ?? '');
+                $hasVerifiedEmail = $rawCustomerEmail !== '';
+                $isPhoneVerified = (bool) ($phoneVerified ?? false);
             @endphp
             <!-- LOGGED IN USER PROFILE -->
             <div class="space-y-6">
@@ -558,12 +559,8 @@
                                         class="w-full px-4 py-2.5 bg-emerald-50/40 border border-emerald-200/70 rounded-xl text-xs font-medium text-emerald-950 cursor-not-allowed select-none"
                                     />
                                 @else
-                                    <input
-                                        type="email"
-                                        wire:model="email"
-                                        placeholder="example@gmail.com"
-                                        class="w-full px-4 py-2.5 bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl text-xs focus:outline-none focus:border-[#1C1917]"
-                                    />
+                                    {{-- An email is only attached through the verified email registration flow. --}}
+                                    <div class="w-full px-4 py-2.5 bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl text-xs text-[#8C827A]">—</div>
                                 @endif
                             </div>
 

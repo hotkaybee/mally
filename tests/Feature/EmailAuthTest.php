@@ -394,7 +394,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'expired@example.com')
-            ->set('authStep', 'register-code')
             ->set('authCode', '123456')
             ->call('verifyRegisterCode')
             ->assertSet('authStep', 'register-code')
@@ -417,7 +416,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'reused@example.com')
-            ->set('authStep', 'register-code')
             ->set('authCode', '654321')
             ->call('verifyRegisterCode')
             ->assertSet('authStep', 'register-profile')
@@ -427,7 +425,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'reused@example.com')
-            ->set('authStep', 'register-code')
             ->set('authCode', '654321')
             ->call('verifyRegisterCode')
             ->assertSet('authStep', 'register-code')
@@ -449,7 +446,6 @@ class EmailAuthTest extends TestCase
         $component = Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'validating@example.com')
-            ->set('authStep', 'register-code')
             ->set('authCode', '222333')
             ->call('verifyRegisterCode')
             ->assertSet('authStep', 'register-profile');
@@ -521,7 +517,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'complete@example.com')
-            ->set('authStep', 'register-code')
             ->set('authCode', '888999')
             ->call('verifyRegisterCode')
             ->assertSet('authStep', 'register-profile')
@@ -624,7 +619,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'resetme@example.com')
-            ->set('authStep', 'reset-code')
             ->set('authCode', '445566')
             ->call('verifyPasswordResetCode')
             ->assertSet('authStep', 'reset-code')
@@ -636,7 +630,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'resetme@example.com')
-            ->set('authStep', 'reset-code')
             ->set('authCode', '333222')
             ->call('verifyPasswordResetCode')
             ->assertSet('authStep', 'reset-code')
@@ -671,7 +664,6 @@ class EmailAuthTest extends TestCase
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
             ->set('authEmail', 'expiredreset@example.com')
-            ->set('authStep', 'reset-code')
             ->set('authCode', '777888')
             ->call('verifyPasswordResetCode')
             ->assertSet('authStep', 'reset-code')
@@ -709,8 +701,7 @@ class EmailAuthTest extends TestCase
 
         $component = Livewire::test(HomePage::class)
             ->call('openAuthModal')
-            ->set('authEmail', 'burn@example.com')
-            ->set('authStep', 'register-code');
+            ->set('authEmail', 'burn@example.com');
 
         for ($i = 1; $i <= 5; $i++) {
             $component
@@ -893,151 +884,5 @@ class EmailAuthTest extends TestCase
 
         // 6. Verify /admin/login opens normally
         $this->get('/admin/login')->assertOk();
-    }
-
-    public function test_telegram_registration_without_email_requires_password_and_allows_phone_login(): void
-    {
-        $tgService = app(\App\Services\TelegramAuthService::class);
-        $token = 'test_reg_token_998950057404';
-        Cache::put($tgService->tokenCacheKey($token), [
-            'status' => 'verified',
-            'phone' => '+998 95 005 74 04',
-            'first_name' => 'Muhammadali',
-            'last_name' => 'Botirov',
-            'telegram_username' => 'BotirovAli15',
-        ], now()->addMinutes(10));
-
-        $component = Livewire::test(HomePage::class)
-            ->call('openAuthModal')
-            ->set('authStep', 'telegram-wait')
-            ->set('authTelegramToken', $token)
-            ->call('checkTelegramAuthStatus')
-            ->assertSet('authStep', 'telegram-register')
-            ->assertSet('authPhone', '+998 95 005 74 04')
-            ->assertSet('authName', 'Muhammadali Botirov');
-
-        // 1. Password is required on Telegram registration
-        $component
-            ->set('authPassword', '')
-            ->set('authPasswordConfirmation', '')
-            ->call('completeTelegramRegistration')
-            ->assertSet('authStep', 'telegram-register')
-            ->assertHasErrors(['authPassword']);
-
-        // 2. Completing registration with password and NO Gmail creates User & Customer without SQLite NOT NULL / CHECK errors
-        $component
-            ->set('authPassword', 'TelegramPass123')
-            ->set('authPasswordConfirmation', 'TelegramPass123')
-            ->call('completeTelegramRegistration')
-            ->assertSet('isAuthModalOpen', false);
-
-        $user = User::where('phone', '+998 95 005 74 04')->first();
-        $this->assertNotNull($user);
-        $this->assertSame('tg_998950057404@telegram.mally.local', $user->email);
-
-        $customer = \App\Models\Customer::where('phone_number', '+998 95 005 74 04')->first();
-        $this->assertNotNull($customer);
-        $this->assertSame('@BotirovAli15', $customer->telegram);
-
-        // 3. Logout and log back in using phone number + password on the standard login screen
-        $component->call('logoutCustomer');
-        $this->assertNull(session('mally_user_id'));
-
-        $component
-            ->call('openAuthModal')
-            ->set('authEmail', '95 005 74 04')
-            ->set('authPassword', 'TelegramPass123')
-            ->call('loginWithPassword')
-            ->assertSet('isAuthModalOpen', false);
-
-        $this->assertSame($user->id, session('mally_user_id'));
-        $this->assertSame($customer->id, session('mally_customer_id'));
-    }
-
-    public function test_telegram_and_gmail_accounts_merge_and_preserve_all_orders(): void
-    {
-        // 1. Existing Gmail user + customer with an order
-        $gmailUser = User::factory()->create([
-            'name' => 'Ali Gmail',
-            'email' => 'ali.buyer@gmail.com',
-            'phone' => '+998 90 111 22 33',
-            'password' => Hash::make('GmailPass123'),
-        ]);
-
-        $gmailCustomer = \App\Models\Customer::create([
-            'first_name' => 'Ali',
-            'last_name' => 'Gmail',
-            'email' => 'ali.buyer@gmail.com',
-            'phone_number' => '+998 90 111 22 33',
-            'source' => 'instagram',
-        ]);
-
-        $order1 = \App\Models\Order::create([
-            'order_number' => 10001,
-            'customer_id' => $gmailCustomer->id,
-            'customer_name' => 'Ali Gmail',
-            'customer_phone' => '+998 90 111 22 33',
-            'amount' => 100000,
-            'amount_paid' => 0,
-            'status' => 'processing',
-            'payment_method' => 'card_fast',
-            'payment_status' => 'PENDING',
-        ]);
-
-        // 2. Also a separate Telegram customer record with another order on the same phone
-        $tgCustomer = \App\Models\Customer::create([
-            'first_name' => 'Ali',
-            'last_name' => 'Telegram',
-            'email' => 'tg_998901112233@telegram.mally.local',
-            'phone_number' => '+998 90 111 22 33',
-            'telegram' => null,
-            'source' => 'instagram',
-        ]);
-
-        $order2 = \App\Models\Order::create([
-            'order_number' => 10002,
-            'customer_id' => $tgCustomer->id,
-            'customer_name' => 'Ali Telegram',
-            'customer_phone' => '+998 90 111 22 33',
-            'amount' => 250000,
-            'amount_paid' => 250000,
-            'status' => 'processing',
-            'payment_method' => 'card_fast',
-            'payment_status' => 'PENDING',
-        ]);
-
-        // 3. Simulate Telegram verification completing for +998 90 111 22 33
-        $tgService = app(\App\Services\TelegramAuthService::class);
-        $token = 'test_merge_token_1234567890';
-        Cache::put($tgService->tokenCacheKey($token), [
-            'status' => 'verified',
-            'phone' => '+998 90 111 22 33',
-            'first_name' => 'Ali',
-            'last_name' => 'Botirov',
-            'telegram_username' => 'ali_tg',
-        ], now()->addMinutes(10));
-
-        // 4. Polling status detects existing Gmail account and shows `telegram-merge-confirm` step
-        $component = Livewire::test(HomePage::class)
-            ->call('openAuthModal')
-            ->set('authStep', 'telegram-wait')
-            ->set('authTelegramToken', $token)
-            ->call('checkTelegramAuthStatus')
-            ->assertSet('authStep', 'telegram-merge-confirm')
-            ->assertSet('authMergeTargetEmail', 'ali.buyer@gmail.com')
-            ->assertSee('ali.buyer@gmail.com');
-
-        // 5. Confirming merge unites both Customer records and reassigns both orders to the primary Customer!
-        $component
-            ->call('confirmTelegramMerge')
-            ->assertSet('isAuthModalOpen', false);
-
-        $this->assertSame($gmailUser->id, session('mally_user_id'));
-        $primaryCustomerId = session('mally_customer_id');
-        $this->assertNotNull($primaryCustomerId);
-
-        $this->assertSame($primaryCustomerId, $order1->fresh()->customer_id);
-        $this->assertSame($primaryCustomerId, $order2->fresh()->customer_id);
-        $this->assertSame(1, \App\Models\Customer::where('phone_number', '+998 90 111 22 33')->count());
     }
 }

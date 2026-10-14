@@ -3,14 +3,26 @@
 namespace App\Livewire\Storefront\Concerns;
 
 use App\Models\AuthCode;
+use App\Models\Customer;
+use App\Models\TelegramLoginRequest;
+use App\Models\User;
+use App\Services\CustomerAccountService;
 use App\Services\EmailAuthService;
 use App\Services\StorefrontService;
 use App\Services\TelegramAuthService;
+use App\Support\PhoneNumber;
+use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
 {
+    private const VERIFIED_TELEGRAM = 'mally_verified_telegram';
+
+    private const PENDING_TELEGRAM_LINK = 'mally_pending_telegram_link';
+
     public bool $isAuthModalOpen = false;
 
+    /** Server-controlled; the browser can only open the entry steps via setAuthStep(). */
+    #[Locked]
     public string $authStep = 'login';
 
     public string $authEmail = '';
@@ -45,17 +57,16 @@ trait InteractsWithStore
 
     public bool $authOfferRegistration = false;
 
-    public string $authTelegramToken = '';
-
+    #[Locked]
     public string $authTelegramBotUrl = '';
 
+    #[Locked]
     public string $authTelegramBotUsername = '';
 
+    #[Locked]
     public string $authTelegramStatus = 'pending';
 
-    public string $authMergeTargetName = '';
-
-    public string $authMergeTargetEmail = '';
+    public string $authTelegramCode = '';
 
     protected function store(): StorefrontService
     {
@@ -65,6 +76,11 @@ trait InteractsWithStore
     protected function emailAuth(): EmailAuthService
     {
         return app(EmailAuthService::class);
+    }
+
+    protected function accounts(): CustomerAccountService
+    {
+        return app(CustomerAccountService::class);
     }
 
     protected function telegramAuth(): TelegramAuthService
@@ -173,6 +189,11 @@ trait InteractsWithStore
 
     public function setAuthStep(string $step): void
     {
+        // Every other step is reached only after a server-side check.
+        if (! in_array($step, ['login', 'register-email', 'reset-email'], true)) {
+            return;
+        }
+
         $this->clearAuthFeedback();
         $this->authOfferRegistration = false;
         $this->authStep = $step;
@@ -239,7 +260,7 @@ trait InteractsWithStore
         $isPhone = $this->emailAuth()->isPhoneIdentifier($rawInput);
 
         if ($isPhone) {
-            $normalizedInput = $this->telegramAuth()->normalizeTelegramPhone($rawInput);
+            $normalizedInput = PhoneNumber::normalize($rawInput) ?? $rawInput;
             $this->authEmail = $normalizedInput;
         } else {
             $normalizedInput = $this->emailAuth()->normalizeEmail($rawInput);
@@ -283,25 +304,8 @@ trait InteractsWithStore
             return;
         }
 
-        $user = $res['user'];
-        $customer = $res['customer'];
-
-        session()->regenerate();
-        session(['mally_user_id' => $user->id]);
-        $this->store()->loginCustomer($customer);
-
-        $this->authPassword = '';
-        $this->authOfferRegistration = false;
-        $this->isAuthModalOpen = false;
-
-        if (method_exists($this, 'onCustomerAuthenticated')) {
-            $this->onCustomerAuthenticated($customer);
-        }
-
-        if ($this->authRedirectTo !== null) {
-            $safeTarget = $this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo);
-            $this->redirect($safeTarget, navigate: true);
-        }
+        $this->linkPendingTelegram($res['user']);
+        $this->finishLogin($res['user']);
     }
 
     /**
@@ -411,6 +415,7 @@ trait InteractsWithStore
         );
 
         if (! $res['success']) {
+            $this->authStep = 'register-code';
             $this->failAuth('authCode', $res['message']);
 
             return;
@@ -482,6 +487,11 @@ trait InteractsWithStore
         );
 
         if (! $res['success']) {
+            if (($res['error'] ?? '') === 'phone_taken') {
+                $this->failAuth('authPhone', $res['message']);
+
+                return;
+            }
             if (($res['error'] ?? '') === 'email_taken') {
                 $this->authEmail = $verifiedEmail;
                 $this->authStep = 'login';
@@ -492,33 +502,7 @@ trait InteractsWithStore
         }
 
         session()->forget('mally_verified_register_email');
-
-        $user = $res['user'];
-        $customer = $res['customer'];
-
-        session()->regenerate();
-        session(['mally_user_id' => $user->id]);
-        $this->store()->loginCustomer($customer);
-
-        $this->authPassword = '';
-        $this->authPasswordConfirmation = '';
-        $this->isAuthModalOpen = false;
-
-        if (method_exists($this, 'onCustomerAuthenticated')) {
-            $this->onCustomerAuthenticated($customer);
-        }
-
-        $toastMsg = ! empty($res['merged'])
-            ? 'Ваш Telegram и почта успешно объединены в один профиль! Все заказы сохранены.'
-            : 'Регистрация успешно завершена!';
-
-        $this->dispatch('toast', message: $toastMsg, type: 'success');
-
-        if ($this->authRedirectTo !== null) {
-            session()->flash('mally_toast', ['message' => $toastMsg, 'type' => 'success']);
-            $safeTarget = $this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo);
-            $this->redirect($safeTarget, navigate: true);
-        }
+        $this->finishLogin($res['user'], 'Регистрация успешно завершена!');
     }
 
     /**
@@ -627,6 +611,7 @@ trait InteractsWithStore
         );
 
         if (! $res['success']) {
+            $this->authStep = 'reset-code';
             $this->failAuth('authCode', $res['message']);
 
             return;
@@ -680,248 +665,153 @@ trait InteractsWithStore
             return;
         }
 
-        $user = $res['user'];
-        $customer = $res['customer'];
-
-        session()->regenerate();
-        session(['mally_user_id' => $user->id]);
-        $this->store()->loginCustomer($customer);
-
-        $this->authOfferRegistration = false;
-        $this->isAuthModalOpen = false;
-
-        if (method_exists($this, 'onCustomerAuthenticated')) {
-            $this->onCustomerAuthenticated($customer);
-        }
-
-        if ($this->authRedirectTo !== null) {
-            $safeTarget = $this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo);
-            $this->redirect($safeTarget, navigate: true);
-        }
+        $this->finishLogin($res['user']);
     }
 
+    // =========================================================================
+    // TELEGRAM LOGIN (see TelegramAuthService for the full flow)
+    // =========================================================================
+
     /**
-     * Start Telegram Bot verification flow: generate a unique token, open the waiting step,
-     * and give the user the `t.me/{bot}?start=auth_{token}` link.
+     * Step 1: create a one-time request bound to this browser session and
+     * show the bot link. Also used from the profile to link Telegram.
      */
     public function startTelegramAuth(): void
     {
         $this->clearAuthFeedback();
         $this->authOfferRegistration = false;
+        $this->authTelegramCode = '';
 
-        $session = $this->telegramAuth()->startAuthSession();
+        if (! $this->telegramAuth()->isConfigured()) {
+            $this->failAuth('authTelegram', __('Telegram login is temporarily unavailable.'));
 
-        $this->authTelegramToken = $session['token'];
-        $this->authTelegramBotUrl = $session['bot_url'];
-        $this->authTelegramBotUsername = $session['bot_username'];
-        $this->authTelegramStatus = 'pending';
+            return;
+        }
 
-        session([
-            'mally_tg_auth_token' => $session['token'],
-        ]);
+        $user = $this->store()->getCurrentUser();
+        $started = $this->telegramAuth()->start(
+            $user ? TelegramLoginRequest::PURPOSE_LINK : TelegramLoginRequest::PURPOSE_LOGIN,
+            $user
+        );
 
+        if ($started === null) {
+            $this->failAuth('authTelegram', __('Too many attempts. Please try again later.'));
+
+            return;
+        }
+
+        $this->authTelegramBotUrl = $started['bot_url'];
+        $this->authTelegramBotUsername = $started['bot_username'];
+        $this->authTelegramStatus = TelegramLoginRequest::STATUS_PENDING;
         $this->authStep = 'telegram-wait';
     }
 
     /**
-     * Poll Telegram bot status every 2 seconds while the user is on the `telegram-wait` modal screen.
-     * - If the user already exists in the DB by phone -> logs them in immediately and closes the modal.
-     * - If the user is new -> opens the `telegram-register` screen with verified phone pre-filled and optional email.
+     * Polled by the modal while waiting for the bot: switches to the code
+     * input as soon as the bot has sent the code.
      */
     public function checkTelegramAuthStatus(): void
     {
-        if ($this->authStep !== 'telegram-wait') {
+        if (! in_array($this->authStep, ['telegram-wait', 'telegram-code'], true)) {
             return;
         }
 
-        $token = (string) session('mally_tg_auth_token', $this->authTelegramToken);
-        if ($token === '') {
-            return;
-        }
-
-        $res = $this->telegramAuth()->checkTokenStatus($token, true);
-        $status = (string) ($res['status'] ?? 'pending');
+        $status = $this->telegramAuth()->status();
         $this->authTelegramStatus = $status;
 
-        if ($status === 'login' && isset($res['user'], $res['customer'])) {
-            session()->forget('mally_tg_auth_token');
-
-            $user = $res['user'];
-            $customer = $res['customer'];
-
-            session()->regenerate();
-            session(['mally_user_id' => $user->id]);
-            $this->store()->loginCustomer($customer);
-
-            $this->authOfferRegistration = false;
-            $this->isAuthModalOpen = false;
-
-            if (method_exists($this, 'onCustomerAuthenticated')) {
-                $this->onCustomerAuthenticated($customer);
-            }
-
-            if ($this->authRedirectTo !== null) {
-                $safeTarget = $this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo);
-                $this->redirect($safeTarget, navigate: true);
-            }
+        if ($status === TelegramAuthService::EXPIRED) {
+            $this->authStep = 'telegram-wait';
+            $this->failAuth('authTelegram', __('The Telegram login link has expired. Please start again.'));
 
             return;
         }
 
-        if ($status === 'merge_confirm' && isset($res['merge_user'])) {
-            $verifiedPhone = (string) ($res['phone'] ?? '');
-            $tgName = (string) ($res['name'] ?? '');
-            $tgUsername = (string) ($res['telegram_username'] ?? '');
-            $mergeUser = $res['merge_user'];
-
-            session([
-                'mally_verified_tg_phone' => $verifiedPhone,
-                'mally_verified_tg_username' => $tgUsername,
-                'mally_tg_merge_user_id' => (int) ($mergeUser['id'] ?? 0),
-                'mally_tg_name' => $tgName,
-            ]);
-            session()->forget('mally_tg_auth_token');
-
-            $this->authPhone = $verifiedPhone;
-            $this->authName = $tgName;
-            $this->authMergeTargetName = (string) ($mergeUser['name'] ?? '');
-            $this->authMergeTargetEmail = (string) ($mergeUser['email'] ?? '');
+        if ($status === TelegramLoginRequest::STATUS_CODE_SENT && $this->authStep === 'telegram-wait') {
             $this->clearAuthFeedback();
-            $this->authStep = 'telegram-merge-confirm';
-
-            return;
-        }
-
-        if ($status === 'register') {
-            $verifiedPhone = (string) ($res['phone'] ?? '');
-            $tgName = (string) ($res['name'] ?? '');
-            $tgUsername = (string) ($res['telegram_username'] ?? '');
-
-            session([
-                'mally_verified_tg_phone' => $verifiedPhone,
-                'mally_verified_tg_username' => $tgUsername,
-            ]);
-            session()->forget('mally_tg_auth_token');
-
-            $this->authPhone = $verifiedPhone;
-            $this->authName = $tgName;
-            $this->authEmail = '';
-            $this->authPassword = '';
-            $this->authPasswordConfirmation = '';
-            $this->clearAuthFeedback();
-            $this->authStep = 'telegram-register';
+            $this->authStep = 'telegram-code';
         }
     }
 
     /**
-     * User clicked "Да, объединить аккаунты и войти" when Telegram phone matched an existing Gmail/Email account.
-     * Merges accounts and 100% of order history inside a DB transaction and logs in immediately.
+     * Step 2: the code the bot sent to the user's Telegram.
      */
-    public function confirmTelegramMerge(): void
+    public function verifyTelegramCode(): void
     {
         $this->clearAuthFeedback();
 
-        $verifiedPhone = (string) session('mally_verified_tg_phone', '');
-        $tgUsername = (string) session('mally_verified_tg_username', '');
-        $mergeUserId = (int) session('mally_tg_merge_user_id', 0);
-        $fallbackName = (string) session('mally_tg_name', $this->authName);
+        $res = $this->telegramAuth()->verifyCode($this->authTelegramCode);
+        $this->authTelegramCode = '';
 
-        if ($verifiedPhone === '' || $mergeUserId <= 0) {
-            $this->startTelegramAuth();
+        if ($res['result'] === TelegramAuthService::INVALID) {
+            $this->failAuth('authTelegramCode', __('Invalid verification code'));
 
             return;
         }
 
-        $primaryUser = \App\Models\User::find($mergeUserId);
-        if (! $primaryUser) {
-            $this->authStep = 'telegram-register';
+        if ($res['result'] !== TelegramAuthService::VERIFIED) {
+            $this->authStep = 'telegram-wait';
+            $this->authTelegramBotUrl = '';
+            $this->failAuth('authTelegram', $res['result'] === TelegramAuthService::THROTTLED
+                ? __('Too many attempts. Please try again later.')
+                : __('The code has expired. Please request a new one.'));
 
             return;
         }
 
-        $merged = $this->telegramAuth()->mergePhoneAccountsIntoPrimary(
-            $primaryUser,
-            $verifiedPhone,
-            $tgUsername,
-            $fallbackName
-        );
+        $identity = $res['identity'];
 
-        session()->forget([
-            'mally_verified_tg_phone',
-            'mally_verified_tg_username',
-            'mally_tg_merge_user_id',
-            'mally_tg_name',
-            'mally_tg_auth_token',
-        ]);
-
-        $user = $merged['user'];
-        $customer = $merged['customer'];
-
-        session()->regenerate();
-        session(['mally_user_id' => $user->id]);
-        $this->store()->loginCustomer($customer);
-
-        $this->authPassword = '';
-        $this->authPasswordConfirmation = '';
-        $this->isAuthModalOpen = false;
-
-        if (method_exists($this, 'onCustomerAuthenticated')) {
-            $this->onCustomerAuthenticated($customer);
-        }
-
-        $mergeToast = 'Ваш Telegram и аккаунт с почтой успешно объединены! Все заказы сохранены.';
-        $this->dispatch('toast', message: $mergeToast, type: 'success');
-
-        if ($this->authRedirectTo !== null) {
-            session()->flash('mally_toast', ['message' => $mergeToast, 'type' => 'success']);
-            $safeTarget = $this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo);
-            $this->redirect($safeTarget, navigate: true);
-        }
-    }
-
-    /**
-     * User clicked "Нет, создать отдельный аккаунт" on the merge confirmation step.
-     */
-    public function declineTelegramMerge(): void
-    {
-        $this->clearAuthFeedback();
-
-        $verifiedPhone = (string) session('mally_verified_tg_phone', '');
-        if ($verifiedPhone === '') {
-            $this->startTelegramAuth();
+        if ($identity['purpose'] === TelegramLoginRequest::PURPOSE_LINK) {
+            $this->finishTelegramLink($identity);
 
             return;
         }
 
-        $this->telegramAuth()->detachPhoneFromOtherAccounts($verifiedPhone);
+        // 1. This Telegram account is already linked -> sign in.
+        $user = $this->accounts()->findByTelegram($identity['telegram_user_id']);
+        if ($user) {
+            $this->finishLogin($user);
 
-        session()->forget('mally_tg_merge_user_id');
+            return;
+        }
 
-        $this->authPhone = $verifiedPhone;
-        $this->authEmail = '';
+        // 2. The phone already belongs to an account that isn't linked to this
+        //    Telegram: don't sign in and don't merge. The owner may link it
+        //    after signing in with the account's password.
+        if ($this->accounts()->phoneTaken($identity['phone'])) {
+            session([self::PENDING_TELEGRAM_LINK => $identity + ['until' => now()->addMinutes(10)->timestamp]]);
+            $this->authEmail = $identity['phone'];
+            $this->authStep = 'login';
+            $this->notifyAuth(__('An account with this phone number already exists. Sign in with its password to link Telegram.'));
+
+            return;
+        }
+
+        // 3. New customer -> finish registration with name and password.
+        session([self::VERIFIED_TELEGRAM => $identity + ['until' => now()->addMinutes(15)->timestamp]]);
+        $this->authPhone = $identity['phone'];
+        $this->authName = trim($identity['first_name'].' '.$identity['last_name']);
         $this->authPassword = '';
         $this->authPasswordConfirmation = '';
         $this->authStep = 'telegram-register';
     }
 
     /**
-     * Complete registration for a new user whose phone was verified via Telegram bot.
-     * Password is REQUIRED (min 8 chars). Gmail/Email is OPTIONAL!
+     * Step 3 (new customers): name + password for the Telegram-verified phone.
      */
     public function completeTelegramRegistration(): void
     {
         $this->clearAuthFeedback();
 
-        $verifiedPhone = (string) session('mally_verified_tg_phone', '');
-        $tgUsername = (string) session('mally_verified_tg_username', '');
-
-        if ($verifiedPhone === '') {
-            $this->startTelegramAuth();
+        $identity = $this->sessionIdentity(self::VERIFIED_TELEGRAM);
+        if (! $identity) {
+            $this->authStep = 'login';
+            $this->failAuth('authTelegram', __('The code has expired. Please request a new one.'));
 
             return;
         }
 
-        if (trim($this->authName) === '') {
+        $name = trim($this->authName);
+        if ($name === '' || mb_strlen($name) > 100) {
             $this->failAuth('authName', 'Пожалуйста, укажите ваше имя.');
 
             return;
@@ -939,71 +829,107 @@ trait InteractsWithStore
             return;
         }
 
-        $res = $this->telegramAuth()->registerTelegramUser(
-            $verifiedPhone,
-            $this->authName,
-            $this->authEmail,
-            $this->authPassword,
-            $tgUsername
-        );
+        $res = $this->accounts()->registerFromTelegram($identity, $name, $this->authPassword);
+        $this->authPassword = '';
+        $this->authPasswordConfirmation = '';
+        session()->forget(self::VERIFIED_TELEGRAM);
 
-        if (! $res['success']) {
-            if (($res['error'] ?? '') === 'merge_needed' && isset($res['merge_user'])) {
-                $mergeUser = $res['merge_user'];
-                session([
-                    'mally_tg_merge_user_id' => (int) ($mergeUser['id'] ?? 0),
-                    'mally_tg_name' => $this->authName,
-                ]);
-                $this->authMergeTargetName = (string) ($mergeUser['name'] ?? '');
-                $this->authMergeTargetEmail = (string) ($mergeUser['email'] ?? '');
-                $this->authStep = 'telegram-merge-confirm';
-
-                return;
-            }
-
-            $field = (string) ($res['field'] ?? 'authName');
-            $this->failAuth($field, $res['message']);
+        if ($res['result'] !== CustomerAccountService::OK) {
+            $this->authStep = 'login';
+            $this->authEmail = $identity['phone'];
+            $this->failAuth('authEmail', __('An account with this phone number already exists. Please sign in.'));
 
             return;
         }
 
-        session()->forget([
-            'mally_verified_tg_phone',
-            'mally_verified_tg_username',
-            'mally_tg_merge_user_id',
-            'mally_tg_name',
-            'mally_tg_auth_token',
-        ]);
+        $this->finishLogin($res['user'], __('Registration via Telegram completed.'));
+    }
 
-        $user = $res['user'];
-        $customer = $res['customer'];
+    /** Link flow from the profile (the owner is already signed in). */
+    protected function finishTelegramLink(array $identity): void
+    {
+        $user = $this->store()->getCurrentUser();
+        if (! $user || (int) $identity['user_id'] !== (int) $user->id) {
+            $this->authStep = 'login';
+            $this->failAuth('authTelegram', __('Please sign in again.'));
 
-        session()->regenerate();
-        session(['mally_user_id' => $user->id]);
-        $this->store()->loginCustomer($customer);
+            return;
+        }
+
+        $result = $this->accounts()->linkTelegram($user, $identity);
+        $this->isAuthModalOpen = false;
+
+        if ($result !== CustomerAccountService::OK) {
+            $this->dispatch('toast', message: __('This Telegram account or phone number is already used by another account.'), type: 'error');
+
+            return;
+        }
+
+        $customer = $this->accounts()->customerFor($user->fresh());
+        if (method_exists($this, 'onCustomerAuthenticated')) {
+            $this->onCustomerAuthenticated($customer);
+        }
+        $this->dispatch('toast', message: __('Telegram is linked and your phone number is confirmed.'), type: 'success');
+    }
+
+    /**
+     * After a password login: link the Telegram identity that was verified a
+     * moment ago, but only to the account that owns that phone number.
+     */
+    protected function linkPendingTelegram(User $user): void
+    {
+        $identity = $this->sessionIdentity(self::PENDING_TELEGRAM_LINK);
+        session()->forget(self::PENDING_TELEGRAM_LINK);
+
+        if ($identity && User::wherePhone($identity['phone'])->whereKey($user->id)->exists()) {
+            $this->accounts()->linkTelegram($user, $identity);
+        }
+    }
+
+    protected function sessionIdentity(string $key): ?array
+    {
+        $identity = session($key);
+
+        return is_array($identity) && ($identity['until'] ?? 0) >= now()->timestamp ? $identity : null;
+    }
+
+    /**
+     * Common end of every successful login: new session id, customer in the
+     * session, modal closed, optional safe redirect.
+     */
+    protected function finishLogin(User $user, ?string $toast = null): Customer
+    {
+        $this->telegramAuth()->forgetSessionRequest();
+        $customer = $this->accounts()->login($user);
 
         $this->authPassword = '';
         $this->authPasswordConfirmation = '';
+        $this->authOfferRegistration = false;
+        $this->authStep = 'login';
         $this->isAuthModalOpen = false;
 
         if (method_exists($this, 'onCustomerAuthenticated')) {
             $this->onCustomerAuthenticated($customer);
         }
 
-        $tgToast = 'Регистрация через Telegram успешно завершена!';
-        $this->dispatch('toast', message: $tgToast, type: 'success');
+        if ($toast !== null) {
+            $this->dispatch('toast', message: $toast, type: 'success');
+        }
 
         if ($this->authRedirectTo !== null) {
-            session()->flash('mally_toast', ['message' => $tgToast, 'type' => 'success']);
-            $safeTarget = $this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo);
-            $this->redirect($safeTarget, navigate: true);
+            if ($toast !== null) {
+                session()->flash('mally_toast', ['message' => $toast, 'type' => 'success']);
+            }
+            $this->redirect($this->emailAuth()->sanitizeRedirectPath($this->authRedirectTo), navigate: true);
         }
+
+        return $customer;
     }
 
     public function logoutCustomer(): void
     {
-        session()->forget('mally_user_id');
         $this->store()->logoutCustomer();
+        $this->redirect(route('home'));
     }
 
     protected function clearAuthFeedback(): void

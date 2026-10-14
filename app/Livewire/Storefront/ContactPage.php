@@ -20,6 +20,9 @@ class ContactPage extends Component
 
     public string $phone = '+998 ';
 
+    /** Optional reply address; only used in the message text. */
+    public string $email = '';
+
     public string $message = '';
 
     public bool $submitted = false;
@@ -106,6 +109,13 @@ class ContactPage extends Component
             return;
         }
 
+        $email = mb_strtolower(trim($this->email));
+        if ($email !== '' && (mb_strlen($email) > 255 || filter_var($email, FILTER_VALIDATE_EMAIL) === false)) {
+            $this->dispatch('toast', message: __('Please enter a valid email address.'), type: 'error');
+
+            return;
+        }
+
         if (mb_strlen($firstName) > 100 || mb_strlen($lastName) > 100 || mb_strlen($msg) > 2000) {
             $this->dispatch('toast', message: __('Message is too long.'), type: 'error');
 
@@ -125,6 +135,7 @@ class ContactPage extends Component
         $telegramText = "📩 Новое сообщение из контактной формы Mally\n\n"
             ."👤 Имя и фамилия: {$firstName} {$lastName}\n"
             ."📱 Телефон: {$normalizedPhone}\n"
+            .($email !== '' ? "📧 Email: {$email}\n" : '')
             .'🕒 Дата: '.now()->timezone('Asia/Tashkent')->format('d.m.Y H:i')."\n\n"
             ."💬 Сообщение:\n{$msg}";
 

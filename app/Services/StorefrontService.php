@@ -6,6 +6,8 @@ use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Review;
+use App\Models\User;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -66,28 +68,7 @@ class StorefrontService
 
     public function normalizeAndValidateUzPhone(string $rawPhone): ?string
     {
-        $digits = preg_replace('/\D/', '', $rawPhone);
-        if (! $digits) {
-            return null;
-        }
-
-        if (strlen($digits) === 9) {
-            $digits = '998'.$digits;
-        }
-
-        if (strlen($digits) !== 12 || ! str_starts_with($digits, '998')) {
-            return null;
-        }
-
-        $sub = substr($digits, 3); // 9 цифр после 998
-
-        return sprintf(
-            '+998 %s %s %s %s',
-            substr($sub, 0, 2),
-            substr($sub, 2, 3),
-            substr($sub, 5, 2),
-            substr($sub, 7, 2)
-        );
+        return PhoneNumber::normalize($rawPhone);
     }
 
     public function getCurrency(): string
@@ -611,11 +592,28 @@ class StorefrontService
         return $this->getCurrentCustomer();
     }
 
+    /** The storefront login (User) of the current session, if any. */
+    public function getCurrentUser(): ?User
+    {
+        $customer = $this->getCurrentCustomer();
+        $userId = (int) session('mally_user_id', 0);
+
+        // The session must still point at the user that owns this customer.
+        if (! $customer || $userId <= 0 || (int) $customer->user_id !== $userId) {
+            return null;
+        }
+
+        return User::find($userId);
+    }
+
     public function loginCustomer(Customer $customer): void
     {
         // New session id on login, so a planted session id can't be reused.
         session()->regenerate();
-        session(['mally_customer_id' => $customer->id]);
+        session([
+            'mally_customer_id' => $customer->id,
+            'mally_user_id' => $customer->user_id,
+        ]);
         $this->cachedCustomer = $customer;
         $this->customerResolved = true;
     }

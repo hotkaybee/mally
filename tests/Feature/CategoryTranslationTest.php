@@ -145,7 +145,7 @@ class CategoryTranslationTest extends TestCase
     public function test_product_list_shows_the_category_in_the_active_locale(): void
     {
         config(['app.env' => 'local']);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $category = $this->makeCategory();
         Product::create([

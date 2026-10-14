@@ -12,13 +12,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::firstOrCreate(
-            ['email' => 'admin@mally.uz'],
-            [
-                'name' => 'Администратор Mally',
-                'password' => 'admin12345',
-            ]
-        );
+        // Development admin only; production admins are created with
+        // make:filament-user + admin:grant.
+        if (app()->environment('local')) {
+            User::firstOrCreate(
+                ['email' => 'admin@mally.uz'],
+                [
+                    'name' => 'Администратор Mally',
+                    'password' => 'admin12345',
+                ]
+            )->forceFill(['is_admin' => true])->save();
+        }
 
         $this->call([
             BrandSeeder::class,

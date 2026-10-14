@@ -97,6 +97,13 @@
                         {{ $txt['login_title'] }}
                     </h2>
 
+                    @if($this->authNotice)
+                        <p class="mb-4 p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-800 font-medium text-center">{{ $this->authNotice }}</p>
+                    @endif
+                    @error('authTelegram')
+                        <p role="alert" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
+                    @enderror
+
                     <form wire:submit="loginWithPassword" class="space-y-4" novalidate>
                         <!-- Поле Email или Телефон -->
                         <div>
@@ -724,46 +731,50 @@
                 </div>
 
             @elseif($step === 'telegram-wait')
-                <!-- ВХОД / РЕГИСТРАЦИЯ ЧЕРЕЗ TELEGRAM БОТА: ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ КОНТАКТА -->
-                <div wire:poll.1500ms="checkTelegramAuthStatus" class="space-y-4">
+                <!-- TELEGRAM: ШАГ 1 — ОТКРЫТЬ БОТА И ПОДЕЛИТЬСЯ КОНТАКТОМ -->
+                <div @if($this->authTelegramBotUrl) wire:poll.2s="checkTelegramAuthStatus" @endif class="space-y-4">
                     <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
-                        Подтверждение через Telegram
+                        {{ __('Sign in with Telegram') }}
                     </h2>
 
-                    <div class="p-4 rounded-2xl bg-[#F0F9FF] border border-[#BAE6FD] space-y-2.5 text-xs text-[#0C4A6E]">
-                        @if(($this->authTelegramStatus ?? 'pending') === 'awaiting_contact')
-                            <div class="flex items-center gap-2 font-bold text-emerald-700">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                                <span>Бот запущен! Нажмите «📱 Поделиться контактом» в Telegram</span>
-                            </div>
-                            <p class="text-[11px] leading-relaxed text-[#0369A1]">
-                                Как только вы поделитесь номером в чате с ботом, это окно автоматически выполнит вход или откроет завершение регистрации.
-                            </p>
-                        @else
-                            <p class="font-semibold text-[#075985]">Как подтвердить номер без кода за 5 секунд:</p>
+                    @error('authTelegram')
+                        <p role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
+                    @enderror
+
+                    @if($this->authTelegramBotUrl)
+                        <div class="p-4 rounded-2xl bg-[#F0F9FF] border border-[#BAE6FD] space-y-2.5 text-xs text-[#0C4A6E]">
                             <ol class="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed text-[#0369A1]">
-                                <li>Нажмите кнопку <strong>«Открыть Telegram-бота»</strong> ниже</li>
-                                <li>В открывшемся боте нажмите <strong>Start / Запустить</strong></li>
-                                <li>Нажмите кнопку <strong>«📱 Поделиться контактом»</strong> внизу чата и вернитесь на сайт</li>
+                                <li>{{ __('Open the bot with the button below and press Start.') }}</li>
+                                <li>{{ __('Share your contact with the "📱 Share contact" button.') }}</li>
+                                <li>{{ __('The bot will send you a 6-digit code — enter it here.') }}</li>
                             </ol>
-                        @endif
-                    </div>
+                        </div>
 
-                    <a
-                        href="{{ $this->authTelegramBotUrl ?: ('https://t.me/'.($this->authTelegramBotUsername ?: 'MallyAdmin_bot')) }}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                        <i class="fa-brands fa-telegram text-base"></i>
-                        <span>Открыть Telegram-бота</span>
-                        <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
-                    </a>
+                        <a
+                            href="{{ $this->authTelegramBotUrl }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Open Telegram bot') }}</span>
+                            <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+                        </a>
 
-                    <div class="flex items-center justify-center gap-2 py-1 text-[11px] text-[#78716C]">
-                        <i class="fa-solid fa-spinner fa-spin text-[#0088CC]"></i>
-                        <span>Ожидаем подтверждение контакта в боте...</span>
-                    </div>
+                        <div class="flex items-center justify-center gap-2 py-1 text-[11px] text-[#78716C]">
+                            <i class="fa-solid fa-spinner fa-spin text-[#0088CC]"></i>
+                            <span>{{ ($this->authTelegramStatus ?? 'pending') === 'contact_requested' ? __('Waiting for your contact in the bot…') : __('Waiting for the bot…') }}</span>
+                        </div>
+                    @else
+                        <button
+                            type="button"
+                            wire:click="startTelegramAuth"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Start again') }}</span>
+                        </button>
+                    @endif
 
                     <button
                         type="button"
@@ -775,65 +786,48 @@
                     </button>
                 </div>
 
-            @elseif($step === 'telegram-merge-confirm')
-                <!-- ПОДТВЕРЖДЕНИЕ ОБЪЕДИНЕНИЯ TELEGRAM И СУЩЕСТВУЮЩЕГО GMAIL/EMAIL АККАУНТА -->
+            @elseif($step === 'telegram-code')
+                <!-- TELEGRAM: ШАГ 2 — КОД ИЗ БОТА -->
                 <div class="space-y-4">
                     <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
-                        Объединить аккаунты?
+                        {{ __('Code from Telegram') }}
                     </h2>
-
-                    <p class="text-xs text-[#57534E] text-center leading-relaxed">
-                        В базе данных уже найден аккаунт с номером
-                        <strong class="font-mono text-[#1C1917]">{{ session('mally_verified_tg_phone', $this->authPhone) }}</strong>.
-                        Хотите объединить ваш Telegram с этим аккаунтом и сохранить всю историю заказов?
+                    <p class="text-xs text-[#78716C] text-center leading-relaxed">
+                        {{ __('Enter the 6-digit code the bot has just sent you. Never share it with anyone.') }}
                     </p>
 
-                    <div class="p-4 rounded-2xl bg-[#FAF7F5] border border-[#EAE3DE] space-y-2 text-xs">
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="text-[#8C827A]">Аккаунт:</span>
-                            <span class="font-bold text-[#1C1917]">{{ $this->authMergeTargetName ?: 'Покупатель' }}</span>
-                        </div>
-                        @if(!empty($this->authMergeTargetEmail) && !str_ends_with($this->authMergeTargetEmail, '@telegram.mally.local'))
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-[#8C827A]">Email (Gmail):</span>
-                                <span class="font-mono font-semibold text-[#1C1917] break-all">{{ $this->authMergeTargetEmail }}</span>
-                            </div>
-                        @endif
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="text-[#8C827A]">Подтверждён в Telegram:</span>
-                            <span class="font-mono font-bold text-emerald-700">{{ session('mally_verified_tg_phone', $this->authPhone) }}</span>
-                        </div>
-                    </div>
+                    <form wire:submit="verifyTelegramCode" class="space-y-3" novalidate>
+                        <input
+                            type="text"
+                            wire:model="authTelegramCode"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            maxlength="6"
+                            placeholder="• • • • • •"
+                            autofocus
+                            class="w-full text-center tracking-[0.5em] text-2xl font-mono font-bold py-3 bg-[#FAF8F6] border border-[#E3DBD5] rounded-2xl focus:outline-none focus:border-[#1C1917]"
+                        />
+                        @error('authTelegramCode')
+                            <p role="alert" class="text-xs text-rose-600 font-medium text-center">{{ $message }}</p>
+                        @enderror
 
-                    <div class="space-y-2.5 pt-1">
                         <button
-                            type="button"
-                            wire:click="confirmTelegramMerge"
+                            type="submit"
                             wire:loading.attr="disabled"
-                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition shadow-md cursor-pointer"
                         >
-                            <i class="fa-solid fa-link text-xs"></i>
-                            <span>Да, объединить аккаунты и войти</span>
+                            {{ __('Confirm') }}
                         </button>
+                    </form>
 
-                        <button
-                            type="button"
-                            wire:click="declineTelegramMerge"
-                            wire:loading.attr="disabled"
-                            class="w-full py-3 px-4 rounded-xl bg-[#FAF7F5] hover:bg-[#EAE3DE] border border-[#D5CCC7] text-[#1C1917] text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                            <span>Нет, создать отдельный аккаунт</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            wire:click="backToLogin"
-                            class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
-                            <span>{{ $txt['back_btn'] }}</span>
-                        </button>
-                    </div>
+                    <button
+                        type="button"
+                        wire:click="backToLogin"
+                        class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                        <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                        <span>{{ $txt['back_btn'] }}</span>
+                    </button>
                 </div>
 
             @elseif($step === 'telegram-register')
@@ -843,7 +837,7 @@
                         Регистрация через Telegram
                     </h2>
                     <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
-                        Ваш номер подтверждён через Telegram. Задайте пароль для входа (почта Gmail не обязательна).
+                        Ваш номер подтверждён через Telegram. Задайте пароль, чтобы входить и по номеру телефона.
                     </p>
 
                     <div class="mb-4 px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
@@ -851,7 +845,7 @@
                             <i class="fa-brands fa-telegram text-[#0088CC] text-base flex-shrink-0"></i>
                             <div class="min-w-0">
                                 <span class="block text-[10px] uppercase tracking-wider text-emerald-700 font-bold">Подтверждённый номер</span>
-                                <span class="text-xs font-mono font-bold text-[#1C1917]">{{ session('mally_verified_tg_phone', $this->authPhone) }}</span>
+                                <span class="text-xs font-mono font-bold text-[#1C1917]">{{ $this->authPhone }}</span>
                             </div>
                         </div>
                         <i class="fa-solid fa-circle-check text-emerald-600 text-sm flex-shrink-0"></i>
@@ -872,24 +866,6 @@
                                 class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
                             />
                             @error('authName')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Email / Gmail (НЕОБЯЗАТЕЛЬНО) -->
-                        <div>
-                            <label for="mally-tg-reg-email" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                Email / Gmail (необязательно)
-                            </label>
-                            <input
-                                id="mally-tg-reg-email"
-                                type="email"
-                                wire:model="authEmail"
-                                placeholder="Можно оставить пустым или указать Gmail"
-                                autocomplete="email"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
-                            />
-                            @error('authEmail')
                                 <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
                             @enderror
                         </div>

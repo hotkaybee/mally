@@ -60,7 +60,7 @@ class ProfilePage extends Component
     {
         $this->firstName = (string) ($customer->first_name ?? '');
         $this->lastName = (string) ($customer->last_name ?? '');
-        $this->phone = (string) ($customer->phone_number ?? '');
+        $this->phone = (string) ($customer->phone_number ?: '+998 ');
         $this->city = (string) ($customer->city ?: 'Ташкент');
         $this->address = (string) ($customer->address ?? '');
     }
@@ -87,12 +87,53 @@ class ProfilePage extends Component
             return;
         }
 
-        $customer->update([
+        $updates = [
             'first_name' => trim($this->firstName),
             'last_name' => trim($this->lastName),
             'city' => $cityVal,
             'address' => trim($this->address) ?: null,
-        ]);
+        ];
+
+        // A phone confirmed through Telegram is locked. An unconfirmed one may
+        // change, but never to a number that belongs to another account.
+        $user = $this->store()->getCurrentUser();
+        $phoneVerified = $user && $user->phone_verified_at !== null;
+        if (! $phoneVerified) {
+            $phone = $this->store()->normalizeAndValidateUzPhone($this->phone);
+            if (! $phone) {
+                $this->dispatch('toast', message: __('Please enter a valid phone number (+998 followed by 9 digits)'), type: 'error');
+
+                return;
+            }
+
+            if ($this->accounts()->phoneTaken($phone, $user?->id)) {
+                $this->dispatch('toast', message: __('This phone number is already used by another account.'), type: 'error');
+
+                return;
+            }
+
+            $this->phone = $phone;
+            $updates['phone_number'] = $phone;
+            $user?->update(['phone' => $phone]);
+        }
+
+        $customer->update($updates);
+        $user?->update(['name' => trim($updates['first_name'].' '.$updates['last_name'])]);
+
+        $this->dispatch('toast', message: __('Saved.'), type: 'success');
+    }
+
+    /** "Confirm via Telegram": links Telegram to the signed-in account. */
+    public function startTelegramPhoneVerification(): void
+    {
+        if (! $this->store()->getCurrentUser()) {
+            $this->openAuthModal();
+
+            return;
+        }
+
+        $this->isAuthModalOpen = true;
+        $this->startTelegramAuth();
     }
 
     public function openProductReview(string $productId, string $title, string $image, int $orderNumber): void
@@ -267,6 +308,8 @@ class ProfilePage extends Component
 
         return view('livewire.storefront.profile-page', array_merge($this->sharedViewData(), [
             'customer' => $customer,
+            'accountEmail' => ($user = $service->getCurrentUser()) && $user->hasRealEmail() ? $user->email : '',
+            'phoneVerified' => $user?->phone_verified_at !== null,
             'orders' => $orders,
             'reviewedKeys' => $reviewedKeys,
         ]));

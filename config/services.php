@@ -42,6 +42,8 @@ return [
         'admin_username' => env('TELEGRAM_ADMIN_USERNAME', 'mallyuz'),
         'auth_bot_token' => env('TELEGRAM_AUTH_BOT_TOKEN', env('TELEGRAM_BOT_TOKEN')),
         'auth_bot_username' => env('TELEGRAM_AUTH_BOT_USERNAME', env('TELEGRAM_BOT_USERNAME', 'MallyAdmin_bot')),
+        // Telegram sends it back as X-Telegram-Bot-Api-Secret-Token on webhook calls.
+        'auth_webhook_secret' => env('TELEGRAM_AUTH_WEBHOOK_SECRET', ''),
     ],
 
     'store' => [

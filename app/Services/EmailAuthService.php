@@ -6,6 +6,7 @@ use App\Mail\AuthCodeMail;
 use App\Models\AuthCode;
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -92,8 +93,7 @@ class EmailAuthService
         $isPhone = $this->isPhoneIdentifier($rawEmail);
 
         if ($isPhone) {
-            $tgService = app(TelegramAuthService::class);
-            $normalizedPhone = $tgService->normalizeTelegramPhone($rawEmail);
+            $normalizedPhone = PhoneNumber::normalize($rawEmail) ?? trim($rawEmail);
 
             if ($password === '') {
                 return [
@@ -114,7 +114,7 @@ class EmailAuthService
                 ];
             }
 
-            $user = $tgService->findUserByPhone($normalizedPhone);
+            $user = User::wherePhone($normalizedPhone)->first();
             if (! $user) {
                 RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
 
@@ -138,7 +138,7 @@ class EmailAuthService
             }
 
             RateLimiter::clear($loginKey);
-            $customer = $this->syncCustomerForUser($user);
+            $customer = $this->accounts()->customerFor($user);
 
             return [
                 'success' => true,
@@ -200,7 +200,7 @@ class EmailAuthService
 
         RateLimiter::clear($loginKey);
 
-        $customer = $this->syncCustomerForUser($user);
+        $customer = $this->accounts()->customerFor($user);
 
         return [
             'success' => true,
@@ -210,47 +210,9 @@ class EmailAuthService
         ];
     }
 
-    /**
-     * Synchronize a storefront Customer record for a given User by email.
-     */
-    public function syncCustomerForUser(User $user): Customer
+    protected function accounts(): CustomerAccountService
     {
-        $email = $this->normalizeEmail((string) $user->email);
-        [$firstName, $lastName] = $this->splitFullName((string) $user->name);
-
-        $customer = Customer::whereRaw('LOWER(email) = ?', [$email])->first();
-
-        if (! $customer && ! empty($user->phone)) {
-            $customer = Customer::where('phone_number', $user->phone)->first();
-        }
-
-        if ($customer) {
-            $updates = [];
-            if (strtolower((string) $customer->email) !== $email) {
-                $updates['email'] = $email;
-            }
-            if (! empty($user->phone) && empty($customer->phone_number)) {
-                $updates['phone_number'] = $user->phone;
-            }
-            if (empty($customer->first_name) && $firstName !== '') {
-                $updates['first_name'] = $firstName;
-            }
-            if (! empty($updates)) {
-                $customer->update($updates);
-            }
-
-            return $customer;
-        }
-
-        return Customer::create([
-            'first_name' => $firstName ?: 'Покупатель',
-            'last_name' => $lastName,
-            'email' => $email,
-            'phone_number' => $user->phone,
-            'telegram' => null,
-            'instagram' => null,
-            'source' => 'instagram',
-        ]);
+        return app(CustomerAccountService::class);
     }
 
     /**
@@ -355,7 +317,6 @@ class EmailAuthService
         ]);
 
         try {
-            $this->syncLocalDotEnvMailConfig();
             Mail::to($email)->send(new AuthCodeMail($plainCode, $purpose));
         } catch (Throwable) {
             $authCode->delete();
@@ -485,6 +446,16 @@ class EmailAuthService
                 ];
             }
 
+            // The phone isn't verified here, so it must not point at someone
+            // else's account. Accounts are never merged.
+            if ($this->accounts()->phoneTaken($normalizedPhone)) {
+                return [
+                    'success' => false,
+                    'error' => 'phone_taken',
+                    'message' => 'Этот номер телефона уже привязан к другому аккаунту. Войдите в него или укажите другой номер.',
+                ];
+            }
+
             $user = User::create([
                 'name' => $cleanName,
                 'email' => $email,
@@ -494,18 +465,11 @@ class EmailAuthService
 
             $this->invalidateActiveCodes($email, AuthCode::PURPOSE_REGISTER);
 
-            // If there was already a Telegram account with the same phone number, merge it and all its order history into this Gmail user!
-            $merged = app(TelegramAuthService::class)->mergePhoneAccountsIntoPrimary($user, $normalizedPhone, '', $cleanName, false);
-            $wasMerged = (bool) ($merged['merged'] ?? false);
-
             return [
                 'success' => true,
-                'merged' => $wasMerged,
-                'message' => $wasMerged
-                    ? 'Ваш Telegram и почта успешно объединены в один профиль! Все заказы сохранены.'
-                    : 'Регистрация успешно завершена.',
-                'user' => $merged['user'],
-                'customer' => $merged['customer'],
+                'message' => 'Регистрация успешно завершена.',
+                'user' => $user,
+                'customer' => $this->accounts()->customerFor($user),
             ];
         });
     }
@@ -536,7 +500,7 @@ class EmailAuthService
 
             $this->invalidateActiveCodes($email, AuthCode::PURPOSE_RESET);
 
-            $customer = $this->syncCustomerForUser($user);
+            $customer = $this->accounts()->customerFor($user);
 
             return [
                 'success' => true,
@@ -596,67 +560,5 @@ class EmailAuthService
             $parts[0] ?? 'Покупатель',
             $parts[1] ?? '',
         ];
-    }
-
-    /**
-     * When running under `php artisan serve --no-reload` in local development,
-     * sync live `MAIL_*` settings from `.env` so changes take effect without restarting the server.
-     */
-    protected function syncLocalDotEnvMailConfig(): void
-    {
-        if (! app()->environment('local') || app()->runningUnitTests()) {
-            return;
-        }
-
-        $envPath = base_path('.env');
-        if (! is_file($envPath)) {
-            return;
-        }
-
-        $lines = @file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if (! is_array($lines)) {
-            return;
-        }
-
-        $env = [];
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-            if ($trimmed === '' || str_starts_with($trimmed, '#') || ! str_contains($trimmed, '=')) {
-                continue;
-            }
-            [$k, $v] = explode('=', $trimmed, 2);
-            $k = trim($k);
-            $v = trim(trim($v), "\"'");
-            if (str_starts_with($k, 'MAIL_')) {
-                $env[$k] = $v;
-            }
-        }
-
-        if (! empty($env['MAIL_MAILER'])) {
-            config(['mail.default' => $env['MAIL_MAILER']]);
-        }
-        if (isset($env['MAIL_SCHEME'])) {
-            config(['mail.mailers.smtp.scheme' => $env['MAIL_SCHEME'] === 'null' ? null : $env['MAIL_SCHEME']]);
-        }
-        if (! empty($env['MAIL_HOST'])) {
-            config(['mail.mailers.smtp.host' => $env['MAIL_HOST']]);
-        }
-        if (! empty($env['MAIL_PORT'])) {
-            config(['mail.mailers.smtp.port' => (int) $env['MAIL_PORT']]);
-        }
-        if (isset($env['MAIL_USERNAME'])) {
-            config(['mail.mailers.smtp.username' => $env['MAIL_USERNAME'] === 'null' ? null : $env['MAIL_USERNAME']]);
-        }
-        if (isset($env['MAIL_PASSWORD'])) {
-            config(['mail.mailers.smtp.password' => $env['MAIL_PASSWORD'] === 'null' ? null : $env['MAIL_PASSWORD']]);
-        }
-        if (! empty($env['MAIL_FROM_ADDRESS'])) {
-            config(['mail.from.address' => $env['MAIL_FROM_ADDRESS']]);
-        }
-        if (! empty($env['MAIL_FROM_NAME']) && ! str_contains($env['MAIL_FROM_NAME'], '${')) {
-            config(['mail.from.name' => $env['MAIL_FROM_NAME']]);
-        }
-
-        app('mail.manager')->forgetMailers();
     }
 }

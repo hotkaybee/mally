@@ -23,7 +23,7 @@ class AdminPanelSmokeTest extends TestCase
         // The panel allows any authenticated user in a local environment (the
         // app has no custom FilamentUser gate); mirror that here.
         config(['app.env' => 'local']);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $this->get($url)->assertOk();
     }

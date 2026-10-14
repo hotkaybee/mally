@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Customer extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'first_name',
         'last_name',
         'email',
@@ -22,33 +25,18 @@ class Customer extends Model
         'source',
     ];
 
+    /** The storefront login this customer belongs to (null for admin/API-only customers). */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     /**
      * Match an Uzbek phone number in any of the formats it may have been
      * saved in (admin input, API, storefront).
      */
     public function scopeWherePhone(Builder $query, string $phone): Builder
     {
-        $digits = preg_replace('/\D/', '', $phone);
-        if (strlen($digits) === 9) {
-            $digits = '998'.$digits;
-        }
-
-        if (strlen($digits) !== 12) {
-            return $query->where('phone_number', trim($phone));
-        }
-
-        $s = substr($digits, 3);
-        [$op, $a, $b, $c] = [substr($s, 0, 2), substr($s, 2, 3), substr($s, 5, 2), substr($s, 7, 2)];
-
-        return $query->whereIn('phone_number', [
-            "+998 {$op} {$a} {$b} {$c}",
-            "+998{$s}",
-            "998{$s}",
-            $s,
-            "+998 {$op} {$a}-{$b}-{$c}",
-            "+998 ({$op}) {$a}-{$b}-{$c}",
-            "+998-{$op}-{$a}-{$b}-{$c}",
-            "998 {$op} {$a} {$b} {$c}",
-        ]);
+        return $query->whereIn('phone_number', PhoneNumber::variants($phone));
     }
 }

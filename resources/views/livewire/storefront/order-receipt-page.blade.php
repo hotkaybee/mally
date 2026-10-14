@@ -1,12 +1,16 @@
 @php
     $orderNum = $order->order_number ?: $order->id;
-    $rate = $exchangeRate ?: 12850;
-    $rawAmount = (float) $order->amount;
-    $totalAmountUzs = $rawAmount > 1000 ? round($rawAmount) : round($rawAmount * $rate);
-    $usdEquiv = number_format($totalAmountUzs / $rate, 2, '.', '');
-
-    $rawDiscount = (float) ($order->discount_amount ?? 0);
-    $discountUzs = $rawDiscount > 1000 ? round($rawDiscount) : round($rawDiscount * $rate);
+    // Order amounts are stored in USD. So'm values use the CBU rate saved
+    // with the order, never today's rate.
+    $rate = (float) ($order->exchange_rate ?? 0);
+    $hasUzs = $rate > 0 && $order->amount_uzs !== null;
+    $amountUsd = (float) $order->amount;
+    $sumUnit = match ($locale) { 'uz' => "so'm", 'en' => 'UZS', default => 'сум' };
+    $money = fn (float $usd) => $hasUzs
+        ? number_format(round($usd * $rate), 0, '.', ' ').' '.$sumUnit
+        : '$'.number_format($usd, 2, '.', ',');
+    $totalDisplay = $hasUzs ? number_format((int) $order->amount_uzs, 0, '.', ' ').' '.$sumUnit : $money($amountUsd);
+    $totalCopyValue = $hasUzs ? (string) (int) $order->amount_uzs : number_format($amountUsd, 2, '.', '');
 
     $statusNormalized = match ($order->status) {
         'processing', 'new', 'NEW' => 'NEW',
@@ -49,7 +53,7 @@
             'order_no' => 'Buyurtma №',
             'how_to_pay_title' => "Buyurtmani qanday to'lash mumkin:",
             'pay_step_1' => 'Yuqoridagi karta raqamini nusxalab oling.',
-            'pay_step_2' => "Istalgan ilova (Payme, Click, Uzum) orqali <b>".number_format($totalAmountUzs, 0, '.', ' ')." so'm</b> o'tkazing.",
+            'pay_step_2' => "Istalgan ilova (Payme, Click, Uzum) orqali <b>".$totalDisplay."</b> o'tkazing.",
             'pay_step_3' => 'Quyidagi tugmani bosing va chek yoki skrinshotni Telegramda menejerga yuboring.',
             'send_receipt_btn' => 'Chekni administratorga yuborish',
             'manager_confirm_note' => "Menejer to'lovni darhol tasdiqlaydi va buyurtmani yig'ishga topshiradi",
@@ -114,12 +118,12 @@
             'order_no' => 'Order #',
             'how_to_pay_title' => 'How to pay for your order:',
             'pay_step_1' => 'Copy the card number above.',
-            'pay_step_2' => 'Transfer <b>'.number_format($totalAmountUzs, 0, '.', ' ').' UZS</b> via any banking app (Payme, Click, Uzum).',
+            'pay_step_2' => 'Transfer <b>'.$totalDisplay.'</b> via any banking app (Payme, Click, Uzum).',
             'pay_step_3' => 'Click the button below and send the payment receipt or screenshot to our manager on Telegram.',
             'send_receipt_btn' => 'Send Receipt to Administrator',
             'manager_confirm_note' => 'Our manager will promptly confirm your payment and forward the order for packing',
             'paid_box_title' => 'Payment confirmed by store',
-            'paid_box_desc' => 'Amount of '.number_format($totalAmountUzs, 0, '.', ' ').' UZS has been received. No further payment is required.',
+            'paid_box_desc' => 'Amount of '.$totalDisplay.' has been received. No further payment is required.',
             'write_manager_btn' => 'Contact Manager',
             'items_title' => 'Items in Order',
             'pcs_unit' => 'pcs',
@@ -179,12 +183,12 @@
             'order_no' => 'Заказ №',
             'how_to_pay_title' => 'Как оплатить заказ:',
             'pay_step_1' => 'Скопируйте номер карты выше.',
-            'pay_step_2' => 'Переведите сумму <b>'.number_format($totalAmountUzs, 0, '.', ' ').' сум</b> через любое приложение (Payme, Click, Uzum).',
+            'pay_step_2' => 'Переведите сумму <b>'.$totalDisplay.'</b> через любое приложение (Payme, Click, Uzum).',
             'pay_step_3' => 'Нажмите кнопку ниже и отправьте чек или скриншот менеджеру в Telegram.',
             'send_receipt_btn' => 'Отправить чек администратору',
             'manager_confirm_note' => 'Менеджер мгновенно подтвердит оплату и передаст заказ на сборку',
             'paid_box_title' => 'Оплата успешно подтверждена магазином',
-            'paid_box_desc' => 'Сумма '.number_format($totalAmountUzs, 0, '.', ' ').' сум зачислена. Повторная оплата не требуется.',
+            'paid_box_desc' => 'Сумма '.$totalDisplay.' зачислена. Повторная оплата не требуется.',
             'write_manager_btn' => 'Написать менеджеру',
             'items_title' => 'Товары в заказе',
             'pcs_unit' => 'шт.',
@@ -294,7 +298,7 @@
     };
 
     $tgMessage = rawurlencode(
-        "Здравствуйте! Я по поводу заказа №{$orderNum} на сумму ".number_format($totalAmountUzs, 0, '.', ' ').' сум.'
+        "Здравствуйте! Я по поводу заказа №{$orderNum} на сумму {$totalDisplay}."
     );
     $tgLink = "https://t.me/{$adminTelegram}?text={$tgMessage}";
 @endphp
@@ -411,20 +415,22 @@
                     <span class="text-[11px] text-[#78716C] block">{{ $rt['amount_due_label'] }}</span>
                     <div class="flex items-center sm:justify-end gap-2">
                         <span class="font-mono text-2xl sm:text-3xl font-extrabold text-[#1C1917]">
-                            {{ number_format($totalAmountUzs, 0, '.', ' ') }} {{ $rt['sum_unit'] }}
+                            {{ $totalDisplay }}
                         </span>
                         <button
                             type="button"
-                            @click="navigator.clipboard.writeText('{{ $totalAmountUzs }}'); copiedAmount = true; setTimeout(() => copiedAmount = false, 2000)"
+                            @click="navigator.clipboard.writeText('{{ $totalCopyValue }}'); copiedAmount = true; setTimeout(() => copiedAmount = false, 2000)"
                             class="p-1 text-stone-400 hover:text-black transition cursor-pointer"
                             title="{{ $rt['copy_amount_hint'] }}"
                         >
                             <i class="fa-solid text-sm" :class="copiedAmount ? 'fa-check text-emerald-600' : 'fa-copy'"></i>
                         </button>
                     </div>
-                    <span class="text-xs text-emerald-600 font-medium font-mono">
-                        ≈ ${{ $usdEquiv }} USD ({{ $rt['usd_rate_note'] }})
-                    </span>
+                    @if($hasUzs)
+                        <span class="text-xs text-emerald-600 font-medium font-mono">
+                            = ${{ number_format($amountUsd, 2, '.', ',') }} USD · 1 USD = {{ number_format($rate, 2, '.', ' ') }} {{ $sumUnit }} ({{ $rt['usd_rate_note'] }})
+                        </span>
+                    @endif
                 </div>
             </div>
 
@@ -462,7 +468,7 @@
                                 </span>
                                 <button
                                     type="button"
-                                    @click="navigator.clipboard.writeText('9860190101149374'); copiedCard = true; setTimeout(() => copiedCard = false, 2000)"
+                                    @click="navigator.clipboard.writeText('{{ preg_replace('/\D/', '', $cardNumber) }}'); copiedCard = true; setTimeout(() => copiedCard = false, 2000)"
                                     class="px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
                                     :class="copiedCard ? 'bg-emerald-500 text-white' : 'bg-white hover:bg-stone-100 text-black shadow-xs'"
                                 >
@@ -566,8 +572,6 @@
                             $img = $prod?->image
                                 ? (str_starts_with($prod->image, 'http') ? $prod->image : asset($prod->image))
                                 : 'https://findy.uz/cdn/shop/files/sample.jpg';
-                            $itemPriceRaw = (float) $item->price;
-                            $itemPriceUzs = $itemPriceRaw > 1000 ? round($itemPriceRaw) : round($itemPriceRaw * $rate);
                         @endphp
                         <div class="py-3.5 first:pt-0 flex items-center gap-4">
                             <div class="w-16 h-16 rounded-2xl bg-[#FAF7F5] border border-[#EAE3DE] overflow-hidden flex-shrink-0">
@@ -586,7 +590,7 @@
                                 </div>
                             </div>
                             <div class="text-right font-mono font-bold text-xs sm:text-sm text-[#1C1917]">
-                                {{ number_format($itemPriceUzs * $item->quantity, 0, '.', ' ') }} {{ $rt['sum_unit'] }}
+                                {{ $money((float) $item->price * $item->quantity) }}
                             </div>
                         </div>
                     @endforeach
@@ -600,14 +604,14 @@
                                 <i class="fa-solid fa-ticket text-[11px]"></i>
                                 <span>{{ $rt['promo_label'] }} ({{ $order->promo_code }}):</span>
                             </span>
-                            <span>-{{ number_format($discountUzs, 0, '.', ' ') }} {{ $rt['sum_unit'] }}</span>
+                            <span>-{{ $money((float) $order->discount_amount) }}</span>
                         </div>
                     @endif
 
                     <div class="flex justify-between items-center pt-2 border-t border-[#F2ECE8] font-serif">
                         <span class="text-sm font-bold text-[#78716C]">{{ $rt['total_label'] }}</span>
                         <span class="text-xl font-bold text-[#1C1917] font-mono">
-                            {{ number_format($totalAmountUzs, 0, '.', ' ') }} {{ $rt['sum_unit'] }}
+                            {{ $totalDisplay }}
                         </span>
                     </div>
                 </div>

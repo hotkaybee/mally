@@ -8,9 +8,8 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Review;
 use App\Services\StorefrontService;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
@@ -30,7 +29,10 @@ class ProfilePage extends Component
 
     public string $address = '';
 
-    // Review modal state
+    private const MAX_REVIEW_PHOTOS = 5;
+
+    // Review modal state (set by openProductReview after an ownership check)
+    #[Locked]
     public ?array $reviewTarget = null;
 
     public int $reviewRating = 5;
@@ -95,12 +97,22 @@ class ProfilePage extends Component
 
     public function openProductReview(string $productId, string $title, string $image, int $orderNumber): void
     {
+        $order = $this->reviewableOrder((int) $productId, $orderNumber);
+        if (! $order) {
+            $this->dispatch('toast', message: __('You can only review products from your delivered orders.'), type: 'error');
+
+            return;
+        }
+
+        $product = Product::find((int) $productId);
+
+        // Target data comes from the database, not from the browser.
         $this->reviewTarget = [
             'type' => 'PRODUCT',
-            'productId' => $productId,
-            'title' => $title,
+            'productId' => (string) $product->id,
+            'title' => $product->name,
             'image' => $image,
-            'orderNumber' => $orderNumber,
+            'orderNumber' => (int) $order->order_number,
         ];
         $this->reviewRating = 5;
         $this->reviewComment = '';
@@ -116,7 +128,7 @@ class ProfilePage extends Component
     public function addReviewPhoto(): void
     {
         $url = trim($this->reviewPhotoUrl);
-        if ($url !== '' && str_starts_with($url, 'http')) {
+        if ($this->isAllowedPhotoUrl($url) && count($this->reviewPhotos) < self::MAX_REVIEW_PHOTOS) {
             $this->reviewPhotos[] = $url;
             $this->reviewPhotoUrl = '';
         }
@@ -130,89 +142,103 @@ class ProfilePage extends Component
 
     public function submitReview(): void
     {
-        $locale = $this->store()->getLocale();
         $commentText = trim($this->reviewComment);
 
         if (! $this->reviewTarget || $commentText === '') {
-            $emptyMsg = match ($locale) {
-                'uz' => 'Iltimos, sharh matnini kiriting',
-                'en' => 'Please enter your review text',
-                default => 'Напишите текст отзыва',
-            };
-            $this->dispatch('toast', message: $emptyMsg, type: 'error');
+            $this->dispatch('toast', message: __('Please enter your review text'), type: 'error');
+
+            return;
+        }
+
+        if (mb_strlen($commentText) > 2000) {
+            $this->dispatch('toast', message: __('Message is too long.'), type: 'error');
 
             return;
         }
 
         $customer = app(StorefrontService::class)->getCurrentCustomer();
         if (! $customer) {
-            $authMsg = match ($locale) {
-                'uz' => 'Sharh qoldirish uchun tizimga kiring',
-                'en' => 'Please sign in to leave a review',
-                default => 'Войдите в профиль, чтобы оставить отзыв',
-            };
-            $this->dispatch('toast', message: $authMsg, type: 'error');
+            $this->dispatch('toast', message: __('Please sign in to leave a review'), type: 'error');
 
             return;
         }
 
-        if (! Schema::hasTable('reviews')) {
-            $unavailableMsg = match ($locale) {
-                'uz' => "Sharhlarni saqlash vaqtincha mavjud emas (ma'lumotlar bazasi ulanmagan).",
-                'en' => 'Saving reviews is currently unavailable (database storage is not configured).',
-                default => 'Сохранение отзывов временно недоступно: база отзывов ещё не подключена.',
-            };
-            $this->dispatch('toast', message: $unavailableMsg, type: 'error');
+        $productId = (int) ($this->reviewTarget['productId'] ?? 0);
+        $orderNumber = (int) ($this->reviewTarget['orderNumber'] ?? 0);
+
+        // Re-check on the server: the order is the customer's, delivered, and contains the product.
+        $order = $this->reviewableOrder($productId, $orderNumber);
+        $product = $order ? Product::find($productId) : null;
+        if (! $order || ! $product) {
+            $this->reviewTarget = null;
+            $this->dispatch('toast', message: __('You can only review products from your delivered orders.'), type: 'error');
+
+            return;
+        }
+
+        $alreadyReviewed = Review::where('customer_id', $customer->id)
+            ->where('order_number', $order->order_number)
+            ->where('product_id', $product->id)
+            ->exists();
+        if ($alreadyReviewed) {
+            $this->reviewTarget = null;
+            $this->dispatch('toast', message: __('You have already reviewed this product for this order.'), type: 'error');
 
             return;
         }
 
         $pendingUrl = trim($this->reviewPhotoUrl);
-        if ($pendingUrl !== '' && str_starts_with($pendingUrl, 'http')) {
+        if ($pendingUrl !== '') {
             $this->reviewPhotos[] = $pendingUrl;
-            $this->reviewPhotoUrl = '';
         }
-
-        $rawProdId = (string) ($this->reviewTarget['productId'] ?? '');
-        $targetTitle = trim((string) ($this->reviewTarget['title'] ?? ''));
-        $orderNumber = isset($this->reviewTarget['orderNumber']) ? (int) $this->reviewTarget['orderNumber'] : null;
-
-        $dbProduct = is_numeric($rawProdId) ? Product::find((int) $rawProdId) : null;
-        if (! $dbProduct && $rawProdId !== '') {
-            $dbProduct = Product::where('sku', $rawProdId)->first();
-        }
-        if (! $dbProduct && $targetTitle !== '') {
-            $dbProduct = Product::where('name', $targetTitle)->first();
-        }
-
-        $storeProduct = app(StorefrontService::class)->findProduct($dbProduct?->sku ?: ($rawProdId ?: $targetTitle));
-        $resolvedSku = $dbProduct?->sku ?: ($storeProduct['sku'] ?? ($rawProdId !== '' ? $rawProdId : null));
-        $resolvedTitle = $dbProduct?->name ?: ($targetTitle ?: ($storeProduct['title'] ?? 'Mally Beauty'));
-
-        $authorName = trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')) ?: 'Покупатель Mally';
-        $authorCity = trim($this->city) ?: 'Ташкент';
+        $photos = array_slice(array_values(array_unique(array_filter($this->reviewPhotos, fn ($url) => $this->isAllowedPhotoUrl((string) $url)))), 0, self::MAX_REVIEW_PHOTOS);
 
         Review::create([
-            'product_id' => $dbProduct?->id,
-            'product_sku' => $resolvedSku,
-            'product_title' => $resolvedTitle,
+            'product_id' => $product->id,
+            'product_sku' => $product->sku,
+            'product_title' => $product->name,
             'customer_id' => $customer->id,
-            'order_number' => $orderNumber,
-            'author_name' => $authorName,
-            'city' => $authorCity,
+            'order_number' => $order->order_number,
+            'author_name' => trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')) ?: 'Покупатель Mally',
+            'city' => $customer->city ?: 'Ташкент',
             'rating' => max(1, min(5, (int) $this->reviewRating)),
             'comment' => $commentText,
-            'photos' => array_values(array_unique($this->reviewPhotos)),
-            'is_approved' => true,
+            'photos' => $photos,
+            // Published only after an admin approves it in the panel.
+            'is_approved' => false,
         ]);
-
-        Cache::forget('mally_all_products_v2');
 
         $this->reviewTarget = null;
         $this->reviewRating = 5;
         $this->reviewComment = '';
         $this->reviewPhotoUrl = '';
         $this->reviewPhotos = [];
+
+        $this->dispatch('toast', message: __('Thank you! Your review will appear after moderation.'), type: 'success');
+    }
+
+    /**
+     * The signed-in customer's delivered order with this number that contains the product.
+     */
+    private function reviewableOrder(int $productId, int $orderNumber): ?Order
+    {
+        $customer = app(StorefrontService::class)->getCurrentCustomer();
+        if (! $customer || $productId <= 0 || $orderNumber <= 0) {
+            return null;
+        }
+
+        return Order::where('customer_id', $customer->id)
+            ->where('order_number', $orderNumber)
+            ->where('status', 'delivered')
+            ->whereHas('orderProducts', fn ($q) => $q->where('product_id', $productId))
+            ->first();
+    }
+
+    private function isAllowedPhotoUrl(string $url): bool
+    {
+        return mb_strlen($url) <= 500
+            && str_starts_with($url, 'https://')
+            && filter_var($url, FILTER_VALIDATE_URL) !== false;
     }
 
     public function render()
@@ -225,20 +251,16 @@ class ProfilePage extends Component
         if ($customer) {
             $orders = Order::with('orderProducts.product')
                 ->where('customer_id', $customer->id)
-                ->orWhere('customer_phone', $customer->phone_number)
                 ->latest('id')
                 ->get();
 
-            if (Schema::hasTable('reviews')) {
-                $existingReviews = Review::where('customer_id', $customer->id)->get();
-                foreach ($existingReviews as $rev) {
-                    $ordKey = (int) ($rev->order_number ?? 0);
-                    if ($rev->product_id) {
-                        $reviewedKeys[$ordKey.':'.$rev->product_id] = true;
-                    }
-                    if ($rev->product_sku) {
-                        $reviewedKeys[$ordKey.':'.$rev->product_sku] = true;
-                    }
+            foreach (Review::where('customer_id', $customer->id)->get() as $rev) {
+                $ordKey = (int) ($rev->order_number ?? 0);
+                if ($rev->product_id) {
+                    $reviewedKeys[$ordKey.':'.$rev->product_id] = true;
+                }
+                if ($rev->product_sku) {
+                    $reviewedKeys[$ordKey.':'.$rev->product_sku] = true;
                 }
             }
         }

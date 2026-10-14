@@ -2,18 +2,15 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Exceptions\CheckoutException;
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
-use App\Models\Brand;
-use App\Models\Category;
 use App\Models\Customer;
-use App\Models\Order;
-use App\Models\OrderProduct;
-use App\Models\Product;
-use App\Models\ProductReceipt;
+use App\Services\OrderService;
 use App\Services\StorefrontService;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
@@ -35,9 +32,15 @@ class CheckoutPage extends Component
 
     public string $promoCode = '';
 
+    #[Locked]
     public ?string $appliedPromo = null;
 
+    #[Locked]
     public float $discountUsd = 0.0;
+
+    /** One token per opened checkout page, so a double submit places one order. */
+    #[Locked]
+    public string $checkoutToken = '';
 
     public function mount(): void
     {
@@ -50,20 +53,13 @@ class CheckoutPage extends Component
             return;
         }
 
-        $this->comment = session()->has('mally_order_note')
-            ? (string) session('mally_order_note', '')
-            : '';
+        $this->checkoutToken = (string) Str::uuid();
+        $this->comment = (string) session('mally_order_note', '');
 
         $activePromo = $service->getPromoCode();
-        if ($activePromo) {
-            $this->promoCode = $activePromo;
-            $this->appliedPromo = $activePromo;
-            $this->discountUsd = (float) ($cartDetails['discount_usd'] ?? 0.0);
-        } else {
-            $this->promoCode = '';
-            $this->appliedPromo = null;
-            $this->discountUsd = 0.0;
-        }
+        $this->promoCode = $activePromo ?? '';
+        $this->appliedPromo = $activePromo;
+        $this->discountUsd = (float) ($cartDetails['discount_usd'] ?? 0.0);
 
         $customer = $service->getCurrentCustomer();
         if ($customer) {
@@ -84,35 +80,14 @@ class CheckoutPage extends Component
         $this->phoneBilling = $phone !== ''
             ? (app(StorefrontService::class)->normalizeAndValidateUzPhone($phone) ?? $phone)
             : '+998 ';
-
-        if ($customer->instagram && str_contains($customer->instagram, '|')) {
-            [$c, $a] = array_map('trim', explode('|', $customer->instagram, 2));
-            if ($c !== '') {
-                $this->city = $c;
-            }
-            if ($a !== '') {
-                $this->address = $a;
-            }
-        } elseif ($customer->instagram) {
-            $this->address = trim((string) $customer->instagram);
-        }
-
-        if (trim($this->city) === '') {
-            $lastOrderCity = Order::where('customer_id', $customer->id)
-                ->whereNotNull('city')
-                ->where('city', '!=', '')
-                ->latest('id')
-                ->value('city');
-            if (is_string($lastOrderCity) && trim($lastOrderCity) !== '') {
-                $this->city = trim($lastOrderCity);
-            }
-        }
+        $this->city = (string) ($customer->city ?? '');
+        $this->address = (string) ($customer->address ?? '');
     }
 
     public function applyPromo(): void
     {
         if (trim($this->promoCode) === '') {
-            $this->dispatch('toast', message: 'Введите промокод', type: 'error');
+            $this->dispatch('toast', message: __('Enter a promo code'), type: 'error');
 
             return;
         }
@@ -121,13 +96,13 @@ class CheckoutPage extends Component
         $cartDetails = $service->getCartItemsWithProducts();
         $res = $service->applyPromoCode($this->promoCode, $cartDetails['subtotal_usd']);
 
-        if (is_array($res) && ($res['success'] ?? false)) {
+        if ($res['success'] ?? false) {
             $this->appliedPromo = $res['code'];
-            $this->discountUsd = (float) ($res['discountUsd'] ?? 0.0);
+            $this->discountUsd = (float) $res['discountUsd'];
         } else {
             $this->appliedPromo = null;
             $this->discountUsd = 0.0;
-            $this->dispatch('toast', message: $res['error'] ?? 'Промокод не найден', type: 'error');
+            $this->dispatch('toast', message: $res['error'] ?? __('Invalid promo code'), type: 'error');
         }
     }
 
@@ -137,25 +112,19 @@ class CheckoutPage extends Component
         $customer = $service->getCurrentCustomer();
 
         if (! $customer) {
-            $this->dispatch('toast', message: 'Для оформления заказа необходимо войти или зарегистрироваться', type: 'error');
-            $this->openAuthModal('Для оформления заказа необходимо войти или зарегистрироваться');
+            $this->openAuthModal(__('Please sign in or register to place an order'));
 
             return;
         }
 
-        // Перепроверяем актуальность цен и остатков товаров на сервере перед оформлением
+        // Re-check prices and stock right before placing the order.
         $validation = $service->validateAndSyncCart();
         $cartDetails = $validation['cart'];
         $this->appliedPromo = $cartDetails['promo_code'];
-        $this->discountUsd = (float) ($cartDetails['discount_usd'] ?? 0.0);
+        $this->discountUsd = (float) $cartDetails['discount_usd'];
 
         if (! $validation['valid']) {
-            $detailsMsg = implode(' ', $validation['messages']);
-            $this->dispatch(
-                'toast',
-                message: ($detailsMsg ? $detailsMsg.' ' : '').'Пожалуйста, проверьте обновлённые данные заказа и подтвердите его снова.',
-                type: 'error'
-            );
+            $this->dispatch('toast', message: implode(' ', $validation['messages']).' '.__('Please review your order and confirm it again.'), type: 'error');
 
             if (empty($cartDetails['items'])) {
                 $this->redirect(route('cart'));
@@ -165,205 +134,97 @@ class CheckoutPage extends Component
         }
 
         if (empty($cartDetails['items'])) {
-            $this->dispatch('toast', message: 'Ваша корзина пуста', type: 'error');
             $this->redirect(route('cart'));
 
             return;
         }
 
-        if (trim($this->firstName) === '' || trim($this->address) === '') {
-            $this->dispatch('toast', message: 'Пожалуйста, укажите имя и адрес доставки', type: 'error');
+        $firstName = trim($this->firstName);
+        $lastName = trim($this->lastName);
+        $address = trim($this->address);
+        $comment = trim($this->comment);
+
+        if ($firstName === '' || $address === '') {
+            $this->dispatch('toast', message: __('Please enter your name and delivery address'), type: 'error');
 
             return;
         }
 
-        // Всегда закрепляем номер телефона из профиля авторизованного клиента
-        $rawPhone = trim((string) ($customer->phone_number ?: $this->phoneBilling));
-        $formattedPhone = $service->normalizeAndValidateUzPhone($rawPhone) ?? ($rawPhone !== '' ? $rawPhone : null);
-        if (! $formattedPhone) {
-            $this->dispatch('toast', message: 'Введите корректный номер телефона Узбекистана (+998 и 9 цифр)', type: 'error');
+        if (mb_strlen($firstName) > 100 || mb_strlen($lastName) > 100 || mb_strlen($address) > 500 || mb_strlen($comment) > 1000) {
+            $this->dispatch('toast', message: __('Message is too long.'), type: 'error');
 
             return;
         }
-        $this->phoneBilling = $formattedPhone;
+
+        // The phone always comes from the signed-in customer, never from the form.
+        $phone = $service->normalizeAndValidateUzPhone((string) $customer->phone_number) ?? trim((string) $customer->phone_number);
+        if ($phone === '') {
+            $this->dispatch('toast', message: __('Please enter a valid phone number (+998 followed by 9 digits)'), type: 'error');
+
+            return;
+        }
+
+        if ($this->checkoutToken === '' || ! Cache::add('checkout:'.$this->checkoutToken, true, now()->addDay())) {
+            return; // this checkout page was already submitted
+        }
+
+        $city = trim($this->city) ?: ($customer->city ?: 'Ташкент');
+        $quantities = [];
+        foreach ($cartDetails['items'] as $item) {
+            $id = (int) $item['product']['id'];
+            $quantities[$id] = ($quantities[$id] ?? 0) + (int) $item['quantity'];
+        }
 
         try {
-            $rate = $service->getExchangeRate();
-            if ($rate <= 0) {
-                throw new \RuntimeException('Курс валют временно недоступен. Пожалуйста, попробуйте чуть позже.');
-            }
+            $order = app(OrderService::class)->placeOrder($customer, $quantities, [
+                'customer_name' => trim($firstName.' '.$lastName),
+                'customer_phone' => $phone,
+                'city' => $city,
+                'address' => $address,
+                'comment' => $comment !== '' ? $comment : null,
+                'promo_code' => $this->appliedPromo,
+            ]);
+        } catch (CheckoutException $e) {
+            Cache::forget('checkout:'.$this->checkoutToken);
+            $this->dispatch('toast', message: $e->getMessage(), type: 'error');
 
-            $order = DB::transaction(function () use ($cartDetails, $customer, $rate, $formattedPhone) {
-                $fullAddress = trim($this->address);
-                $customerCity = trim($this->city);
-                if ($customerCity === '' && $customer->instagram && str_contains($customer->instagram, '|')) {
-                    [$savedCity] = array_map('trim', explode('|', $customer->instagram, 2));
-                    $customerCity = $savedCity;
-                }
-                if ($customerCity === '') {
-                    $customerCity = 'Ташкент';
-                }
-
-                $customerFullName = trim($this->firstName.' '.$this->lastName) ?: 'Покупатель';
-
-                $customer->update([
-                    'first_name' => trim($this->firstName) ?: $customer->first_name,
-                    'last_name' => trim($this->lastName) ?: $customer->last_name,
-                    'instagram' => $customerCity.' | '.$fullAddress,
-                ]);
-
-                $maxNum = (int) (Order::max('order_number') ?: 1000);
-                $orderNumber = $maxNum + 1;
-                $secureHash = bin2hex(random_bytes(16));
-
-                $newOrder = Order::create([
-                    'customer_id' => $customer->id,
-                    'order_number' => $orderNumber,
-                    'secure_hash' => $secureHash,
-                    'customer_name' => $customerFullName,
-                    'customer_phone' => $formattedPhone,
-                    'city' => $customerCity,
-                    'address' => $fullAddress,
-                    'comment' => trim($this->comment) ?: null,
-                    'promo_code' => $this->appliedPromo,
-                    'discount_amount' => 0,
-                    'amount' => 0,
-                    'amount_paid' => 0.00,
-                    'status' => 'processing',
-                    'payment_method' => 'card_fast',
-                    'payment_status' => 'PENDING',
-                ]);
-
-                $verifiedSubtotalUsd = 0.0;
-
-                foreach ($cartDetails['items'] as $item) {
-                    $prodData = $item['product'] ?? [];
-                    $prodId = $prodData['id'] ?? null;
-                    $sku = trim((string) ($prodData['sku'] ?? ''));
-                    $title = trim((string) ($prodData['title'] ?? $prodData['name'] ?? 'Mally Product'));
-                    $qty = (int) ($item['quantity'] ?? 0);
-
-                    if ($qty <= 0) {
-                        throw new \RuntimeException("Некорректное количество для товара «{$title}».");
-                    }
-
-                    $productModel = is_numeric($prodId) ? Product::lockForUpdate()->find((int) $prodId) : null;
-                    if (! $productModel && $sku !== '') {
-                        $productModel = Product::lockForUpdate()->where('sku', $sku)->first();
-                    }
-                    if (! $productModel && $title !== '') {
-                        $productModel = Product::lockForUpdate()->where('name', $title)->first();
-                    }
-
-                    if (! $productModel) {
-                        $availStock = max(0, (int) ($prodData['stock'] ?? $prodData['quantity'] ?? 0));
-                        if ($availStock < $qty || ! ($prodData['inStock'] ?? true)) {
-                            throw new \RuntimeException("Недостаточно товара «{$title}» на складе (доступно: {$availStock} шт.).");
-                        }
-
-                        $brandName = trim((string) ($prodData['brand'] ?? 'Mally Collection')) ?: 'Mally Collection';
-                        $brand = Brand::firstOrCreate(['name' => $brandName]);
-
-                        $catName = trim((string) ($prodData['category'] ?? 'Косметика')) ?: 'Косметика';
-                        $category = Category::where('name_ru', $catName)
-                            ->orWhere('name_en', $catName)
-                            ->orWhere('name_uz', $catName)
-                            ->first()
-                            ?? Category::first()
-                            ?? Category::create([
-                                'name_ru' => $catName,
-                                'name_en' => $prodData['category_en'] ?? $catName,
-                                'name_uz' => $prodData['category_uz'] ?? $catName,
-                            ]);
-
-                        $productModel = Product::create([
-                            'brand_id' => $brand->id,
-                            'category_id' => $category->id,
-                            'name' => $title,
-                            'sku' => $sku !== '' ? $sku : ('ML-'.Str::upper(Str::random(6))),
-                            'description' => $prodData['description'] ?? null,
-                            'quantity' => $availStock,
-                            'selling_price' => (float) ($prodData['price'] ?? 35),
-                            'image' => $prodData['image'] ?? null,
-                            'status' => 'in_stock',
-                        ]);
-                    } else {
-                        $dbStock = max(0, (int) $productModel->quantity);
-                        if ($productModel->status === 'out_of_stock' || $dbStock < $qty) {
-                            throw new \RuntimeException("Недостаточно товара «{$productModel->name}» на складе (доступно: {$dbStock} шт.).");
-                        }
-                    }
-
-                    $dbNumPrice = (float) $productModel->selling_price;
-                    $unitPriceUsd = ($dbNumPrice > 1000 && $rate > 0)
-                        ? round($dbNumPrice / $rate, 2)
-                        : ($dbNumPrice > 0 ? $dbNumPrice : (float) ($prodData['price'] ?? 35));
-
-                    $verifiedSubtotalUsd += round($unitPriceUsd * $qty, 2);
-                    $unitPriceUzs = round($unitPriceUsd * $rate);
-                    $lineTotalUzs = $unitPriceUzs * $qty;
-
-                    $receipt = ProductReceipt::where('product_id', $productModel->id)
-                        ->where('quantity_remaining', '>=', $qty)
-                        ->orderBy('id', 'asc')
-                        ->first();
-
-                    OrderProduct::create([
-                        'order_id' => $newOrder->id,
-                        'product_id' => $productModel->id,
-                        'product_receipt_id' => $receipt?->id,
-                        'quantity' => $qty,
-                        'price' => $unitPriceUzs,
-                        'unit_cost' => $receipt?->purchase_price ?? 0,
-                        'total_price' => $lineTotalUzs,
-                    ]);
-
-                    if (! $receipt) {
-                        $productModel->decrement('quantity', $qty);
-                    }
-                }
-
-                $discountUsd = $this->appliedPromo === 'MALLY10'
-                    ? round($verifiedSubtotalUsd * 0.10, 2)
-                    : 0.0;
-                $finalUsd = max(0.0, round($verifiedSubtotalUsd - $discountUsd, 2));
-                $finalUzs = round(($finalUsd * $rate) / 1000) * 1000;
-                $discountUzs = round($discountUsd * $rate);
-
-                $newOrder->update([
-                    'discount_amount' => $discountUzs,
-                    'amount' => $finalUzs,
-                ]);
-
-                return $newOrder;
-            });
-
-            $service->clearCart();
-            session()->forget(['mally_promo_code', 'mally_order_note']);
-
-            $this->redirect(route('checkout.receipt', [
-                'orderNumber' => $order->order_number,
-                'orderHash' => $order->secure_hash,
-            ]), navigate: true);
+            return;
         } catch (\Throwable $e) {
-            $this->dispatch('toast', message: $e->getMessage() ?: 'Ошибка оформления заказа', type: 'error');
+            Cache::forget('checkout:'.$this->checkoutToken);
+            report($e);
+            $this->dispatch('toast', message: __('We could not place your order. Please try again or contact us.'), type: 'error');
+
+            return;
         }
+
+        $customer->update([
+            'first_name' => $firstName,
+            'last_name' => $lastName !== '' ? $lastName : $customer->last_name,
+            'city' => $city,
+            'address' => $address,
+        ]);
+
+        $service->clearCart();
+        session()->forget(['mally_promo_code', 'mally_order_note']);
+
+        $this->redirect(route('checkout.receipt', [
+            'orderNumber' => $order->order_number,
+            'orderHash' => $order->secure_hash,
+        ]), navigate: true);
     }
 
     public function render()
     {
         $service = app(StorefrontService::class);
         $cartDetails = $service->getCartItemsWithProducts();
-        $subtotalUsd = $cartDetails['subtotal_usd'];
         $this->appliedPromo = $cartDetails['promo_code'];
-        $this->discountUsd = (float) ($cartDetails['discount_usd'] ?? 0.0);
-        $finalTotalUsd = max(0, round($subtotalUsd - $this->discountUsd, 2));
+        $this->discountUsd = (float) $cartDetails['discount_usd'];
 
         return view('livewire.storefront.checkout-page', array_merge($this->sharedViewData(), [
             'cartItems' => $cartDetails['items'],
-            'subtotalUsd' => $subtotalUsd,
+            'subtotalUsd' => $cartDetails['subtotal_usd'],
             'discountUsd' => $this->discountUsd,
-            'finalTotalUsd' => $finalTotalUsd,
+            'finalTotalUsd' => $cartDetails['total_usd'],
         ]));
     }
 }

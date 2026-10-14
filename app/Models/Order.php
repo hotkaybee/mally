@@ -28,6 +28,8 @@ class Order extends Model
         'discount_amount',
         'amount',
         'amount_paid',
+        'exchange_rate',
+        'amount_uzs',
         'status',
         'payment_method',
         'payment_status',

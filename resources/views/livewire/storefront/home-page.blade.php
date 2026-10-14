@@ -9,8 +9,6 @@
             'btn_us_order' => '✈️ AQSHdan buyurtma (15–20 kun)',
             'stat_1_val' => '100%',
             'stat_1_lbl' => 'AQSH va Yevropadan original',
-            'stat_2_val' => '> 1 500',
-            'stat_2_lbl' => 'Yetkazilgan buyurtmalar',
             'stat_3_val' => 'Buyurtma kunida',
             'stat_3_lbl' => "Toshkent bo'ylab yetkazish",
             'stat_4_val' => '1–3 kun',
@@ -42,7 +40,6 @@
             'brand_view' => 'mahsulotlarini ko‘rish →',
             'reviews_badge' => 'Mijozlar fikri',
             'reviews_title' => 'Xaridorlarimiz biz haqimizda nima deyishadi',
-            'reviews_rating' => '5.0 dan 4.9 (140 dan ortiq sharhlar)',
             'reviews_verified' => 'Tasdiqlangan sharh',
             'faq_badge' => 'Savollar va javoblar',
             'faq_title' => "Ko'p beriladigan savollar",
@@ -56,8 +53,6 @@
             'btn_us_order' => '✈️ Custom US Order (15–20 days)',
             'stat_1_val' => '100%',
             'stat_1_lbl' => 'Authentic from USA & Europe',
-            'stat_2_val' => '> 1,500',
-            'stat_2_lbl' => 'Delivered Orders',
             'stat_3_val' => 'Same Day',
             'stat_3_lbl' => 'Delivery in Tashkent',
             'stat_4_val' => '1–3 Days',
@@ -89,7 +84,6 @@
             'brand_view' => 'Explore products →',
             'reviews_badge' => 'Customer Reviews',
             'reviews_title' => 'What Our Customers Say About Us',
-            'reviews_rating' => '4.9 out of 5.0 (over 140 reviews)',
             'reviews_verified' => 'Verified Review',
             'faq_badge' => 'Questions & Answers',
             'faq_title' => 'Frequently Asked Questions',
@@ -103,8 +97,6 @@
             'btn_us_order' => '✈️ Заказ из США под ключ (15–20 дн.)',
             'stat_1_val' => '100%',
             'stat_1_lbl' => 'Оригинал из США и Европы',
-            'stat_2_val' => '> 1 500',
-            'stat_2_lbl' => 'Доставленных заказов',
             'stat_3_val' => 'В день заказа',
             'stat_3_lbl' => 'Доставка по Ташкенту',
             'stat_4_val' => '1–3 дня',
@@ -136,7 +128,6 @@
             'brand_view' => 'Смотреть продукцию →',
             'reviews_badge' => 'Отзывы клиентов',
             'reviews_title' => 'Что говорят о нас наши покупательницы',
-            'reviews_rating' => '4.9 из 5.0 (более 140 отзывов)',
             'reviews_verified' => 'Проверенный отзыв',
             'faq_badge' => 'Вопросы и ответы',
             'faq_title' => 'Часто задаваемые вопросы',
@@ -198,14 +189,10 @@
             </div>
 
             <!-- Статистика доверия -->
-            <div class="pt-10 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto border-t border-[#EAE3DE] mt-12 text-left">
+            <div class="pt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto border-t border-[#EAE3DE] mt-12 text-left">
                 <div>
                     <div class="font-serif text-2xl font-bold text-[#1C1917]">{{ $homeTexts['stat_1_val'] }}</div>
                     <div class="text-[11px] text-[#8C827A]">{{ $homeTexts['stat_1_lbl'] }}</div>
-                </div>
-                <div>
-                    <div class="font-serif text-2xl font-bold text-[#1C1917]">{{ $homeTexts['stat_2_val'] }}</div>
-                    <div class="text-[11px] text-[#8C827A]">{{ $homeTexts['stat_2_lbl'] }}</div>
                 </div>
                 <div>
                     <div class="font-serif text-2xl font-bold text-[#1C1917]">{{ $homeTexts['stat_3_val'] }}</div>
@@ -363,7 +350,8 @@
         </div>
     </section>
 
-    <!-- 5. Отзывы покупателей -->
+    <!-- 5. Отзывы покупателей (только реальные, одобренные в админке) -->
+    @if(count($reviews) > 0)
     <section class="py-16 px-4 bg-[#FAF7F5] border-b border-[#EAE3DE]">
         <div class="max-w-5xl mx-auto">
             <div class="text-center max-w-xl mx-auto mb-12">
@@ -371,10 +359,7 @@
                 <h2 class="font-serif text-2xl sm:text-3xl font-bold text-[#1C1917] mt-1">
                     {{ $homeTexts['reviews_title'] }}
                 </h2>
-                <div class="flex items-center justify-center gap-2 mt-2 text-amber-500 text-sm">
-                    <span>★★★★★</span>
-                    <span class="text-xs font-semibold text-black">{{ $homeTexts['reviews_rating'] }}</span>
-                </div>
+
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -385,7 +370,7 @@
                                 <h4 class="font-serif font-bold text-sm text-[#1C1917]">{{ $rev['title'] }}</h4>
                                 <span class="text-xs text-[#8C827A]">{{ $rev['author'] }}, {{ $rev['city'] }}</span>
                             </div>
-                            <span class="text-amber-500 text-xs">★★★★★</span>
+                            <span class="text-amber-500 text-xs">{{ str_repeat('★', $rev['rating']) }}{{ str_repeat('☆', 5 - $rev['rating']) }}</span>
                         </div>
                         <p class="text-xs text-[#57534E] leading-relaxed italic">
                             «{{ $rev['text'] }}»
@@ -398,6 +383,7 @@
             </div>
         </div>
     </section>
+    @endif
 
     <!-- 6. FAQ на Alpine.js -->
     <section x-data="{ openFaq: null }" class="py-16 px-4 bg-white border-b border-[#EAE3DE]">

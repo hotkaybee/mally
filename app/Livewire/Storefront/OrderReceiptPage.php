@@ -5,6 +5,7 @@ namespace App\Livewire\Storefront;
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
 use App\Models\Order;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
@@ -12,8 +13,10 @@ class OrderReceiptPage extends Component
 {
     use InteractsWithStore;
 
+    #[Locked]
     public string $orderNumber;
 
+    #[Locked]
     public ?string $orderHash = null;
 
     public function mount(string $orderNumber, ?string $orderHash = null): void
@@ -29,36 +32,27 @@ class OrderReceiptPage extends Component
 
     public function render()
     {
+        abort_unless(ctype_digit($this->orderNumber), 404);
+
         $order = Order::with(['customer', 'orderProducts.product'])
-            ->where(function ($q) {
-                $q->where('order_number', $this->orderNumber)
-                    ->orWhere('id', is_numeric($this->orderNumber) ? (int) $this->orderNumber : 0);
-            })
+            ->where('order_number', (int) $this->orderNumber)
             ->firstOrFail();
 
+        // Access: the secret link from checkout, or the signed-in owner of the order.
+        // A matching phone number alone is not proof of ownership.
         $customer = $this->store()->getCurrentCustomer();
-        $isOwner = $customer && (
-            ((int) $order->customer_id > 0 && (int) $order->customer_id === (int) $customer->id)
-            || ($customer->phone_number && $order->customer_phone === $customer->phone_number)
-        );
-
+        $isOwner = $customer && $order->customer_id && (int) $order->customer_id === (int) $customer->id;
         $hasValidHash = ! empty($order->secure_hash)
             && ! empty($this->orderHash)
             && hash_equals((string) $order->secure_hash, (string) $this->orderHash);
 
-        if (! empty($order->secure_hash)) {
-            if (! $hasValidHash && ! $isOwner) {
-                abort(403);
-            }
-        } elseif (! $isOwner) {
-            abort(403);
-        }
+        abort_unless($isOwner || $hasValidHash, 403);
 
         return view('livewire.storefront.order-receipt-page', array_merge($this->sharedViewData(), [
             'order' => $order,
-            'cardNumber' => '9860 1901 0114 9374',
-            'cardHolder' => 'MALLY BEAUTY (Uzcard / Humo)',
-            'adminTelegram' => 'mallyuz',
+            'cardNumber' => (string) config('services.store.card_number'),
+            'cardHolder' => (string) config('services.store.card_holder'),
+            'adminTelegram' => (string) config('services.telegram.admin_username'),
         ]));
     }
 }

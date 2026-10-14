@@ -4,7 +4,6 @@ namespace App\Livewire\Storefront;
 
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
 use App\Models\Review;
-use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -135,133 +134,21 @@ class HomePage extends Component
             ],
         };
 
-        $reviews = match ($locale) {
-            'uz' => [
-                [
-                    'id' => 1,
-                    'author' => 'Dilnoza Karimova',
-                    'city' => 'Toshkent (Mirobod tumani)',
-                    'date' => '28-sentabr 2026',
-                    'title' => 'Nihoyat Toshkentda original Rhode!',
-                    'text' => "Singlimga sovg'a uchun Rhode Peptide Lip Tint va Rituals of Sakura to'plamini buyurtma qildim. Kuryer shu kunning o'zida eshik oldigacha yetkazib berdi. Batch-kodlarni CheckFresh orqali tekshirdim — 100% AQSH originali!",
-                ],
-                [
-                    'id' => 2,
-                    'author' => 'Madina Umarova',
-                    'city' => 'Samarqand',
-                    'date' => '24-sentabr 2026',
-                    'title' => 'Tezkor yetkazib berish va chiroyli qadoqlash',
-                    'text' => "Samarqandga yetkazib berishdan xavotir olgandim, lekin buyurtma BTS orqali 2 kunda yetib keldi. Hammasi ipak lentali firma qutisiga juda chiroyli qadoqlangan. Sovg'a sifatida qo'shilgan probniklar uchun alohida rahmat!",
-                ],
-                [
-                    'id' => 3,
-                    'author' => 'Zarina Aliyeva',
-                    'city' => 'Toshkent (Yunusobod)',
-                    'date' => '19-sentabr 2026',
-                    'title' => "Hourglass ikki tomonlama cho'tkasi — ajoyib",
-                    'text' => "Hourglass Ambient Lighting Edit Brush cho'tkasini uzoq qidirdim. Telegram orqali administratorga yozdim, to'lovdan so'ng 2 soat ichida yetkazib berishdi. Tuklari juda yumshoq va mukammal surtadi.",
-                ],
-                [
-                    'id' => 4,
-                    'author' => 'Sevara Xamidova',
-                    'city' => 'Buxoro',
-                    'date' => '12-sentabr 2026',
-                    'title' => 'Sephora AQSHdan individual bayer-buyurtma',
-                    'text' => "Toshkent omborida yo'q bo'lgan limitlangan paletkani buyurtma qildim. Nyu-Yorkdagi Sephora do'konidan xarid qilib, hech qanday bojxona muammolarisiz 15 kunda yetkazib berishdi. Mally xizmatidan juda mamnunman!",
-                ],
-            ],
-            'en' => [
-                [
-                    'id' => 1,
-                    'author' => 'Dilnoza Karimova',
-                    'city' => 'Tashkent (Mirabad)',
-                    'date' => 'September 28, 2026',
-                    'title' => 'Finally authentic Rhode in Tashkent!',
-                    'text' => 'Ordered the Rhode Peptide Lip Tint and Rituals of Sakura gift set for my sister. Same-day courier delivery right to my door. Verified the batch codes on CheckFresh — 100% authentic from the USA!',
-                ],
-                [
-                    'id' => 2,
-                    'author' => 'Madina Umarova',
-                    'city' => 'Samarkand',
-                    'date' => 'September 24, 2026',
-                    'title' => 'Fast express shipping & signature gift box',
-                    'text' => 'My parcel arrived in Samarkand in just 2 days via BTS Express. Everything was carefully wrapped in a craft gift box with a satin ribbon and free samples inside!',
-                ],
-                [
-                    'id' => 3,
-                    'author' => 'Zarina Aliyeva',
-                    'city' => 'Tashkent (Yunusabad)',
-                    'date' => 'September 19, 2026',
-                    'title' => 'Hourglass double-ended brush is perfection',
-                    'text' => 'Searched everywhere for the authentic Hourglass Ambient Lighting Edit Brush. Ordered from Mally and received it in 2 hours across Tashkent. Super soft bristles and blends like a dream.',
-                ],
-                [
-                    'id' => 4,
-                    'author' => 'Sevara Khamidova',
-                    'city' => 'Bukhara',
-                    'date' => 'September 12, 2026',
-                    'title' => 'Custom Personal Shopper order from Sephora USA',
-                    'text' => 'Ordered a limited-edition palette that was out of stock locally. The Mally team bought it at Sephora New York and delivered it straight to me without any customs hassle!',
-                ],
-            ],
-            default => [
-                [
-                    'id' => 1,
-                    'author' => 'Дильноза Каримова',
-                    'city' => 'Ташкент (Мирабадский р-н)',
-                    'date' => '28 сентября 2026',
-                    'title' => 'Наконец-то оригинальный Rhode в Ташкенте!',
-                    'text' => 'Заказывала тинт Rhode Peptide Lip Tint и спа-набор Rituals of Sakura на подарок сестре. Курьер доставил в день заказа прямо до дверей. Батч-коды проверила через CheckFresh — всё 100% оригинал из США! Теперь не нужно просить знакомых привозить из Дубая или Америки.',
-                ],
-                [
-                    'id' => 2,
-                    'author' => 'Мадина Умарова',
-                    'city' => 'Самарканд',
-                    'date' => '24 сентября 2026',
-                    'title' => 'Быстрая экспресс-доставка и фирменная упаковка',
-                    'text' => 'Очень переживала за доставку в Самарканд, но посылка пришла за 2 дня через BTS. Всё упаковано в двойную пупырку и фирменную крафтовую коробку с шелковой лентой. Ничего не помялось! Отдельное спасибо за пробники в подарок.',
-                ],
-                [
-                    'id' => 3,
-                    'author' => 'Зарина Алиева',
-                    'city' => 'Ташкент (Юнусабад)',
-                    'date' => '19 сентября 2026',
-                    'title' => 'Двусторонняя кисть Hourglass — восторг',
-                    'text' => 'Долго искала кисть Hourglass Ambient Lighting Edit Brush, везде были подделки или не было в наличии. Написала администратору в Telegram, уточнила детали, оплатила и через 2 часа кисть была у меня. Очень мягкий ворс, растушевывает идеально.',
-                ],
-                [
-                    'id' => 4,
-                    'author' => 'Севара Хамидова',
-                    'city' => 'Бухара',
-                    'date' => '12 сентября 2026',
-                    'title' => 'Индивидуальный байер-заказ из Sephora США',
-                    'text' => 'Заказывала лимитированную палетку, которой не было на складе в Ташкенте. Ребята выкупили в Sephora в Нью-Йорке и привезли без всяких таможенных заморочек с моей стороны. Очень довольна сервисом Mally!',
-                ],
-            ],
-        };
-
-        if (Schema::hasTable('reviews')) {
-            $dbReviews = Review::where('is_approved', true)
-                ->latest('id')
-                ->limit(4)
-                ->get()
-                ->map(function (Review $rev) {
-                    return [
-                        'id' => 'db_'.$rev->id,
-                        'author' => $rev->author_name,
-                        'city' => $rev->city ?: 'Ташкент',
-                        'date' => $rev->created_at ? $rev->created_at->format('d.m.Y') : now()->format('d.m.Y'),
-                        'title' => $rev->product_title ?: 'Отзыв о заказе Mally',
-                        'text' => $rev->comment,
-                        'rating' => (int) $rev->rating,
-                    ];
-                })
-                ->all();
-
-            if (! empty($dbReviews)) {
-                $reviews = array_slice(array_merge($dbReviews, $reviews), 0, 8);
-            }
-        }
+        // Only real reviews approved in the admin panel.
+        $reviews = Review::where('is_approved', true)
+            ->latest('id')
+            ->limit(4)
+            ->get()
+            ->map(fn (Review $rev) => [
+                'id' => 'db_'.$rev->id,
+                'author' => $rev->author_name,
+                'city' => $rev->city ?: 'Ташкент',
+                'date' => $rev->created_at?->timezone('Asia/Tashkent')->format('d.m.Y'),
+                'title' => $rev->product_title ?: 'Mally',
+                'text' => $rev->comment,
+                'rating' => max(1, min(5, (int) $rev->rating)),
+            ])
+            ->all();
 
         $faqs = match ($locale) {
             'uz' => [

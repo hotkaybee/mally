@@ -169,15 +169,15 @@
                     </div>
                 </div>
 
-                <!-- НАЛИЧИЕ: только «В наличии» / «Распродано» -->
-                <div class="p-5 bg-white rounded-3xl border border-[#EAE3DE] shadow-xs">
-                    <div class="flex items-center gap-2 text-xs sm:text-sm">
-                        <span class="w-2.5 h-2.5 rounded-full {{ $isOutOfStock ? 'bg-stone-400' : 'bg-emerald-500' }}"></span>
-                        <span class="font-bold text-[#1C1917]">
-                            {{ $isOutOfStock ? $store->t('product.out_of_stock', 'Распродано') : $store->t('product.in_stock', 'В наличии') }}
-                        </span>
+                <!-- НАЛИЧИЕ: показываем только «Распродано»; если товар можно положить в корзину, он есть -->
+                @if($isOutOfStock)
+                    <div class="p-5 bg-white rounded-3xl border border-[#EAE3DE] shadow-xs">
+                        <div class="flex items-center gap-2 text-xs sm:text-sm">
+                            <span class="w-2.5 h-2.5 rounded-full bg-stone-400"></span>
+                            <span class="font-bold text-[#1C1917]">{{ $store->t('product.out_of_stock', 'Распродано') }}</span>
+                        </div>
                     </div>
-                </div>
+                @endif
 
                 <!-- ЦЕНЫ -->
                 <div class="p-5 bg-white rounded-3xl border border-[#EAE3DE] flex items-baseline justify-between shadow-xs">
@@ -275,16 +275,6 @@
                                 <i class="fa-solid fa-bag-shopping text-sm"></i>
                                 <span>{{ $store->t('product.add_to_cart', 'Добавить в корзину') }} ({{ $store->formatPrice($price) }})</span>
                             </button>
-
-                            <a
-                                href="https://t.me/mallyuz?text={{ rawurlencode('Здравствуйте! Хочу заказать товар: '.$title.' (Артикул: '.$skuCode.', Цена: '.$store->formatPrice($price).').') }}"
-                                target="_blank"
-                                rel="noreferrer"
-                                class="py-4 px-5 bg-white hover:bg-stone-50 text-[#1C1917] border border-[#EAE3DE] text-xs font-bold rounded-2xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                                <i class="fa-brands fa-telegram text-[#229ED9] text-base"></i>
-                                <span>{{ $store->t('product.buy_tg', 'Купить в Telegram') }}</span>
-                            </a>
                         </div>
                     @endif
                 </div>

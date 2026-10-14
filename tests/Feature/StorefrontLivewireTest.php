@@ -140,11 +140,17 @@ class StorefrontLivewireTest extends TestCase
         $this->product(qty: 7);
         $this->product('Sold Out Tint', 'ML-SOLD', 20, 0);
 
+        // Available: no status label, just the cart button. Sold out: «Распродано», no cart button.
         $detail = $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))->assertOk();
-        $detail->assertSee('В наличии');
+        $detail->assertSee("addToCart('ML-HG-BRUSH')", false);
+        $detail->assertDontSee('В наличии');
+        $detail->assertDontSee('Купить в Telegram');
         $detail->assertDontSee('7 шт');
 
-        $this->get(route('product.detail', ['slug' => 'ML-SOLD']))->assertOk()->assertSee('Распродано');
+        $this->get(route('product.detail', ['slug' => 'ML-SOLD']))->assertOk()
+            ->assertSee('Распродано')
+            ->assertDontSee("addToCart('ML-SOLD')", false);
+        $this->get(route('catalog'))->assertOk()->assertDontSee('В наличии');
 
         $api = $this->getJson('/api/products')->assertOk()->json('products');
         $this->assertArrayNotHasKey('quantity', $api[0]);

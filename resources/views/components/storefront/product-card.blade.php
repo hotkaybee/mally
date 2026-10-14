@@ -79,14 +79,12 @@
             </h3>
         </a>
 
-        <!-- Наличие: только «В наличии» / «Распродано», без точного остатка -->
-        <div class="mt-1.5 flex items-center justify-end gap-1">
-            @if(!$isOutOfStock)
-                <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>{{ $store->t('product.in_stock', 'В наличии') }}</span>
-                </span>
-            @endif
+        <!-- Звёзды рейтинга. Наличие отдельно не показываем: распроданный товар помечен на кнопке «Распродано» -->
+        <div class="mt-1.5 flex items-center gap-0.5 text-amber-400 text-[10px]">
+            @for ($i = 0; $i < 5; $i++)
+                <i class="fa-solid fa-star"></i>
+            @endfor
+            <span class="text-stone-600 font-mono font-bold ml-1 text-[11px]">5.0</span>
         </div>
 
         <!-- Цены в выбранной валюте (USD $ / UZS сум) -->

@@ -826,6 +826,8 @@ class StorefrontService
 
     public function loginCustomer(Customer $customer): void
     {
+        // New session id on login, so a planted session id can't be reused.
+        session()->regenerate();
         session(['mally_customer_id' => $customer->id]);
         $this->cachedCustomer = $customer;
         $this->customerResolved = true;
@@ -833,7 +835,8 @@ class StorefrontService
 
     public function logoutCustomer(): void
     {
-        session()->forget('mally_customer_id');
+        session()->invalidate();
+        session()->regenerateToken();
         $this->cachedCustomer = null;
         $this->customerResolved = false;
     }

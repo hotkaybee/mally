@@ -93,5 +93,15 @@
     "Maintained from receipts": "Рассчитывается по поступлениям",
     "From the latest receipt": "Из последнего поступления",
     "Message is too long.": "Сообщение слишком длинное.",
-    "Too many messages. Please try again later.": "Слишком много сообщений. Попробуйте позже."
+    "Too many messages. Please try again later.": "Слишком много сообщений. Попробуйте позже.",
+    "city": "Город",
+    "Please enter a valid phone number (+998 followed by 9 digits)": "Введите корректный номер телефона (+998 и 9 цифр)",
+    "Too many code requests. Please wait and try again.": "Слишком много запросов кода. Подождите и попробуйте снова.",
+    "We could not send the code right now. Please contact us on Telegram.": "Сейчас не удалось отправить код. Напишите нам в Telegram.",
+    "Please enter the verification code": "Введите проверочный код",
+    "Invalid verification code": "Неверный код подтверждения",
+    "The code has expired. Please request a new one.": "Срок действия кода истёк. Запросите новый код.",
+    "Please confirm your phone number first.": "Сначала подтвердите номер телефона.",
+    "Please enter your first name": "Пожалуйста, укажите имя",
+    "An account with this phone number already exists. Please sign in.": "Аккаунт с этим номером уже существует. Войдите в него."
 }

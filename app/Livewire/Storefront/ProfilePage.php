@@ -59,24 +59,8 @@ class ProfilePage extends Component
         $this->firstName = (string) ($customer->first_name ?? '');
         $this->lastName = (string) ($customer->last_name ?? '');
         $this->phone = (string) ($customer->phone_number ?? '');
-
-        if ($customer->instagram && str_contains($customer->instagram, '|')) {
-            [$c, $a] = array_map('trim', explode('|', $customer->instagram, 2));
-            $this->city = $c ?: 'Ташкент';
-            $this->address = $a;
-        } else {
-            if ($customer->instagram) {
-                $this->address = trim((string) $customer->instagram);
-            }
-            $lastOrderCity = Order::where('customer_id', $customer->id)
-                ->whereNotNull('city')
-                ->where('city', '!=', '')
-                ->latest('id')
-                ->value('city');
-            if (is_string($lastOrderCity) && trim($lastOrderCity) !== '') {
-                $this->city = trim($lastOrderCity);
-            }
-        }
+        $this->city = (string) ($customer->city ?: 'Ташкент');
+        $this->address = (string) ($customer->address ?? '');
     }
 
     public function saveSettings(): void
@@ -95,10 +79,17 @@ class ProfilePage extends Component
         $cityVal = trim($this->city) ?: 'Ташкент';
         $this->city = $cityVal;
 
+        if (mb_strlen($this->firstName) > 100 || mb_strlen($this->lastName) > 100 || mb_strlen($cityVal) > 100 || mb_strlen($this->address) > 500) {
+            $this->dispatch('toast', message: __('Message is too long.'), type: 'error');
+
+            return;
+        }
+
         $customer->update([
             'first_name' => trim($this->firstName),
             'last_name' => trim($this->lastName),
-            'instagram' => $cityVal.' | '.trim($this->address),
+            'city' => $cityVal,
+            'address' => trim($this->address) ?: null,
         ]);
     }
 

@@ -3,7 +3,6 @@
     'isOpen' => null,
     'step' => null,
     'phone' => null,
-    'devCode' => null,
     'message' => null,
 ])
 
@@ -13,7 +12,6 @@
     $isOpen = $isOpen ?? ($this->isAuthModalOpen ?? false);
     $step = $step ?? ($this->authStep ?? 'phone');
     $phone = $phone ?? ($this->authPhone ?? '+998 ');
-    $devCode = $devCode ?? ($this->authDevCode ?? '7788');
     $message = $message ?? ($this->authModalMessage ?? '');
 
     $texts = match ($locale) {
@@ -26,10 +24,6 @@
             'or' => 'yoki',
             'tg_login' => 'Telegram-bot orqali kirish',
             'code_sent_to' => 'Kod ushbu raqamga yuborildi:',
-            'test_mode' => 'Test rejimi (Terminal)',
-            'test_desc' => "Kod server terminalida chiqarildi. Shuningdek, universal test-kod 1111 ni kiritish mumkin.",
-            'code_from_term' => 'Terminal kodi:',
-            'insert_code' => 'Kiritish:',
             'enter_code' => 'Tasdiqlash kodini kiriting',
             'sign_in_btn' => 'Akkauntga kirish',
             'change_phone' => "Raqamni o'zgartirish",
@@ -59,10 +53,6 @@
             'or' => 'or',
             'tg_login' => 'Sign in via Telegram Bot',
             'code_sent_to' => 'Verification code sent to:',
-            'test_mode' => 'Testing Mode (Dev Terminal)',
-            'test_desc' => 'The code is printed in the server terminal. You can also enter the universal test code 1111.',
-            'code_from_term' => 'Terminal code:',
-            'insert_code' => 'Fill:',
             'enter_code' => 'Enter verification code',
             'sign_in_btn' => 'Sign In',
             'change_phone' => 'Change phone number',
@@ -92,10 +82,6 @@
             'or' => 'или',
             'tg_login' => 'Войти через Telegram-бота',
             'code_sent_to' => 'Код отправлен на номер:',
-            'test_mode' => 'Режим тестирования (Заглушка)',
-            'test_desc' => 'Код напечатан в терминале сервера. Также можно ввести универсальный тест-код 1111.',
-            'code_from_term' => 'Код из терминала:',
-            'insert_code' => 'Вставить:',
             'enter_code' => 'Введите проверочный код',
             'sign_in_btn' => 'Войти в аккаунт',
             'change_phone' => 'Изменить номер',
@@ -238,30 +224,6 @@
                         </div>
                     </div>
 
-                    <!-- Блок-заглушка: подсказка про терминал -->
-                    <div class="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-left space-y-2">
-                        <div class="flex items-center gap-2 text-xs font-bold text-amber-900">
-                            <i class="fa-solid fa-terminal text-amber-600 text-sm"></i>
-                            <span>{{ $texts['test_mode'] }}</span>
-                        </div>
-                        <p class="text-[11px] text-amber-800 leading-relaxed">
-                            {{ $texts['test_desc'] }}
-                        </p>
-                        @if($devCode)
-                            <div class="pt-1 flex items-center justify-between">
-                                <span class="text-[11px] text-stone-500 font-mono">{{ $texts['code_from_term'] }}</span>
-                                <button
-                                    type="button"
-                                    wire:click="fillAndVerifyDevCode"
-                                    class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
-                                >
-                                    <span>{{ $texts['insert_code'] }} {{ $devCode }}</span>
-                                    <i class="fa-solid fa-bolt text-[10px]"></i>
-                                </button>
-                            </div>
-                        @endif
-                    </div>
-
                     <!-- Поле ввода проверочного кода -->
                     <div>
                         <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5 text-center">
@@ -272,7 +234,9 @@
                             required
                             autofocus
                             maxlength="6"
-                            placeholder="• • • •"
+                            placeholder="• • • • • •"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
                             wire:model="authCode"
                             class="w-full text-center tracking-[0.5em] text-2xl font-mono font-bold py-3 bg-[#FAF8F6] border border-[#E3DBD5] rounded-2xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
                         />

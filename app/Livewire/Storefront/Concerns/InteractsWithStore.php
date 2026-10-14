@@ -3,20 +3,22 @@
 namespace App\Livewire\Storefront\Concerns;
 
 use App\Models\Customer;
+use App\Services\PhoneVerificationService;
 use App\Services\StorefrontService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
 {
     public bool $isAuthModalOpen = false;
 
+    #[Locked]
     public string $authStep = 'phone';
 
     public string $authPhone = '+998 ';
 
     public string $authCode = '';
-
-    public ?string $authDevCode = null;
 
     public string $authFirstName = '';
 
@@ -101,7 +103,6 @@ trait InteractsWithStore
         $this->authStep = 'phone';
         $this->authPhone = '+998 ';
         $this->authCode = '';
-        $this->authDevCode = null;
         $this->authFirstName = '';
         $this->authLastName = '';
         $this->authCity = 'Ташкент';
@@ -114,129 +115,160 @@ trait InteractsWithStore
         $this->isAuthModalOpen = false;
     }
 
+    /**
+     * Only the steps that don't depend on a verified phone can be opened
+     * from the browser; 'code' and 'complete-profile' are reached through
+     * sendAuthCode() / verifyAuthCode() only.
+     */
     public function setAuthStep(string $step): void
     {
-        $this->authStep = $step;
+        if (in_array($step, ['phone', 'telegram'], true)) {
+            $this->authStep = $step;
+        }
     }
 
     public function sendAuthCode(): void
     {
-        $locale = $this->store()->getLocale();
-        $normalized = $this->store()->normalizeAndValidateUzPhone($this->authPhone);
+        $phone = $this->authStep === 'code'
+            ? $this->phoneVerification()->pendingPhone()
+            : $this->store()->normalizeAndValidateUzPhone($this->authPhone);
 
-        if (! $normalized) {
-            $errMsg = match ($locale) {
-                'uz' => "Iltimos, to'g'ri telefon raqamini kiriting (+998 va 9 ta raqam)",
-                'en' => 'Please enter a valid phone number (+998 followed by 9 digits)',
-                default => 'Введите корректный номер телефона (+998 и 9 цифр)',
-            };
-            $this->dispatch('toast', message: $errMsg, type: 'error');
+        if (! $phone) {
+            $this->dispatch('toast', message: __('Please enter a valid phone number (+998 followed by 9 digits)'), type: 'error');
 
             return;
         }
 
-        $this->authPhone = $normalized;
-        $this->authDevCode = '7788';
+        $result = $this->phoneVerification()->send($phone, (string) request()->ip());
+
+        if ($result === PhoneVerificationService::THROTTLED) {
+            $this->dispatch('toast', message: __('Too many code requests. Please wait and try again.'), type: 'error');
+
+            return;
+        }
+
+        if ($result === PhoneVerificationService::UNAVAILABLE) {
+            $this->dispatch('toast', message: __('We could not send the code right now. Please contact us on Telegram.'), type: 'error');
+
+            return;
+        }
+
+        $this->authPhone = $phone;
         $this->authCode = '';
         $this->authStep = 'code';
     }
 
-    public function fillAndVerifyDevCode(): void
-    {
-        $this->authCode = $this->authDevCode ?: '7788';
-        $this->verifyAuthCode();
-    }
-
     public function verifyAuthCode(): void
     {
-        $locale = $this->store()->getLocale();
-        $code = trim($this->authCode);
-        if ($code === '') {
-            $msg = match ($locale) {
-                'uz' => 'Tasdiqlash kodini kiriting',
-                'en' => 'Please enter the verification code',
-                default => 'Введите проверочный код',
-            };
-            $this->dispatch('toast', message: $msg, type: 'error');
+        if (trim($this->authCode) === '') {
+            $this->dispatch('toast', message: __('Please enter the verification code'), type: 'error');
 
             return;
         }
 
-        if (! in_array($code, ['7788', '1111'], true) && ($this->authDevCode && $code !== $this->authDevCode)) {
-            $msg = match ($locale) {
-                'uz' => "Tasdiqlash kodi noto'g'ri",
-                'en' => 'Invalid verification code',
-                default => 'Неверный код подтверждения',
-            };
-            $this->dispatch('toast', message: $msg, type: 'error');
+        $verification = $this->phoneVerification();
+        $phone = $verification->pendingPhone();
+        $result = $verification->verify($this->authCode);
+        $this->authCode = '';
+
+        if ($result === PhoneVerificationService::INVALID) {
+            $this->dispatch('toast', message: __('Invalid verification code'), type: 'error');
 
             return;
         }
 
-        $phone = trim($this->authPhone);
-        $digits = preg_replace('/\D/', '', $phone);
-        $compactPhone = '+'.$digits;
+        if ($result !== PhoneVerificationService::VERIFIED) {
+            $this->authStep = 'phone';
+            $this->dispatch('toast', message: __('The code has expired. Please request a new one.'), type: 'error');
 
-        $existing = Customer::where('phone_number', $phone)
-            ->orWhere('phone_number', $compactPhone)
-            ->first();
+            return;
+        }
 
+        $existing = Customer::wherePhone($phone)->first();
         if ($existing) {
-            if ($existing->phone_number !== $phone) {
-                $existing->update(['phone_number' => $phone]);
-            }
-            $this->store()->loginCustomer($existing);
-            $this->isAuthModalOpen = false;
-            if (method_exists($this, 'onCustomerAuthenticated')) {
-                $this->onCustomerAuthenticated($existing);
-            }
+            $verification->forgetVerified();
+            $this->finishLogin($existing);
 
             return;
         }
 
+        $this->authPhone = $phone;
         $this->authStep = 'complete-profile';
     }
 
     public function completeAuthRegister(): void
     {
-        $locale = $this->store()->getLocale();
+        $verification = $this->phoneVerification();
+        $phone = $verification->verifiedPhone();
+
+        if (! $phone) {
+            $this->authStep = 'phone';
+            $this->dispatch('toast', message: __('Please confirm your phone number first.'), type: 'error');
+
+            return;
+        }
+
         $firstName = trim($this->authFirstName);
         $lastName = trim($this->authLastName);
         $city = trim($this->authCity) ?: 'Ташкент';
         $address = trim($this->authAddress);
 
-        if ($firstName === '') {
-            $msg = match ($locale) {
-                'uz' => 'Iltimos, ismingizni kiriting',
-                'en' => 'Please enter your first name',
-                default => 'Пожалуйста, укажите имя',
-            };
-            $this->dispatch('toast', message: $msg, type: 'error');
+        if ($firstName === '' || mb_strlen($firstName) > 100 || mb_strlen($lastName) > 100 || mb_strlen($address) > 500) {
+            $this->dispatch('toast', message: __('Please enter your first name'), type: 'error');
 
             return;
         }
 
-        $customer = Customer::create([
-            'phone_number' => trim($this->authPhone),
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'telegram' => null,
-            'instagram' => $city.($address ? ' | '.$address : ''),
-            'email' => 'client_'.Str::random(6).'@mally.uz',
-            'source' => 'instagram',
-        ]);
+        // Serialize registrations for the same phone so two parallel requests
+        // can't both pass the "does it exist" check.
+        $customer = Cache::lock('register-phone:'.preg_replace('/\D/', '', $phone), 10)->block(5, function () use ($phone, $firstName, $lastName, $city, $address) {
+            if (Customer::wherePhone($phone)->exists()) {
+                return null;
+            }
 
+            return Customer::create([
+                'phone_number' => $phone,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'city' => $city,
+                'address' => $address !== '' ? $address : null,
+                'email' => 'client_'.Str::lower(Str::random(12)).'@mally.uz',
+                'source' => 'instagram',
+            ]);
+        });
+
+        $verification->forgetVerified();
+
+        if (! $customer) {
+            $this->authStep = 'phone';
+            $this->dispatch('toast', message: __('An account with this phone number already exists. Please sign in.'), type: 'error');
+
+            return;
+        }
+
+        $this->finishLogin($customer);
+    }
+
+    public function logoutCustomer(): void
+    {
+        $this->store()->logoutCustomer();
+        $this->redirect(route('home'));
+    }
+
+    protected function finishLogin(Customer $customer): void
+    {
         $this->store()->loginCustomer($customer);
         $this->isAuthModalOpen = false;
+        $this->authStep = 'phone';
 
         if (method_exists($this, 'onCustomerAuthenticated')) {
             $this->onCustomerAuthenticated($customer);
         }
     }
 
-    public function logoutCustomer(): void
+    protected function phoneVerification(): PhoneVerificationService
     {
-        $this->store()->logoutCustomer();
+        return app(PhoneVerificationService::class);
     }
 
     protected function sharedViewData(): array

@@ -168,7 +168,8 @@ class StorefrontLivewireTest extends TestCase
             'last_name' => 'Каримова',
             'email' => 'dilnoza@mally.uz',
             'phone_number' => '+998 99 822 28 80',
-            'instagram' => 'Бухара | ул. Навои 15',
+            'city' => 'Бухара',
+            'address' => 'ул. Навои 15',
             'source' => 'instagram',
         ]);
 

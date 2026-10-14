@@ -93,5 +93,15 @@
     "Maintained from receipts": "Kelib tushishlar asosida hisoblanadi",
     "From the latest receipt": "Oxirgi kelib tushishdan",
     "Message is too long.": "Xabar juda uzun.",
-    "Too many messages. Please try again later.": "Xabarlar juda ko'p. Keyinroq urinib ko'ring."
+    "Too many messages. Please try again later.": "Xabarlar juda ko'p. Keyinroq urinib ko'ring.",
+    "city": "Shahar",
+    "Please enter a valid phone number (+998 followed by 9 digits)": "Iltimos, to'g'ri telefon raqamini kiriting (+998 va 9 ta raqam)",
+    "Too many code requests. Please wait and try again.": "Kod juda ko'p so'raldi. Biroz kuting va qayta urinib ko'ring.",
+    "We could not send the code right now. Please contact us on Telegram.": "Hozir kodni yuborib bo'lmadi. Iltimos, Telegram orqali yozing.",
+    "Please enter the verification code": "Tasdiqlash kodini kiriting",
+    "Invalid verification code": "Tasdiqlash kodi noto'g'ri",
+    "The code has expired. Please request a new one.": "Kodning amal qilish muddati tugadi. Yangi kod so'rang.",
+    "Please confirm your phone number first.": "Avval telefon raqamingizni tasdiqlang.",
+    "Please enter your first name": "Iltimos, ismingizni kiriting",
+    "An account with this phone number already exists. Please sign in.": "Bu raqam bilan akkaunt allaqachon mavjud. Iltimos, tizimga kiring."
 }

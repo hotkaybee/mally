@@ -17,11 +17,7 @@ class OrderObserver
     public function deleting(Order $order): void
     {
         foreach ($order->orderProducts as $line) {
-            $this->inventory->release(
-                $line->product_receipt_id ? (int) $line->product_receipt_id : null,
-                (int) $line->quantity,
-                $line->product_id ? (int) $line->product_id : null,
-            );
+            $this->inventory->release($line->product_receipt_id, (int) $line->quantity);
         }
     }
 }

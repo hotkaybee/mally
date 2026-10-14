@@ -32,40 +32,18 @@ class InventoryService
         }
 
         $product->saveQuietly();
+
+        StorefrontService::forgetProductsCache();
     }
 
     /**
-     * Draw the line's quantity out of its chosen receipt, or directly from the
-     * product when no receipt is associated. Throws when the receipt or product
-     * does not have enough units left. Caches are refreshed via receipt events.
+     * Draw the line's quantity out of its chosen receipt. Throws when the
+     * receipt does not have enough units left. Caches are refreshed via
+     * receipt events.
      */
     public function consume(OrderProduct $line): void
     {
-        if ($line->quantity <= 0) {
-            return;
-        }
-
-        if (! $line->product_receipt_id) {
-            if (! $line->product_id) {
-                return;
-            }
-
-            DB::transaction(function () use ($line) {
-                $product = Product::lockForUpdate()->find($line->product_id);
-
-                if (! $product) {
-                    return;
-                }
-
-                if ((int) $product->quantity < $line->quantity) {
-                    throw new RuntimeException(
-                        "Insufficient stock for product #{$product->id}: {$product->quantity} left, {$line->quantity} requested."
-                    );
-                }
-
-                $product->decrement('quantity', $line->quantity);
-            });
-
+        if (! $line->product_receipt_id || $line->quantity <= 0) {
             return;
         }
 
@@ -88,30 +66,11 @@ class InventoryService
     }
 
     /**
-     * Return units to a receipt or directly to a product when no receipt was used
-     * (order line edited/removed, order deleted).
+     * Return units to a receipt (order line edited/removed, order deleted).
      */
-    public function release(?int $receiptId, int $quantity, ?int $productId = null): void
+    public function release(?int $receiptId, int $quantity): void
     {
-        if ($quantity <= 0) {
-            return;
-        }
-
-        if (! $receiptId) {
-            if (! $productId) {
-                return;
-            }
-
-            DB::transaction(function () use ($productId, $quantity) {
-                $product = Product::lockForUpdate()->find($productId);
-
-                if (! $product) {
-                    return;
-                }
-
-                $product->increment('quantity', $quantity);
-            });
-
+        if (! $receiptId || $quantity <= 0) {
             return;
         }
 

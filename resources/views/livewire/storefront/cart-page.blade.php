@@ -139,7 +139,9 @@
                                 <button
                                     type="button"
                                     wire:click="updateCartQuantity('{{ addslashes($prodKey) }}', {{ $item['quantity'] + 1 }})"
-                                    class="w-7 h-7 flex items-center justify-center text-sm font-bold text-[#57534E] hover:text-black transition cursor-pointer"
+                                    @disabled(empty($p['canIncrease']))
+                                    title="{{ empty($p['canIncrease']) ? __('No more units of this product are available.') : __('Increase') }}"
+                                    class="w-7 h-7 flex items-center justify-center text-sm font-bold transition {{ empty($p['canIncrease']) ? 'text-stone-300 cursor-not-allowed' : 'text-[#57534E] hover:text-black cursor-pointer' }}"
                                 >
                                     +
                                 </button>

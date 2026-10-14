@@ -335,9 +335,13 @@
                                         ? route('checkout.receipt', ['orderNumber' => $orderNum, 'orderHash' => $order->secure_hash])
                                         : route('checkout.receipt', ['orderNumber' => $orderNum]);
                                     $st = $statusMap[$order->status] ?? ['label' => $order->status, 'bg' => '#F3F4F6', 'color' => '#374151', 'border' => '#E5E7EB'];
-                                    $rate = (float) ($exchangeRate ?? 0);
-                                    $amountUzs = (int) round((float) $order->amount);
-                                    $amountUsd = $rate > 0 ? round($amountUzs / $rate, 2) : null;
+                                    // Stored in USD; so'm only with the rate saved on the order.
+                                    $rate = (float) ($order->exchange_rate ?? 0);
+                                    $hasUzs = $rate > 0 && $order->amount_uzs !== null;
+                                    $amountUsd = (float) $order->amount;
+                                    $money = fn (float $usd) => $hasUzs
+                                        ? number_format(round($usd * $rate), 0, '.', ' ').' '.$pt['sum_unit']
+                                        : '$'.number_format($usd, 2, '.', ',');
                                     $isDelivered = in_array($order->status, ['delivered', 'DELIVERED', 'ARCHIVED'], true);
                                 @endphp
                                 <div class="bg-white rounded-3xl p-6 border border-[#EAE3DE] shadow-sm space-y-4 hover:border-[#D5CCC7] transition">
@@ -378,17 +382,17 @@
                                                 </a>
                                             </div>
                                             <span class="text-[11px] text-[#A8A29E] mt-1 block">
-                                                {{ $pt['date_from'] }} {{ $order->created_at?->format('d.m.Y H:i') }}
+                                                {{ $pt['date_from'] }} {{ $order->created_at?->timezone('Asia/Tashkent')->format('d.m.Y H:i') }}
                                             </span>
                                         </div>
 
                                         <div class="text-left sm:text-right">
                                             <div class="font-bold text-base text-[#1C1917]">
-                                                {{ number_format($amountUzs, 0, '.', ' ') }} {{ $pt['sum_unit'] }}
+                                                {{ $hasUzs ? number_format((int) $order->amount_uzs, 0, '.', ' ').' '.$pt['sum_unit'] : $money($amountUsd) }}
                                             </div>
-                                            @if($amountUsd !== null)
+                                            @if($hasUzs)
                                                 <div class="text-[11px] text-emerald-600 font-medium">
-                                                    ≈ ${{ number_format($amountUsd, 1, '.', '') }} USD
+                                                    = ${{ number_format($amountUsd, 2, '.', ',') }} USD
                                                 </div>
                                             @endif
                                         </div>
@@ -415,7 +419,6 @@
                                                         $img = $prod?->image
                                                             ? (str_starts_with($prod->image, 'http') ? $prod->image : asset($prod->image))
                                                             : 'https://findy.uz/cdn/shop/files/sample.jpg';
-                                                        $itemPriceUzs = (int) round((float) $item->price);
                                                     @endphp
                                                     <div class="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between gap-4">
                                                         <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -430,14 +433,14 @@
                                                                     @if($prod?->sku)
                                                                         <span>{{ $pt['sku_prefix'] }} {{ $prod->sku }} ·</span>
                                                                     @endif
-                                                                    <span>{{ $item->quantity }} {{ $pt['pcs_unit'] }} × {{ number_format($itemPriceUzs, 0, '.', ' ') }} {{ $pt['sum_unit'] }}</span>
+                                                                    <span>{{ $item->quantity }} {{ $pt['pcs_unit'] }} × {{ $money((float) $item->price) }}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
 
                                                         <div class="text-right flex flex-col items-end gap-1.5 flex-shrink-0">
                                                             <span class="font-mono font-bold text-xs text-[#1C1917]">
-                                                                {{ number_format($itemPriceUzs * $item->quantity, 0, '.', ' ') }} {{ $pt['sum_unit'] }}
+                                                                {{ $money((float) $item->price * $item->quantity) }}
                                                             </span>
 
                                                             @if($isDelivered && $prod)

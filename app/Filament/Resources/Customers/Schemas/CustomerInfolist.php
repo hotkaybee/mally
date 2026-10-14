@@ -17,6 +17,12 @@ class CustomerInfolist
                     ->label('Email address'),
                 TextEntry::make('phone_number')
                     ->placeholder('-'),
+                TextEntry::make('city')
+                    ->label(__('city'))
+                    ->placeholder('-'),
+                TextEntry::make('address')
+                    ->label(__('address'))
+                    ->placeholder('-'),
                 TextEntry::make('telegram')
                     ->placeholder('-'),
                 TextEntry::make('instagram')

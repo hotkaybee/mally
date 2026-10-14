@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\CheckoutException;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderProduct;
-use App\Models\Product;
-use App\Models\ProductReceipt;
-use App\Services\OrderNumberRetryService;
+use App\Services\OrderService;
+use App\Services\StorefrontService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -15,9 +15,14 @@ use Illuminate\Support\Str;
 class OrderController extends Controller
 {
     public function __construct(
-        private readonly OrderNumberRetryService $orderNumberRetry,
+        private readonly OrderService $orders,
+        private readonly StorefrontService $storefront,
     ) {}
 
+    /**
+     * Create an order from the Telegram bot. Protected by VerifyOrdersApiToken
+     * and rate-limited in routes/api.php. Prices come from the database (USD).
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -28,93 +33,91 @@ class OrderController extends Controller
             'paymentMethod' => 'nullable|string|max:50',
             'comment' => 'nullable|string|max:1000',
             'promoCode' => 'nullable|string|max:50',
-            'items' => 'required|array|min:1',
-            'items.*.id' => 'required|integer|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items' => 'required|array|min:1|max:50',
+            'items.*.id' => 'required|integer',
+            'items.*.quantity' => 'required|integer|min:1|max:'.OrderService::MAX_QUANTITY_PER_LINE,
         ]);
 
-        $order = $this->orderNumberRetry->run(function (int $orderNumber) use ($validated): Order {
-            $parts = explode(' ', trim($validated['customerName']), 2);
-            $customer = Customer::firstOrCreate(
-                ['phone_number' => trim($validated['customerPhone'])],
-                [
-                    'first_name' => $parts[0] ?: 'Покупатель',
-                    'last_name' => $parts[1] ?? '',
-                    'email' => 'tg_'.Str::random(6).'@mally.uz',
-                    'source' => 'instagram',
-                ]
-            );
+        $phone = $this->storefront->normalizeAndValidateUzPhone($validated['customerPhone']);
+        if (! $phone) {
+            return response()->json(['error' => __('Please enter a valid phone number (+998 followed by 9 digits)')], 422);
+        }
 
-            $secureHash = bin2hex(random_bytes(16));
+        $name = trim($validated['customerName']);
+        $quantities = [];
+        foreach ($validated['items'] as $item) {
+            $quantities[(int) $item['id']] = ($quantities[(int) $item['id']] ?? 0) + (int) $item['quantity'];
+        }
 
-            $rawPromo = strtoupper(trim((string) ($validated['promoCode'] ?? '')));
-            $validPromo = $rawPromo === 'MALLY10' ? 'MALLY10' : null;
+        $customer = Customer::wherePhone($phone)->first();
+        if (! $customer) {
+            $parts = explode(' ', $name, 2);
+            $customer = Customer::create([
+                'first_name' => $parts[0] ?: 'Покупатель',
+                'last_name' => $parts[1] ?? '',
+                'phone_number' => $phone,
+                'city' => $validated['city'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'email' => 'tg_'.Str::lower(Str::random(12)).'@mally.uz',
+                'source' => 'telegram',
+            ]);
+        }
 
-            $order = Order::create([
-                'customer_id' => $customer->id,
-                'order_number' => $orderNumber,
-                'secure_hash' => $secureHash,
-                'customer_name' => trim($validated['customerName']),
-                'customer_phone' => trim($validated['customerPhone']),
+        try {
+            $order = $this->orders->placeOrder($customer, $quantities, [
+                'customer_name' => $name,
+                'customer_phone' => $phone,
                 'city' => $validated['city'] ?? 'Ташкент',
-                'address' => $validated['address'] ?? '',
+                'address' => $validated['address'] ?? null,
                 'comment' => $validated['comment'] ?? null,
-                'promo_code' => $validPromo,
-                'discount_amount' => 0,
-                'amount' => 0,
-                'amount_paid' => 0,
-                'status' => 'processing',
+                'promo_code' => $validated['promoCode'] ?? null,
                 'payment_method' => $validated['paymentMethod'] ?? 'card_fast',
-                'payment_status' => 'PENDING',
             ]);
-
-            $subtotalAmount = 0.0;
-
-            foreach ($validated['items'] as $itemData) {
-                $product = Product::lockForUpdate()->findOrFail($itemData['id']);
-                $qty = (int) $itemData['quantity'];
-
-                if ($product->status === 'out_of_stock' || (int) $product->quantity < $qty) {
-                    abort(422, "Недостаточно товара «{$product->name}» на складе.");
-                }
-
-                $unitPrice = (float) $product->selling_price;
-                $lineTotal = round($unitPrice * $qty, 2);
-
-                $receipt = ProductReceipt::where('product_id', $product->id)
-                    ->where('quantity_remaining', '>=', $qty)
-                    ->orderBy('id', 'asc')
-                    ->first();
-
-                OrderProduct::create([
-                    'order_id' => $order->id,
-                    'product_id' => $product->id,
-                    'product_receipt_id' => $receipt?->id,
-                    'quantity' => $qty,
-                    'price' => $unitPrice,
-                    'unit_cost' => $receipt?->unit_cost ?? 0,
-                    'total_price' => $lineTotal,
-                ]);
-
-                $subtotalAmount += $lineTotal;
-            }
-
-            $discountAmount = $validPromo === 'MALLY10' ? round($subtotalAmount * 0.10, 2) : 0.0;
-            $totalAmount = max(0.0, round($subtotalAmount - $discountAmount, 2));
-
-            $order->update([
-                'discount_amount' => $discountAmount,
-                'amount' => $totalAmount,
-            ]);
-
-            return $order;
-        });
+        } catch (CheckoutException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'success' => true,
             'orderNumber' => $order->order_number,
             'orderHash' => $order->secure_hash,
             'totalAmount' => (float) $order->amount,
+            'currency' => 'USD',
         ], 201);
+    }
+
+    /**
+     * Order status for its owner: needs both the order number and its secret hash.
+     */
+    public function track(Request $request): JsonResponse
+    {
+        $number = trim((string) $request->query('order', ''));
+        $hash = trim((string) $request->query('hash', ''));
+
+        $order = ctype_digit($number) && $hash !== ''
+            ? Order::with('orderProducts.product')->where('order_number', (int) $number)->first()
+            : null;
+
+        if (! $order || empty($order->secure_hash) || ! hash_equals((string) $order->secure_hash, $hash)) {
+            return response()->json(['error' => __('Order not found')], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'order' => [
+                'orderNumber' => $order->order_number,
+                'status' => $order->status,
+                'paymentStatus' => $order->payment_status,
+                'totalAmount' => (float) $order->amount,
+                'currency' => 'USD',
+                'createdAt' => $order->created_at?->toIso8601String(),
+                'items' => $order->orderProducts->map(fn (OrderProduct $op) => [
+                    'productId' => $op->product_id,
+                    'name' => $op->product?->name,
+                    'quantity' => $op->quantity,
+                    'price' => (float) $op->price,
+                ]),
+            ],
+        ]);
     }
 }

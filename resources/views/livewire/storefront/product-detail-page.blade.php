@@ -9,21 +9,8 @@
     if (empty($images)) {
         $images = ['https://findy.uz/cdn/shop/files/sample.jpg'];
     }
-    $stockCount = (int) ($currentProduct['quantity'] ?? 12);
-    $isOutOfStock = ($currentProduct['status'] ?? '') === 'OUT_OF_STOCK' || ($currentProduct['status'] ?? '') === 'out_of_stock' || $stockCount <= 0;
-    $monthlyIntake = (int) ($currentProduct['monthly_batch'] ?? ($stockCount > 0 ? max(25, ceil(($stockCount * 2.3) / 5) * 5) : 30));
-    $soldCount = max(0, $monthlyIntake - $stockCount);
-    $remainingPercent = $isOutOfStock ? 0 : min(100, max(8, (int) round(($stockCount / max(1, $monthlyIntake)) * 100)));
-    $soldPercent = 100 - $remainingPercent;
-    $isLowStock = $stockCount > 0 && $remainingPercent <= 25;
-    $isMediumStock = $stockCount > 0 && $remainingPercent > 25 && $remainingPercent <= 50;
-    $stockBarColor = $isOutOfStock
-        ? 'bg-stone-300'
-        : ($isLowStock
-            ? 'bg-gradient-to-r from-rose-500 to-rose-600'
-            : ($isMediumStock
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600'
-                : 'bg-gradient-to-r from-emerald-500 to-emerald-600'));
+    $isOutOfStock = empty($currentProduct['inStock']);
+    $canIncrease = $qtyInCart > 0 && $store->canIncrease($prodKey);
     $price = (float) ($currentProduct['price'] ?? $currentProduct['selling_price'] ?? 35);
     $oldPrice = isset($currentProduct['oldPrice']) && $currentProduct['oldPrice'] > $price ? (float) $currentProduct['oldPrice'] : null;
     $discountPercent = $oldPrice ? (int) round((($oldPrice - $price) / $oldPrice) * 100) : null;
@@ -182,43 +169,13 @@
                     </div>
                 </div>
 
-                <!-- ПОЛОСКА НАЛИЧИЯ ПАРТИИ -->
-                <div class="p-5 bg-white rounded-3xl border border-[#EAE3DE] shadow-xs space-y-3">
-                    <div class="flex items-center justify-between text-xs sm:text-sm">
-                        <div class="flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full {{ $isOutOfStock ? 'bg-stone-400' : ($isLowStock ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500') }}"></span>
-                            <span class="font-bold text-[#1C1917]">
-                                @if($isOutOfStock)
-                                    {{ $store->t('product.batch_sold_out', 'Партия полностью распродана') }}
-                                @else
-                                    {{ $store->t('product.in_stock', 'В наличии') }}:
-                                    <span class="text-emerald-700 font-extrabold text-sm sm:text-base">
-                                        {{ $stockCount }} {{ $store->t('product.pcs', 'шт.') }}
-                                    </span>
-                                    <span class="text-[#8C827A] font-normal text-xs ml-1.5">
-                                        {{ $store->t('product.of_total', 'из') }} {{ $monthlyIntake }} {{ $store->t('product.pcs', 'шт.') }}
-                                    </span>
-                                @endif
-                            </span>
-                        </div>
-
-                        <span class="text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-stone-100 text-[#57534E]">
-                            {{ $isOutOfStock ? '0%' : $store->t('product.remaining', 'Осталось').' '.$remainingPercent.'%' }}
+                <!-- НАЛИЧИЕ: только «В наличии» / «Распродано» -->
+                <div class="p-5 bg-white rounded-3xl border border-[#EAE3DE] shadow-xs">
+                    <div class="flex items-center gap-2 text-xs sm:text-sm">
+                        <span class="w-2.5 h-2.5 rounded-full {{ $isOutOfStock ? 'bg-stone-400' : 'bg-emerald-500' }}"></span>
+                        <span class="font-bold text-[#1C1917]">
+                            {{ $isOutOfStock ? $store->t('product.out_of_stock', 'Распродано') : $store->t('product.in_stock', 'В наличии') }}
                         </span>
-                    </div>
-
-                    <div class="w-full h-2.5 bg-stone-100 rounded-full overflow-hidden p-0.5 border border-stone-200">
-                        <div
-                            class="h-full rounded-full transition-all duration-700 ease-out {{ $stockBarColor }}"
-                            style="width: {{ $isOutOfStock ? 0 : $remainingPercent }}%"
-                        ></div>
-                    </div>
-
-                    <div class="flex justify-between items-center text-[11px] text-[#8C827A] pt-0.5">
-                        <span>
-                            {{ $isOutOfStock ? $store->t('product.awaiting_stock', 'Ожидается новое поступление') : $store->t('product.sold_month', 'Продано за месяц').': '.$soldCount.' '.$store->t('product.pcs', 'шт.').' ('.$soldPercent.'%)' }}
-                        </span>
-                        <span class="text-[#1C1917] font-medium">{{ $store->t('product.month_batch', 'Партия этого месяца') }}</span>
                     </div>
                 </div>
 
@@ -284,8 +241,8 @@
                                     <button
                                         type="button"
                                         wire:click="updateCartQuantity('{{ addslashes($prodKey) }}', {{ $qtyInCart + 1 }})"
-                                        @disabled($qtyInCart >= $stockCount)
-                                        class="w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold transition {{ $qtyInCart >= $stockCount ? 'bg-white/5 text-stone-500 opacity-40 cursor-not-allowed' : 'bg-white/10 hover:bg-white/20 text-white cursor-pointer' }}"
+                                        @disabled(! $canIncrease)
+                                        class="w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold transition {{ ! $canIncrease ? 'bg-white/5 text-stone-500 opacity-40 cursor-not-allowed' : 'bg-white/10 hover:bg-white/20 text-white cursor-pointer' }}"
                                     >
                                         +
                                     </button>
@@ -301,10 +258,10 @@
                                 </a>
                             </div>
 
-                            @if($qtyInCart >= $stockCount)
+                            @if(! $canIncrease)
                                 <div class="text-[11px] text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200/60 flex items-center gap-1.5">
                                     <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
-                                    <span>{{ $store->t('product.max_stock_selected', 'Выбрано максимальное количество товара на складе') }} ({{ $stockCount }} {{ $store->t('product.pcs', 'шт.') }})</span>
+                                    <span>{{ __('No more units of this product are available.') }}</span>
                                 </div>
                             @endif
                         </div>
@@ -335,11 +292,11 @@
                 <!-- Краткие маркеры гарантий -->
                 <div class="pt-2 grid grid-cols-2 gap-3 text-xs text-[#57534E]">
                     <div class="flex items-center gap-2 p-3 bg-white/60 rounded-2xl border border-stone-200/60">
-                        <i class="fa-solid fa-shield-check text-emerald-600 text-sm"></i>
+                        <i class="fa-solid fa-shield-halved text-emerald-600 text-sm"></i>
                         <span class="font-medium text-[#1C1917]">{{ $store->t('product.usa_origin', '100% Оригинал из США') }}</span>
                     </div>
                     <div class="flex items-center gap-2 p-3 bg-white/60 rounded-2xl border border-stone-200/60">
-                        <i class="fa-solid fa-sparkles text-[#96674c] text-sm"></i>
+                        <i class="fa-solid fa-wand-magic-sparkles text-[#96674c] text-sm"></i>
                         <span class="font-medium text-[#1C1917]">{{ $store->t('product.batch_verified', 'Батч-код проверяется') }}</span>
                     </div>
                 </div>

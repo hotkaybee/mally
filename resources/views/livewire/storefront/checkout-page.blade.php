@@ -109,11 +109,6 @@
         <!-- Левая колонка: Форма данных -->
         <div class="lg:col-span-7 py-8 px-4 sm:px-8 border-r border-[#EAE3DE]">
             <!-- Статус авторизации -->
-            @php
-                $isPhoneVerified = $currentCustomer && !empty($currentCustomer->telegram) && !empty($currentCustomer->phone_number);
-                $rawCustEmail = $currentCustomer ? trim((string) ($currentCustomer->email ?? '')) : '';
-                $hasVerifiedEmail = $rawCustEmail !== '' && !str_ends_with(strtolower($rawCustEmail), '@telegram.mally.local');
-            @endphp
             @if($currentCustomer)
                 @php
                     $custName = trim(($currentCustomer->first_name ?? '').' '.($currentCustomer->last_name ?? '')) ?: $cht['customer_default'];
@@ -130,14 +125,7 @@
                                     {{ $custName }}
                                 </span>
                             </div>
-                            <div class="flex items-center gap-2 flex-wrap">
-                                @if(!empty($currentCustomer->phone_number))
-                                    <span class="text-[11px] text-[#78716C] font-mono">{{ $currentCustomer->phone_number }}</span>
-                                @endif
-                                @if($hasVerifiedEmail)
-                                    <span class="text-[11px] text-[#78716C]">{{ $rawCustEmail }}</span>
-                                @endif
-                            </div>
+                            <span class="text-[11px] text-[#78716C] font-mono">{{ $currentCustomer->phone_number }}</span>
                         </div>
                     </div>
                     <a href="{{ route('profile') }}" wire:navigate class="text-xs font-semibold text-emerald-800 hover:underline">
@@ -168,7 +156,7 @@
             @endif
 
             <form wire:submit.prevent="placeOrder" class="space-y-6 text-xs text-left max-w-xl">
-                <!-- Доставка и получатель: Имя, Фамилия, Email (Gmail), Телефон (+998), Адрес доставки и Комментарий -->
+                <!-- Доставка и получатель: только Имя, Фамилия, Телефон (+998), Адрес доставки и Комментарий -->
                 <div class="space-y-3 pt-2">
                     <h2 class="text-base font-semibold text-[#1C1917]">
                         {{ $cht['recipient_title'] }}
@@ -200,89 +188,24 @@
                         </div>
                     </div>
 
-                    <!-- Email (Gmail): закреплен если подтвержден, иначе доступен для заполнения -->
-                    <div>
-                        <div class="flex items-center justify-between mb-1">
-                            <label class="text-[11px] text-[#78716C] block">
-                                Email (Gmail)
-                            </label>
-                            @if($hasVerifiedEmail)
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                    <i class="fa-solid fa-lock text-[9px]"></i>
-                                    <span>{{ $locale === 'uz' ? 'Profildan' : ($locale === 'en' ? 'From profile' : 'Из профиля') }}</span>
-                                </span>
-                            @endif
-                        </div>
-                        @if($hasVerifiedEmail)
-                            <input
-                                type="email"
-                                disabled
-                                readonly
-                                value="{{ $rawCustEmail }}"
-                                class="w-full p-3 bg-emerald-50/40 border border-emerald-200/70 rounded-xl font-medium text-xs text-emerald-950 cursor-not-allowed select-none"
-                            />
-                        @else
-                            <input
-                                type="email"
-                                wire:model="email"
-                                placeholder="example@gmail.com"
-                                class="w-full p-3 bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl focus:outline-none focus:border-[#1C1917]"
-                            />
-                        @endif
-                    </div>
-
-                    <!-- Номер телефона: закреплен если подтвержден через Telegram, иначе доступен для редактирования -->
+                    <!-- Номер телефона из профиля (заблокирован для изменения) -->
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <label class="text-[11px] text-[#78716C] block">
                                 {{ $cht['phone_label'] }} *
                             </label>
-                            @if($isPhoneVerified)
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                    <i class="fa-solid fa-lock text-[9px]"></i>
-                                    <span>{{ $locale === 'uz' ? 'Profildan (Telegram)' : ($locale === 'en' ? 'From profile (Telegram)' : 'Из профиля (Telegram)') }}</span>
-                                </span>
-                            @endif
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                <i class="fa-solid fa-lock text-[9px]"></i>
+                                <span>{{ $locale === 'uz' ? 'Profildan' : ($locale === 'en' ? 'From profile' : 'Из профиля') }}</span>
+                            </span>
                         </div>
-                        @if($isPhoneVerified)
-                            <input
-                                type="tel"
-                                disabled
-                                readonly
-                                value="{{ $currentCustomer?->phone_number ?: $phoneBilling }}"
-                                class="w-full p-3 bg-emerald-50/40 border border-emerald-200/70 rounded-xl font-mono font-bold text-sm text-emerald-950 cursor-not-allowed select-none"
-                            />
-                        @else
-                            <div
-                                x-data="{
-                                    formatUzPhone(e) {
-                                        let digits = (e.target.value || '').replace(/\D/g, '');
-                                        if (digits.startsWith('998')) {
-                                            digits = digits.slice(3);
-                                        }
-                                        digits = digits.slice(0, 9);
-                                        let formatted = '+998';
-                                        if (digits.length > 0) formatted += ' ' + digits.slice(0, 2);
-                                        if (digits.length > 2) formatted += ' ' + digits.slice(2, 5);
-                                        if (digits.length > 5) formatted += ' ' + digits.slice(5, 7);
-                                        if (digits.length > 7) formatted += ' ' + digits.slice(7, 9);
-                                        e.target.value = formatted;
-                                        $wire.set('phoneBilling', formatted, false);
-                                    }
-                                }"
-                            >
-                                <input
-                                    type="tel"
-                                    wire:model="phoneBilling"
-                                    maxlength="17"
-                                    required
-                                    placeholder="+998 90 123 45 67"
-                                    @input="formatUzPhone($event)"
-                                    @focus="if (!$event.target.value || !$event.target.value.startsWith('+998')) { $event.target.value = '+998 '; $wire.set('phoneBilling', '+998 ', false); }"
-                                    class="w-full p-3 bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl font-mono font-medium text-sm focus:outline-none focus:border-[#1C1917]"
-                                />
-                            </div>
-                        @endif
+                        <input
+                            type="tel"
+                            disabled
+                            readonly
+                            value="{{ $currentCustomer?->phone_number ?: $phoneBilling }}"
+                            class="w-full p-3 bg-emerald-50/40 border border-emerald-200/70 rounded-xl font-mono font-bold text-sm text-emerald-950 cursor-not-allowed select-none"
+                        />
                     </div>
 
                     <div>

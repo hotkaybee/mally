@@ -91,5 +91,7 @@
     "unit_cost": "Unit cost",
     "profit": "Profit",
     "Maintained from receipts": "Maintained from receipts",
-    "From the latest receipt": "From the latest receipt"
+    "From the latest receipt": "From the latest receipt",
+    "Message is too long.": "Message is too long.",
+    "Too many messages. Please try again later.": "Too many messages. Please try again later."
 }

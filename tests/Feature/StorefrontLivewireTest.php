@@ -17,6 +17,7 @@ use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\ExchangeRateService;
 use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -31,11 +32,12 @@ class StorefrontLivewireTest extends TestCase
     {
         parent::setUp();
 
-        Cache::put('cbu_usd_rate_data_v3', [
+        Cache::put(ExchangeRateService::CACHE_KEY, [
             'rate' => 12199.57,
-            'diff' => 0.0,
             'date' => '11.10.2026',
-            'updated_at' => now()->format('H:i'),
+            'source' => 'cbu.uz',
+            'isLive' => true,
+            'updatedAt' => now()->toIso8601String(),
         ], 3600);
     }
 

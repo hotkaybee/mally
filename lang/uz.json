@@ -91,5 +91,7 @@
     "unit_cost": "Tannarx",
     "profit": "Foyda",
     "Maintained from receipts": "Kelib tushishlar asosida hisoblanadi",
-    "From the latest receipt": "Oxirgi kelib tushishdan"
+    "From the latest receipt": "Oxirgi kelib tushishdan",
+    "Message is too long.": "Xabar juda uzun.",
+    "Too many messages. Please try again later.": "Xabarlar juda ko'p. Keyinroq urinib ko'ring."
 }

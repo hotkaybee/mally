@@ -2,10 +2,10 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Jobs\SendTelegramMessage;
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
 use App\Models\Customer;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -106,40 +106,34 @@ class ContactPage extends Component
             return;
         }
 
+        if (mb_strlen($firstName) > 100 || mb_strlen($lastName) > 100 || mb_strlen($msg) > 2000) {
+            $this->dispatch('toast', message: __('Message is too long.'), type: 'error');
+
+            return;
+        }
+
+        $rateKey = 'contact-form:'.request()->ip();
+        if (RateLimiter::tooManyAttempts($rateKey, 3)) {
+            $this->dispatch('toast', message: __('Too many messages. Please try again later.'), type: 'error');
+
+            return;
+        }
+        RateLimiter::hit($rateKey, 600);
+
         $this->phone = $normalizedPhone;
 
-        $telegramText = "📩 *Новое сообщение из контактной формы Mally*\n\n"
-            ."👤 *Имя и Фамилия:* {$firstName} {$lastName}\n"
-            ."📱 *Телефон:* {$normalizedPhone}\n"
-            .'🕒 *Дата:* '.now()->timezone('Asia/Tashkent')->format('d.m.Y H:i')."\n\n"
-            ."💬 *Сообщение:*\n{$msg}";
+        $telegramText = "📩 Новое сообщение из контактной формы Mally\n\n"
+            ."👤 Имя и фамилия: {$firstName} {$lastName}\n"
+            ."📱 Телефон: {$normalizedPhone}\n"
+            .'🕒 Дата: '.now()->timezone('Asia/Tashkent')->format('d.m.Y H:i')."\n\n"
+            ."💬 Сообщение:\n{$msg}";
 
         $this->lastTelegramText = "Здравствуйте! Меня зовут {$firstName} {$lastName} ({$normalizedPhone}).\nСообщение: {$msg}";
 
-        $botToken = trim((string) config('services.telegram.bot_token'));
-        $chatIdsRaw = (string) config('services.telegram.admin_chat_ids');
-        $chatIds = array_values(array_filter(array_map('trim', explode(',', $chatIdsRaw))));
-
-        if ($botToken !== '' && count($chatIds) > 0) {
-            foreach ($chatIds as $chatId) {
-                try {
-                    Http::timeout(4)->withoutVerifying()->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                        'chat_id' => $chatId,
-                        'text' => $telegramText,
-                        'parse_mode' => 'Markdown',
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::warning('Telegram contact form send failed: '.$e->getMessage());
-                }
-            }
+        $chatIds = array_filter(array_map('trim', explode(',', (string) config('services.telegram.admin_chat_ids'))));
+        foreach ($chatIds as $chatId) {
+            SendTelegramMessage::dispatch($chatId, $telegramText);
         }
-
-        Log::info('Contact form submitted', [
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'phone' => $normalizedPhone,
-            'message' => $msg,
-        ]);
 
         $this->submitted = true;
         $this->message = '';

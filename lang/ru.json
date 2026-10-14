@@ -91,5 +91,7 @@
     "unit_cost": "Себестоимость",
     "profit": "Прибыль",
     "Maintained from receipts": "Рассчитывается по поступлениям",
-    "From the latest receipt": "Из последнего поступления"
+    "From the latest receipt": "Из последнего поступления",
+    "Message is too long.": "Сообщение слишком длинное.",
+    "Too many messages. Please try again later.": "Слишком много сообщений. Попробуйте позже."
 }

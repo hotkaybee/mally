@@ -292,11 +292,11 @@
                 <!-- Краткие маркеры гарантий -->
                 <div class="pt-2 grid grid-cols-2 gap-3 text-xs text-[#57534E]">
                     <div class="flex items-center gap-2 p-3 bg-white/60 rounded-2xl border border-stone-200/60">
-                        <i class="fa-solid fa-shield-check text-emerald-600 text-sm"></i>
+                        <i class="fa-solid fa-shield-halved text-emerald-600 text-sm"></i>
                         <span class="font-medium text-[#1C1917]">{{ $store->t('product.usa_origin', '100% Оригинал из США') }}</span>
                     </div>
                     <div class="flex items-center gap-2 p-3 bg-white/60 rounded-2xl border border-stone-200/60">
-                        <i class="fa-solid fa-sparkles text-[#96674c] text-sm"></i>
+                        <i class="fa-solid fa-wand-magic-sparkles text-[#96674c] text-sm"></i>
                         <span class="font-medium text-[#1C1917]">{{ $store->t('product.batch_verified', 'Батч-код проверяется') }}</span>
                     </div>
                 </div>

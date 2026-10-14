@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\OrderProduct;
 use App\Models\ProductReceipt;
 use App\Services\InventoryService;
+use Illuminate\Support\Facades\DB;
 
 class OrderProductObserver
 {
@@ -24,6 +25,15 @@ class OrderProductObserver
         }
     }
 
+    /**
+     * Refuse an oversold line before its row is inserted, so a failed save
+     * outside a transaction leaves no line without stock behind.
+     */
+    public function creating(OrderProduct $line): void
+    {
+        $this->inventory->ensureAvailable($line->product_receipt_id, (int) $line->quantity);
+    }
+
     public function created(OrderProduct $line): void
     {
         $this->inventory->consume($line);
@@ -31,16 +41,20 @@ class OrderProductObserver
 
     /**
      * Return the units the line previously held, then draw the new amounts —
-     * covers quantity changes and switching to a different receipt.
+     * covers quantity changes and switching to a different receipt. Both
+     * steps share one transaction: if the new amount can't be drawn, the
+     * returned units are rolled back too.
      */
     public function updating(OrderProduct $line): void
     {
-        $this->inventory->release(
-            $line->getOriginal('product_receipt_id'),
-            (int) $line->getOriginal('quantity'),
-        );
+        DB::transaction(function () use ($line) {
+            $this->inventory->release(
+                $line->getOriginal('product_receipt_id'),
+                (int) $line->getOriginal('quantity'),
+            );
 
-        $this->inventory->consume($line);
+            $this->inventory->consume($line);
+        });
     }
 
     public function deleted(OrderProduct $line): void

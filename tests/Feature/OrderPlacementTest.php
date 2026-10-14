@@ -114,6 +114,18 @@ class OrderPlacementTest extends TestCase
         $this->assertSame([], app(StorefrontService::class)->getCart());
     }
 
+    public function test_correcting_the_amount_keeps_the_som_total_at_the_order_rate(): void
+    {
+        $product = $this->product(57.15);
+        $order = $this->place($this->customer(), [$product->id => 1]);
+
+        // Today's rate changes; the order keeps its own.
+        Cache::put(ExchangeRateService::CACHE_KEY, ['rate' => 13000.0, 'isLive' => true], 3600);
+        $order->update(['amount' => 50.00]);
+
+        $this->assertSame((int) round(50.00 * self::RATE), (int) $order->fresh()->amount_uzs);
+    }
+
     public function test_checkout_rejects_unknown_products_and_creates_nothing(): void
     {
         $customer = $this->customer();

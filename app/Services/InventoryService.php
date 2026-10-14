@@ -37,6 +37,25 @@ class InventoryService
     }
 
     /**
+     * Throw when the receipt can't cover the quantity. consume() checks
+     * again under a row lock; this only stops the line from being saved.
+     */
+    public function ensureAvailable(?int $receiptId, int $quantity): void
+    {
+        if (! $receiptId || $quantity <= 0) {
+            return;
+        }
+
+        $remaining = ProductReceipt::whereKey($receiptId)->value('quantity_remaining');
+
+        if ($remaining !== null && (int) $remaining < $quantity) {
+            throw new RuntimeException(
+                "Insufficient stock in receipt #{$receiptId}: {$remaining} left, {$quantity} requested."
+            );
+        }
+    }
+
+    /**
      * Draw the line's quantity out of its chosen receipt. Throws when the
      * receipt does not have enough units left. Caches are refreshed via
      * receipt events.

@@ -105,6 +105,44 @@ class InventoryTest extends TestCase
         $this->assertSame(1, $product->fresh()->quantity);
     }
 
+    public function test_failed_line_increase_does_not_create_phantom_stock(): void
+    {
+        [$product, $receipt] = $this->productWithReceipt(qty: 5, purchase: 30, delivery: 5, selling: 70);
+        $line = $this->makeOrder()->orderProducts()->create([
+            'product_id' => $product->id, 'product_receipt_id' => $receipt->id,
+            'quantity' => 3, 'price' => 70, 'total_price' => 210,
+        ]);
+
+        // No outer transaction, like a plain admin save.
+        try {
+            $line->update(['quantity' => 6]);
+            $this->fail('Expected a RuntimeException when overselling.');
+        } catch (RuntimeException) {
+        }
+
+        $this->assertSame(3, $line->fresh()->quantity);
+        $this->assertSame(2, $receipt->fresh()->quantity_remaining);
+        $this->assertSame(2, $product->fresh()->quantity);
+    }
+
+    public function test_overselling_line_is_not_saved_without_an_outer_transaction(): void
+    {
+        [$product, $receipt] = $this->productWithReceipt(qty: 3, purchase: 30, delivery: 5, selling: 70);
+        $order = $this->makeOrder();
+
+        try {
+            $order->orderProducts()->create([
+                'product_id' => $product->id, 'product_receipt_id' => $receipt->id,
+                'quantity' => 5, 'price' => 70, 'total_price' => 350,
+            ]);
+            $this->fail('Expected a RuntimeException when overselling.');
+        } catch (RuntimeException) {
+        }
+
+        $this->assertSame(0, $order->orderProducts()->count());
+        $this->assertSame(3, $receipt->fresh()->quantity_remaining);
+    }
+
     public function test_deleting_an_order_restores_stock(): void
     {
         [$product, $receipt] = $this->productWithReceipt(qty: 5, purchase: 30, delivery: 5, selling: 70);

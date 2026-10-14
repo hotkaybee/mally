@@ -13,6 +13,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductReceipt;
 use App\Models\Review;
+use App\Models\User;
 use App\Services\ExchangeRateService;
 use App\Services\OrderService;
 use App\Services\StorefrontService;
@@ -283,6 +284,29 @@ class OrderPlacementTest extends TestCase
         $this->assertSame('USD', $response->json('currency'));
         $this->assertEquals(57.15, $response->json('totalAmount'));
         $this->assertSame('telegram', Customer::where('phone_number', '+998 93 555 44 33')->sole()->source);
+    }
+
+    public function test_api_order_is_never_attached_to_a_storefront_account_by_phone(): void
+    {
+        config(['services.store.orders_api_token' => 'secret-token']);
+        $product = $this->product(57.15);
+        // A shopper account that typed (but never verified) this phone.
+        $user = User::factory()->create(['phone' => '+998 93 555 44 33']);
+        $account = $this->customer(['user_id' => $user->id, 'phone_number' => '+998 93 555 44 33']);
+
+        $this->postJson('/api/orders', [
+            'customerName' => 'Ali Valiev',
+            'customerPhone' => '+998 93 555 44 33',
+            'address' => 'Real owner street 1',
+            'items' => [['id' => $product->id, 'quantity' => 1]],
+        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
+
+        $order = Order::sole();
+        $this->assertNotSame($account->id, $order->customer_id);
+        $this->assertNull($order->customer->user_id);
+
+        session(['mally_customer_id' => $account->id]);
+        $this->assertCount(0, Livewire::test(ProfilePage::class)->viewData('orders'));
     }
 
     public function test_api_rejects_unknown_products_without_creating_them(): void

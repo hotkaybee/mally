@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Storefront\CartPage;
 use App\Livewire\Storefront\CatalogPage;
+use App\Livewire\Storefront\CheckoutPage;
 use App\Livewire\Storefront\ContactPage;
 use App\Livewire\Storefront\FavoritesPage;
 use App\Livewire\Storefront\HomePage;
@@ -12,11 +13,13 @@ use App\Livewire\Storefront\ProfilePage;
 use App\Livewire\Storefront\ReturnsPage;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Services\ExchangeRateService;
 use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -180,6 +183,31 @@ class StorefrontLivewireTest extends TestCase
 
         $this->assertTrue($service->findProduct('ML-HG-BRUSH')['inStock']);
         $this->assertTrue($service->addToCart('ML-HG-BRUSH')['success']);
+    }
+
+    public function test_customer_details_cannot_be_loaded_by_id_from_the_browser(): void
+    {
+        $product = $this->product();
+        $victim = Customer::create([
+            'first_name' => 'Victim', 'last_name' => 'Person', 'email' => 'victim@example.com',
+            'phone_number' => '+998 90 765 43 21', 'city' => 'Бухара', 'address' => 'Secret street 7', 'source' => 'website',
+        ]);
+        session(['mally_cart' => [['id' => (string) $product->id, 'title' => $product->name, 'price' => 57.15, 'quantity' => 1]]]);
+
+        foreach ([ProfilePage::class, CheckoutPage::class, ContactPage::class] as $class) {
+            $component = Livewire::test($class);
+
+            try {
+                $component->call('onCustomerAuthenticated', $victim->id);
+            } catch (MethodNotFoundException) {
+                // expected: the hook is not callable from the browser
+            }
+
+            $snapshot = json_encode($component->snapshot, JSON_UNESCAPED_UNICODE);
+            $this->assertStringNotContainsString('Secret street 7', $snapshot, $class);
+            $this->assertStringNotContainsString('765 43 21', $snapshot, $class);
+            $this->assertStringNotContainsString('Victim', $snapshot, $class);
+        }
     }
 
     public function test_currency_switch_only_changes_display(): void

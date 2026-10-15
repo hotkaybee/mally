@@ -313,7 +313,7 @@ class TelegramAuthTest extends TestCase
     public function test_email_registration_rejects_a_phone_that_belongs_to_another_account(): void
     {
         $this->emailUser(['telegram_id' => self::TG_ID]);
-        session(['mally_verified_register_email' => 'new@gmail.com']);
+        session(['mally_verified_register_email' => 'new@gmail.com', 'mally_verified_register_email_at' => time()]);
 
         Livewire::test(HomePage::class)
             ->set('authName', 'Someone')

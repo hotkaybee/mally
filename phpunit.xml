@@ -33,5 +33,7 @@
         <!-- Tests set Telegram config themselves; never pick up the real bots from .env -->
         <env name="TELEGRAM_BOT_TOKEN" value=""/>
         <env name="TELEGRAM_ADMIN_CHAT_IDS" value=""/>
+        <env name="STORE_PROMO_CODE" value="MALLY10"/>
+        <env name="STORE_PROMO_PERCENT" value="10"/>
     </php>
 </phpunit>

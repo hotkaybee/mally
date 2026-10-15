@@ -162,5 +162,6 @@
     "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.": "Your number is confirmed by Telegram. No password needed: you will always sign in through the bot.",
     "Please wait, the bot will reply in a few seconds…": "Please wait, the bot will reply in a few seconds…",
     "Payments received": "Payments received",
-    "Calculated from the order lines": "Calculated from the order lines"
+    "Calculated from the order lines": "Calculated from the order lines",
+    "You already have unpaid orders. Please pay for them or contact us before placing a new one.": "You already have unpaid orders. Please pay for them or contact us before placing a new one."
 }

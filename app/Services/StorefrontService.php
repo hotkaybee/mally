@@ -591,7 +591,23 @@ class StorefrontService
             return $this->cachedCustomer;
         }
 
-        $this->cachedCustomer = Customer::find($customerId);
+        $customer = Customer::with('user')->find($customerId);
+
+        // A password change (reset) signs out the account's other sessions:
+        // the session remembers a fingerprint of the password it signed in with.
+        if ($customer?->user) {
+            $fingerprint = $this->passwordFingerprint($customer->user);
+            $known = session('mally_auth_fingerprint');
+
+            if ($known === null) {
+                session(['mally_auth_fingerprint' => $fingerprint]); // signed in before fingerprints existed
+            } elseif (! hash_equals((string) $known, $fingerprint)) {
+                session()->forget(['mally_customer_id', 'mally_user_id', 'mally_auth_fingerprint']);
+                $customer = null;
+            }
+        }
+
+        $this->cachedCustomer = $customer;
         $this->customerResolved = true;
 
         return $this->cachedCustomer;
@@ -623,9 +639,15 @@ class StorefrontService
         session([
             'mally_customer_id' => $customer->id,
             'mally_user_id' => $customer->user_id,
+            'mally_auth_fingerprint' => $customer->user ? $this->passwordFingerprint($customer->user) : null,
         ]);
         $this->cachedCustomer = $customer;
         $this->customerResolved = true;
+    }
+
+    private function passwordFingerprint(User $user): string
+    {
+        return hash_hmac('sha256', (string) $user->password, (string) config('app.key'));
     }
 
     public function logoutCustomer(): void
@@ -743,7 +765,7 @@ class StorefrontService
         $category = $p->category;
         $catNameRu = $category?->name_ru ?: ($category?->name ?: 'Косметика');
         $price = round((float) $p->selling_price, 2);
-        $img = $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset($p->image)) : 'https://findy.uz/cdn/shop/files/sample.jpg';
+        $img = $p->imageUrl();
         $inStock = $this->isSellable($p);
 
         return [
@@ -765,7 +787,8 @@ class StorefrontService
             'isNew' => $p->created_at && $p->created_at->gt(now()->subDays(30)),
             'image' => $img,
             'images' => [$img],
-            'description' => $p->description ?: ($p->comment ?: 'Премиальная оригинальная продукция из США.'),
+            // `comment` is the admin's internal note and never reaches customers.
+            'description' => $p->description ?: 'Премиальная оригинальная продукция из США.',
             'features' => ['100% Оригинал из США', 'Сертифицированная косметика'],
             'howToUse' => 'Наносите в соответствии с рекомендациями производителя.',
             'reviews' => $withReviews ? $this->getDatabaseReviewsForProduct($p->id) : [],

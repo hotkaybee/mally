@@ -67,10 +67,17 @@ cart's + button and quantity changes are checked on the server against live
 receipts (capped at 50), asking for more keeps the current quantity, and
 availability is checked again at checkout and inside the order transaction.
 
+In the admin, saves run in one transaction and the order total is always
+recomputed from its lines (line total = price × quantity). Delivered orders,
+receipts with sales and sold products can't be deleted; a receipt's quantity
+can't drop below what was sold. One account may hold at most 3 unpaid orders
+(5 orders/hour), so nobody can reserve the whole stock.
+
 **Accounts.** A shopper is a `users` row (`is_admin = false`) owning one
 `customers` row. Sign-in: email or phone + password (email confirmed by a
 code), or Telegram. Accounts are never merged; an existing phone/email blocks
-registration. Failed logins are limited per account+IP and per IP.
+registration. Failed logins are limited per account+IP, per IP and per account. A password
+reset signs out the account's other sessions.
 
 **Telegram login** (`TelegramAuthService`): the site creates a one-time
 request bound to the browser session and opens `t.me/<bot>?start=login_<token>`
@@ -109,10 +116,14 @@ order and product, and wait for moderation in the admin.
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_IDS`, `TELEGRAM_ADMIN_USERNAME` | Admin bot (new orders, order/SKU lookup, contact form messages, shop contact) |
 | `ORDERS_API_TOKEN` | Shared secret of the ordering bot; empty = `POST /api/orders` closed |
 | `STORE_CARD_NUMBER`, `STORE_CARD_HOLDER` | Payment details on the receipt |
-| `STORE_PROMO_CODE`, `STORE_PROMO_PERCENT` | The single promo code |
+| `STORE_PROMO_CODE`, `STORE_PROMO_PERCENT` | The single promo code (empty = none) |
+| `TRUSTED_PROXIES` | Reverse proxies allowed to set `X-Forwarded-*` (default: localhost + Docker gateway) |
 | `MAIL_*` | SMTP for email codes |
 
-Contact-form messages go through the queue: run a worker in production.
+Contact-form messages and admin-bot order alerts go through the queue: run a
+worker in production. Product photos uploaded in the admin go to the `public`
+disk (`php artisan storage:link`). Production setup, backups and HTTPS:
+`DEPLOYMENT.md`.
 Never commit `.env`, local databases or diagnostic dumps.
 
 ## Telegram bot: manual check

@@ -29,9 +29,15 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->unique()->after('id')->constrained()->nullOnDelete();
         });
 
+        // A user whose email is also a shop customer's is a shopper, not an
+        // admin, even without a phone. Check the result after migrating:
+        // SELECT email FROM users WHERE is_admin = 1.
         DB::table('users')
             ->whereNull('phone')
             ->where('email', 'not like', '%@telegram.mally.local')
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))
+                ->from('customers')
+                ->whereRaw('LOWER(customers.email) = LOWER(users.email)'))
             ->update(['is_admin' => true]);
 
         // Link existing shopper accounts to the customer row with exactly the

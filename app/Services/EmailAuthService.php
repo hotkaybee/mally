@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use InvalidArgumentException;
+use RuntimeException;
 use Throwable;
 
 class EmailAuthService
@@ -35,6 +36,9 @@ class EmailAuthService
     public const MAX_LOGIN_FAILURES_PER_IP = 30;
 
     public const LOGIN_IP_DECAY_SECONDS = 900;
+
+    /** Failed logins for one account from any IPs (distributed guessing). */
+    public const MAX_LOGIN_FAILURES_PER_ACCOUNT = 10;
 
     public const GENERIC_LOGIN_ERROR = 'Неверный email или пароль.';
 
@@ -110,7 +114,7 @@ class EmailAuthService
             }
 
             $loginKey = $this->loginRateKey($normalizedPhone, $ipAddress);
-            if ($this->loginThrottled($loginKey, $ipAddress)) {
+            if ($this->loginThrottled($loginKey, $ipAddress, $normalizedPhone)) {
                 return [
                     'success' => false,
                     'error' => 'rate_limit',
@@ -121,7 +125,7 @@ class EmailAuthService
 
             $user = User::wherePhone($normalizedPhone)->first();
             if (! $user) {
-                $this->recordFailedLogin($loginKey, $ipAddress);
+                $this->recordFailedLogin($loginKey, $ipAddress, $normalizedPhone);
 
                 return [
                     'success' => false,
@@ -132,7 +136,7 @@ class EmailAuthService
             }
 
             if (! Hash::check($password, (string) $user->password)) {
-                $this->recordFailedLogin($loginKey, $ipAddress);
+                $this->recordFailedLogin($loginKey, $ipAddress, $normalizedPhone);
 
                 return [
                     'success' => false,
@@ -173,7 +177,7 @@ class EmailAuthService
         }
 
         $loginKey = $this->loginRateKey($email, $ipAddress);
-        if ($this->loginThrottled($loginKey, $ipAddress)) {
+        if ($this->loginThrottled($loginKey, $ipAddress, $email)) {
             return [
                 'success' => false,
                 'error' => 'rate_limit',
@@ -184,7 +188,7 @@ class EmailAuthService
         $user = $this->findUserByEmail($email);
 
         if (! $user) {
-            $this->recordFailedLogin($loginKey, $ipAddress);
+            $this->recordFailedLogin($loginKey, $ipAddress, $email);
 
             return [
                 'success' => false,
@@ -194,7 +198,7 @@ class EmailAuthService
         }
 
         if (! Hash::check($password, (string) $user->password)) {
-            $this->recordFailedLogin($loginKey, $ipAddress);
+            $this->recordFailedLogin($loginKey, $ipAddress, $email);
 
             return [
                 'success' => false,
@@ -322,8 +326,14 @@ class EmailAuthService
         ]);
 
         try {
+            // The "log" mailer would write the code into laravel.log.
+            if (app()->isProduction() && in_array(config('mail.default'), ['log', 'array'], true)) {
+                throw new RuntimeException('MAIL_MAILER is not set up for production; login codes are not sent.');
+            }
+
             Mail::to($email)->send(new AuthCodeMail($plainCode, $purpose));
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            report($e);
             $authCode->delete();
 
             return [
@@ -499,6 +509,8 @@ class EmailAuthService
                 ];
             }
 
+            // A new password hash also signs out every other session of this
+            // account (StorefrontService checks the fingerprint).
             $user->update([
                 'password' => Hash::make($newPlainPassword),
             ]);
@@ -555,16 +567,24 @@ class EmailAuthService
         return 'auth_login_failures_ip:'.sha1(trim($ip));
     }
 
-    private function loginThrottled(string $loginKey, string $ip): bool
+    /** Failed logins for one email/phone from all IPs together. */
+    public function loginAccountRateKey(string $identifier): string
     {
-        return RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)
-            || RateLimiter::tooManyAttempts($this->loginIpRateKey($ip), self::MAX_LOGIN_FAILURES_PER_IP);
+        return 'auth_login_failures_account:'.sha1(mb_strtolower(trim($identifier)));
     }
 
-    private function recordFailedLogin(string $loginKey, string $ip): void
+    private function loginThrottled(string $loginKey, string $ip, string $identifier): bool
+    {
+        return RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)
+            || RateLimiter::tooManyAttempts($this->loginIpRateKey($ip), self::MAX_LOGIN_FAILURES_PER_IP)
+            || RateLimiter::tooManyAttempts($this->loginAccountRateKey($identifier), self::MAX_LOGIN_FAILURES_PER_ACCOUNT);
+    }
+
+    private function recordFailedLogin(string $loginKey, string $ip, string $identifier): void
     {
         RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
         RateLimiter::hit($this->loginIpRateKey($ip), self::LOGIN_IP_DECAY_SECONDS);
+        RateLimiter::hit($this->loginAccountRateKey($identifier), self::LOGIN_IP_DECAY_SECONDS);
     }
 
     /**

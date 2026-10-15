@@ -406,7 +406,7 @@ trait InteractsWithStore
             return;
         }
 
-        session(['mally_verified_register_email' => $normalizedEmail]);
+        session(['mally_verified_register_email' => $normalizedEmail, 'mally_verified_register_email_at' => time()]);
         $this->authCode = '';
         $this->authPassword = '';
         $this->authPasswordConfirmation = '';
@@ -423,7 +423,7 @@ trait InteractsWithStore
     {
         $this->clearAuthFeedback();
 
-        $verifiedEmail = (string) session('mally_verified_register_email', '');
+        $verifiedEmail = $this->recentlyVerifiedEmail('mally_verified_register_email');
         if (! $this->emailAuth()->isValidEmail($verifiedEmail)) {
             $this->authStep = 'register-email';
             $this->failAuth('authEmail', 'Сначала подтвердите ваш email одноразовым кодом из письма.');
@@ -602,7 +602,7 @@ trait InteractsWithStore
             return;
         }
 
-        session(['mally_verified_reset_email' => $normalizedEmail]);
+        session(['mally_verified_reset_email' => $normalizedEmail, 'mally_verified_reset_email_at' => time()]);
         $this->authCode = '';
         $this->authPassword = '';
         $this->authPasswordConfirmation = '';
@@ -617,7 +617,7 @@ trait InteractsWithStore
     {
         $this->clearAuthFeedback();
 
-        $verifiedEmail = (string) session('mally_verified_reset_email', '');
+        $verifiedEmail = $this->recentlyVerifiedEmail('mally_verified_reset_email');
         if (! $this->emailAuth()->isValidEmail($verifiedEmail)) {
             $this->authStep = 'reset-email';
             $this->failAuth('authEmail', 'Сначала подтвердите код восстановления пароля.');
@@ -869,6 +869,21 @@ trait InteractsWithStore
      * Common end of every successful login: new session id, customer in the
      * session, modal closed, optional safe redirect.
      */
+    /**
+     * The email confirmed by a code in this session, if confirmed in the last
+     * 15 minutes — an old confirmation must not reset a password days later.
+     */
+    protected function recentlyVerifiedEmail(string $key): string
+    {
+        if (time() - (int) session($key.'_at', 0) > 900) {
+            session()->forget([$key, $key.'_at']);
+
+            return '';
+        }
+
+        return (string) session($key, '');
+    }
+
     protected function finishLogin(User $user, ?string $toast = null): Customer
     {
         $this->telegramAuth()->forgetSessionRequest();

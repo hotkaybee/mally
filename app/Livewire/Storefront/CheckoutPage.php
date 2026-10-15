@@ -5,9 +5,11 @@ namespace App\Livewire\Storefront;
 use App\Exceptions\CheckoutException;
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
 use App\Models\Customer;
+use App\Models\Order;
 use App\Services\OrderService;
 use App\Services\StorefrontService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -17,6 +19,16 @@ use Livewire\Component;
 class CheckoutPage extends Component
 {
     use InteractsWithStore;
+
+    /** Unpaid orders hold stock, so one account can't reserve the whole shop. */
+    public const MAX_OPEN_UNPAID_ORDERS = 3;
+
+    public const MAX_ORDERS_PER_HOUR = 5;
+
+    /** Generous: mobile carriers in UZ put many people behind one IP. */
+    public const MAX_ORDERS_PER_HOUR_PER_IP = 30;
+
+    public const MAX_PROMO_ATTEMPTS = 10;
 
     public string $firstName = '';
 
@@ -92,9 +104,21 @@ class CheckoutPage extends Component
             return;
         }
 
+        // Guessing promo codes one request at a time.
+        $promoKey = 'checkout-promo:'.request()->ip();
+        if (RateLimiter::tooManyAttempts($promoKey, self::MAX_PROMO_ATTEMPTS)) {
+            $this->dispatch('toast', message: __('Too many attempts. Please try again later.'), type: 'error');
+
+            return;
+        }
+
         $service = app(StorefrontService::class);
         $cartDetails = $service->getCartItemsWithProducts();
         $res = $service->applyPromoCode($this->promoCode, $cartDetails['subtotal_usd']);
+
+        if (! ($res['success'] ?? false)) {
+            RateLimiter::hit($promoKey, 600);
+        }
 
         if ($res['success'] ?? false) {
             $this->appliedPromo = $res['code'];
@@ -164,6 +188,28 @@ class CheckoutPage extends Component
             return;
         }
 
+        $openUnpaid = Order::where('customer_id', $customer->id)
+            ->where('status', 'processing')
+            ->where('payment_status', 'PENDING')
+            ->count();
+        if ($openUnpaid >= self::MAX_OPEN_UNPAID_ORDERS) {
+            $this->dispatch('toast', message: __('You already have unpaid orders. Please pay for them or contact us before placing a new one.'), type: 'error');
+
+            return;
+        }
+
+        $rateKeys = [
+            'checkout-orders:customer:'.$customer->id => self::MAX_ORDERS_PER_HOUR,
+            'checkout-orders:ip:'.request()->ip() => self::MAX_ORDERS_PER_HOUR_PER_IP,
+        ];
+        foreach ($rateKeys as $rateKey => $limit) {
+            if (RateLimiter::tooManyAttempts($rateKey, $limit)) {
+                $this->dispatch('toast', message: __('Too many attempts. Please try again later.'), type: 'error');
+
+                return;
+            }
+        }
+
         if ($this->checkoutToken === '' || ! Cache::add('checkout:'.$this->checkoutToken, true, now()->addDay())) {
             return; // this checkout page was already submitted
         }
@@ -195,6 +241,10 @@ class CheckoutPage extends Component
             $this->dispatch('toast', message: __('We could not place your order. Please try again or contact us.'), type: 'error');
 
             return;
+        }
+
+        foreach (array_keys($rateKeys) as $rateKey) {
+            RateLimiter::hit($rateKey, 3600);
         }
 
         $customer->update([

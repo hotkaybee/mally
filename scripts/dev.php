@@ -14,7 +14,9 @@ $windows = PHP_OS_FAMILY === 'Windows';
 
 $processes = [
     'server' => $windows ? 'php artisan serve --no-reload' : 'php artisan serve',
-    'queue' => 'php artisan queue:listen --tries=1',
+    // --timeout=0 as in the Laravel skeleton: a slow job (or a busy machine)
+    // must not hit the 60 s default and take every other process down.
+    'queue' => 'php artisan queue:listen --tries=1 --timeout=0',
     'logs' => $windows ? null : 'php artisan pail --timeout=0',
     'vite' => 'npm run dev',
     // Answers the Telegram login bot at once (idles when a webhook is set).

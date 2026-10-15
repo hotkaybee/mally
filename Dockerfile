@@ -12,7 +12,7 @@ RUN composer install \
     --optimize-autoloader \
     --no-interaction \
     --no-scripts \
-    --ignore-platform-reqs
+    --ignore-platform-req='ext-*'
 
 
 # Stage 2: Frontend assets (Vite + Tailwind 4)
@@ -29,7 +29,8 @@ RUN npm run build
 
 
 # Stage 3: Production image
-FROM php:8.2-fpm-alpine
+# Same PHP as development and tests (composer.lock needs >= 8.3).
+FROM php:8.4-fpm-alpine
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -54,6 +55,7 @@ RUN apk add --no-cache \
         intl \
         opcache \
         bcmath \
+        pcntl \
     && rm -rf /var/cache/apk/*
 
 # Copy PHP configuration
@@ -84,7 +86,7 @@ RUN chown -R www-data:www-data \
     /var/www/html/bootstrap/cache
 
 RUN mkdir -p /var/log/supervisor /var/log/php /var/log/nginx \
-    && chown -R www-data:www-data /var/log/supervisor
+    && chown -R www-data:www-data /var/log/supervisor /var/log/php
 
 # Publish Filament/Livewire static assets
 RUN php artisan filament:assets

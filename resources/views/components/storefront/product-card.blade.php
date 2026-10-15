@@ -8,7 +8,7 @@
     $displayTitle = $product['title'] ?? $product['name'] ?? 'Косметика Mally';
     $isOutOfStock = empty($product['inStock']);
     $canIncrease = $qtyInCart > 0 && $store->canIncrease($prodKey);
-    $mainImage = $product['image'] ?? ($product['images'][0] ?? 'https://findy.uz/cdn/shop/files/sample.jpg');
+    $mainImage = $product['image'] ?? ($product['images'][0] ?? \App\Models\Product::placeholderUrl());
     $price = (float) ($product['price'] ?? $product['selling_price'] ?? 35);
     $oldPrice = isset($product['oldPrice']) && $product['oldPrice'] > $price ? (float) $product['oldPrice'] : null;
     $discountPercent = $oldPrice ? (int) round((($oldPrice - $price) / $oldPrice) * 100) : null;

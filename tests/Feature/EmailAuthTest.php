@@ -72,7 +72,10 @@ class EmailAuthTest extends TestCase
         // Verify rollback and re-migration on the test database
         $phoneMigration = require base_path('database/migrations/2026_10_12_000001_add_phone_to_users_table.php');
         $authCodesMigration = require base_path('database/migrations/2026_10_12_000000_create_auth_codes_table.php');
+        // A later migration indexes users.phone; it is rolled back first, as in a real rollback.
+        $indexMigration = require base_path('database/migrations/2026_10_17_000000_add_lookup_indexes.php');
 
+        $indexMigration->down();
         $phoneMigration->down();
         $authCodesMigration->down();
 
@@ -81,6 +84,7 @@ class EmailAuthTest extends TestCase
 
         $authCodesMigration->up();
         $phoneMigration->up();
+        $indexMigration->up();
 
         $this->assertTrue(Schema::hasTable('auth_codes'));
         $this->assertTrue(Schema::hasColumn('users', 'phone'));

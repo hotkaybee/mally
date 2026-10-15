@@ -569,9 +569,7 @@
                     @foreach($order->orderProducts as $item)
                         @php
                             $prod = $item->product;
-                            $img = $prod?->image
-                                ? (str_starts_with($prod->image, 'http') ? $prod->image : asset($prod->image))
-                                : 'https://findy.uz/cdn/shop/files/sample.jpg';
+                            $img = $prod ? $prod->imageUrl() : \App\Models\Product::placeholderUrl();
                         @endphp
                         <div class="py-3.5 first:pt-0 flex items-center gap-4">
                             <div class="w-16 h-16 rounded-2xl bg-[#FAF7F5] border border-[#EAE3DE] overflow-hidden flex-shrink-0">

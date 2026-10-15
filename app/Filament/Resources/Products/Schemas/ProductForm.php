@@ -54,9 +54,19 @@ class ProductForm
                     ->disabled()
                     ->dehydrated(false)
                     ->helperText(__('From the latest receipt')),
+                // Public disk, so the storefront can show it (storage:link).
+                // No SVG: it could run scripts on the shop's domain.
                 FileUpload::make('image')
                     ->label(__('image'))
-                    ->image(),
+                    ->image()
+                    ->disk('public')
+                    ->directory('products')
+                    ->visibility('public')
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                    ->maxSize(4096)
+                    ->imageResizeMode('contain')
+                    ->imageResizeTargetWidth('1200')
+                    ->imageResizeTargetHeight('1200'),
                 TextInput::make('link')
                     ->label(__('link')),
                 Select::make('status')

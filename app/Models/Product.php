@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -67,5 +68,31 @@ class Product extends Model
         return $this->belongsToMany(Order::class)
             ->using(OrderProduct::class)
             ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
+    }
+
+    /**
+     * Public URL of the product photo: an external link as is, a file
+     * uploaded in the admin (public disk), or a legacy path under public/.
+     */
+    public function imageUrl(): string
+    {
+        $image = trim((string) $this->image);
+
+        if ($image === '') {
+            return self::placeholderUrl();
+        }
+
+        if (preg_match('#^https?://#i', $image)) {
+            return $image;
+        }
+
+        $path = ltrim($image, '/');
+
+        return Storage::disk('public')->exists($path) ? Storage::disk('public')->url($path) : asset($path);
+    }
+
+    public static function placeholderUrl(): string
+    {
+        return asset('images/product-placeholder.svg');
     }
 }

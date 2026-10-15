@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Services\ExchangeRateService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -40,3 +41,13 @@ Artisan::command('admin:grant {email}', function (string $email) {
 })->purpose('Allow a user to open the Filament admin panel');
 
 Schedule::command('exchange-rate:refresh')->hourly()->withoutOverlapping();
+
+// Housekeeping: expired login codes / Telegram requests, old failed jobs and
+// expired rows of the database cache (rate-limiter keys pile up there).
+Schedule::command('model:prune')->daily();
+Schedule::command('queue:prune-failed --hours=720')->daily();
+Schedule::call(function () {
+    if (config('cache.default') === 'database') {
+        DB::table(config('cache.stores.database.table', 'cache'))->where('expiration', '<', time())->delete();
+    }
+})->name('cache:delete-expired')->daily();

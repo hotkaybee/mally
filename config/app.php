@@ -55,6 +55,14 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+    | Reverse proxies allowed to set X-Forwarded-For/-Proto/-Host (the host
+    | nginx reaches the container through the Docker gateway). Without them
+    | every visitor has the proxy's IP — one shared rate limit — and the site
+    | builds http:// URLs behind HTTPS. Never "*" while the app port is public.
+    */
+    'trusted_proxies' => array_values(array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', '127.0.0.1,172.16.0.0/12'))))),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

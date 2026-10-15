@@ -82,9 +82,45 @@ DB_ROOT_PASSWORD=your_root_password_here
 # Image to pull (override if you tag differently)
 APP_IMAGE=ghcr.io/hotkaybee/mally:latest
 
-# Host port to expose the app on
+# Host port of the app. It listens on 127.0.0.1 only (APP_BIND): the host
+# nginx below is the only way in, and the app trusts its X-Forwarded-* headers.
 APP_PORT=8080
+# TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12   (default: localhost + Docker gateway)
+
+# Logs: daily files, warnings and errors only
+LOG_STACK=daily
+LOG_DAILY_DAYS=14
+LOG_LEVEL=warning
+
+# Mail (login / registration / password-reset codes). Must be a real
+# mailer: with MAIL_MAILER=log production refuses to send codes.
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=
+MAIL_FROM_NAME=Mally
+
+# Telegram: the login bot and the admin bot must be two different bots
+TELEGRAM_AUTH_BOT_TOKEN=
+TELEGRAM_AUTH_BOT_USERNAME=
+TELEGRAM_AUTH_WEBHOOK_SECRET=     # empty = the telegram:auth-poll worker
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_USERNAME=
+TELEGRAM_ADMIN_CHAT_IDS=          # comma-separated; the admin bot answers only these
+TELEGRAM_ADMIN_USERNAME=
+
+# Shop
+STORE_CARD_NUMBER=
+STORE_CARD_HOLDER=
+STORE_PROMO_CODE=                 # empty = no promo code
+STORE_PROMO_PERCENT=0
+ORDERS_API_TOKEN=                 # empty = POST /api/orders closed
 ```
+
+With `APP_URL=https://…` the session cookie is marked Secure and every URL
+is generated as https.
 
 ### Generate an APP_KEY
 
@@ -104,7 +140,31 @@ Filament login requires a user. After the first deploy:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec app php artisan make:filament-user
+docker compose -f docker-compose.prod.yml exec app php artisan admin:grant you@example.com
 ```
+
+When upgrading an existing database, migration `2026_10_16_000001` marks old
+users without a phone (and not shoppers) as admins. Check the result right
+after the first deploy and revoke anyone unexpected:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T mysql sh -c \
+  'mysql -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -e "SELECT id, email FROM users WHERE is_admin = 1"'
+```
+
+### Product photos
+
+Photos uploaded in the admin are stored in `storage/app/public/products`
+(inside the `./storage` volume) and served through the `public/storage` link
+the container creates on start. If an older version uploaded photos to
+private storage, copy them once:
+
+```bash
+docker compose -f docker-compose.prod.yml exec app php artisan products:publish-images
+```
+
+Anything in the host's `./public/storage` folder (the old volume) must be
+moved to `./storage/app/public`.
 
 ---
 
@@ -190,10 +250,15 @@ docker compose -f docker-compose.prod.yml restart
 
 ### Database backup / restore
 
+Every deploy (CI or `deploy.sh`) writes a dump to `backups/` before the new
+container migrates. Also back up daily (cron), together with the photos:
+
 ```bash
-# Backup
-docker compose -f docker-compose.prod.yml exec mysql \
-  mysqldump -u mally -p mally > backup_$(date +%Y%m%d_%H%M%S).sql
+# Backup (-T: no TTY, so the dump isn't corrupted)
+docker compose -f docker-compose.prod.yml exec -T mysql sh -c \
+  'exec mysqldump --single-transaction --routines -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+  | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+tar czf storage_$(date +%Y%m%d).tar.gz storage/app/public
 
 # Restore
 docker compose -f docker-compose.prod.yml exec -T mysql \
@@ -221,11 +286,24 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        client_max_body_size 20M;
     }
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+}
+
+server {
+    listen 80;
+    server_name yourdomain.com;
+    return 301 https://$host$request_uri;
 }
 ```
 
-Set `APP_URL=https://yourdomain.com` in `.env` so Laravel generates correct URLs.
+Set `APP_URL=https://yourdomain.com` in `.env` so Laravel generates correct
+URLs. The app trusts `X-Forwarded-*` only from `TRUSTED_PROXIES` (localhost and
+the Docker gateway by default); without that every visitor would share the
+proxy's IP and its rate limits.
 
 ---
 
@@ -271,4 +349,8 @@ docker compose -f docker-compose.prod.yml exec app php artisan db:show
 - [ ] SSL/TLS configured via reverse proxy
 - [ ] GHCR image private (with `GHCR_PAT`) or intentionally public
 - [ ] SSH key for the deploy job is dedicated and least-privilege
-- [ ] Regular database backups configured
+- [ ] Regular database backups configured (plus `storage/app/public`)
+- [ ] App port bound to 127.0.0.1 (`APP_BIND`), only the HTTPS proxy in front
+- [ ] Real `MAIL_*` settings (codes are never sent through the `log` mailer)
+- [ ] `SELECT email FROM users WHERE is_admin = 1` checked after the first migration
+- [ ] `composer audit` clean (update Livewire / Filament / Laravel when it reports advisories)

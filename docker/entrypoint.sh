@@ -3,6 +3,11 @@ set -e
 
 echo "Starting Mally application..."
 
+# A fresh server mounts an empty ./storage: create the directories Laravel
+# needs before any artisan command (view:cache fails without them).
+mkdir -p storage/app/public storage/app/private storage/framework/cache/data \
+    storage/framework/sessions storage/framework/views storage/logs
+
 # Wait for MySQL to be ready
 echo "Waiting for MySQL..."
 until php artisan db:show 2>/dev/null; do
@@ -36,11 +41,9 @@ php artisan view:cache
 php artisan event:cache
 php artisan filament:optimize
 
-# Create storage link if missing
-if [ ! -e public/storage ]; then
-    echo "Creating storage link..."
-    php artisan storage:link
-fi
+# public/storage -> storage/app/public (product photos uploaded in the admin)
+echo "Linking public storage..."
+php artisan storage:link --force
 
 # Set proper permissions
 echo "Setting permissions..."

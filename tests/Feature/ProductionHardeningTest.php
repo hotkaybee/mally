@@ -80,6 +80,35 @@ class ProductionHardeningTest extends TestCase
         $this->assertSame(CheckoutPage::MAX_OPEN_UNPAID_ORDERS + 1, Order::count());
     }
 
+    public function test_parallel_checkouts_of_one_customer_run_one_at_a_time(): void
+    {
+        $this->product();
+        $customer = $this->signedInCustomer();
+
+        // Another request of the same customer is placing an order right now.
+        $lock = Cache::lock('checkout-customer:'.$customer->id, 30);
+        $lock->get();
+
+        $this->checkoutOnce();
+        $this->assertSame(0, Order::count());
+
+        $lock->release();
+        $this->checkoutOnce();
+        $this->assertSame(1, Order::count());
+    }
+
+    public function test_a_session_without_a_password_fingerprint_is_signed_out(): void
+    {
+        $user = User::create(['name' => 'A', 'email' => 'a@example.com', 'password' => Hash::make('Pass12345')]);
+        $customer = Customer::create(['user_id' => $user->id, 'first_name' => 'A', 'last_name' => 'B', 'email' => 'a@example.com', 'source' => 'website']);
+
+        // Signed in before fingerprints existed: it must not adopt the current password.
+        session(['mally_customer_id' => $customer->id, 'mally_user_id' => $user->id]);
+
+        $this->assertNull(app(StorefrontService::class)->getCurrentCustomer());
+        $this->assertNull(session('mally_customer_id'));
+    }
+
     public function test_promo_codes_cannot_be_guessed_endlessly(): void
     {
         $this->product();

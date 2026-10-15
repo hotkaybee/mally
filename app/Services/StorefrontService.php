@@ -595,13 +595,12 @@ class StorefrontService
 
         // A password change (reset) signs out the account's other sessions:
         // the session remembers a fingerprint of the password it signed in with.
+        // A session without a fingerprint (signed in before they existed) is
+        // signed out too, never trusted to adopt the current password.
         if ($customer?->user) {
-            $fingerprint = $this->passwordFingerprint($customer->user);
-            $known = session('mally_auth_fingerprint');
+            $known = (string) session('mally_auth_fingerprint', '');
 
-            if ($known === null) {
-                session(['mally_auth_fingerprint' => $fingerprint]); // signed in before fingerprints existed
-            } elseif (! hash_equals((string) $known, $fingerprint)) {
+            if ($known === '' || ! hash_equals($known, $this->passwordFingerprint($customer->user))) {
                 session()->forget(['mally_customer_id', 'mally_user_id', 'mally_auth_fingerprint']);
                 $customer = null;
             }

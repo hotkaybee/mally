@@ -188,63 +188,76 @@ class CheckoutPage extends Component
             return;
         }
 
-        $openUnpaid = Order::where('customer_id', $customer->id)
-            ->where('status', 'processing')
-            ->where('payment_status', 'PENDING')
-            ->count();
-        if ($openUnpaid >= self::MAX_OPEN_UNPAID_ORDERS) {
-            $this->dispatch('toast', message: __('You already have unpaid orders. Please pay for them or contact us before placing a new one.'), type: 'error');
+        // One checkout at a time per customer: parallel submits must not pass
+        // the unpaid-order cap and the rate limit together.
+        $lock = Cache::lock('checkout-customer:'.$customer->id, 30);
+        if (! $lock->get()) {
+            $this->dispatch('toast', message: __('Too many attempts. Please try again later.'), type: 'error');
 
             return;
-        }
-
-        $rateKeys = [
-            'checkout-orders:customer:'.$customer->id => self::MAX_ORDERS_PER_HOUR,
-            'checkout-orders:ip:'.request()->ip() => self::MAX_ORDERS_PER_HOUR_PER_IP,
-        ];
-        foreach ($rateKeys as $rateKey => $limit) {
-            if (RateLimiter::tooManyAttempts($rateKey, $limit)) {
-                $this->dispatch('toast', message: __('Too many attempts. Please try again later.'), type: 'error');
-
-                return;
-            }
-        }
-
-        if ($this->checkoutToken === '' || ! Cache::add('checkout:'.$this->checkoutToken, true, now()->addDay())) {
-            return; // this checkout page was already submitted
-        }
-
-        $city = trim($this->city) ?: ($customer->city ?: 'Ташкент');
-        $quantities = [];
-        foreach ($cartDetails['items'] as $item) {
-            $id = (int) $item['product']['id'];
-            $quantities[$id] = ($quantities[$id] ?? 0) + (int) $item['quantity'];
         }
 
         try {
-            $order = app(OrderService::class)->placeOrder($customer, $quantities, [
-                'customer_name' => trim($firstName.' '.$lastName),
-                'customer_phone' => $phone,
-                'city' => $city,
-                'address' => $address,
-                'comment' => $comment !== '' ? $comment : null,
-                'promo_code' => $this->appliedPromo,
-            ]);
-        } catch (CheckoutException $e) {
-            Cache::forget('checkout:'.$this->checkoutToken);
-            $this->dispatch('toast', message: $e->getMessage(), type: 'error');
+            $openUnpaid = Order::where('customer_id', $customer->id)
+                ->where('status', 'processing')
+                ->where('payment_status', 'PENDING')
+                ->count();
+            if ($openUnpaid >= self::MAX_OPEN_UNPAID_ORDERS) {
+                $this->dispatch('toast', message: __('You already have unpaid orders. Please pay for them or contact us before placing a new one.'), type: 'error');
 
-            return;
-        } catch (\Throwable $e) {
-            Cache::forget('checkout:'.$this->checkoutToken);
-            report($e);
-            $this->dispatch('toast', message: __('We could not place your order. Please try again or contact us.'), type: 'error');
+                return;
+            }
 
-            return;
-        }
+            $rateKeys = [
+                'checkout-orders:customer:'.$customer->id => self::MAX_ORDERS_PER_HOUR,
+                'checkout-orders:ip:'.request()->ip() => self::MAX_ORDERS_PER_HOUR_PER_IP,
+            ];
+            foreach ($rateKeys as $rateKey => $limit) {
+                if (RateLimiter::tooManyAttempts($rateKey, $limit)) {
+                    $this->dispatch('toast', message: __('Too many attempts. Please try again later.'), type: 'error');
 
-        foreach (array_keys($rateKeys) as $rateKey) {
-            RateLimiter::hit($rateKey, 3600);
+                    return;
+                }
+            }
+
+            if ($this->checkoutToken === '' || ! Cache::add('checkout:'.$this->checkoutToken, true, now()->addDay())) {
+                return; // this checkout page was already submitted
+            }
+
+            $city = trim($this->city) ?: ($customer->city ?: 'Ташкент');
+            $quantities = [];
+            foreach ($cartDetails['items'] as $item) {
+                $id = (int) $item['product']['id'];
+                $quantities[$id] = ($quantities[$id] ?? 0) + (int) $item['quantity'];
+            }
+
+            try {
+                $order = app(OrderService::class)->placeOrder($customer, $quantities, [
+                    'customer_name' => trim($firstName.' '.$lastName),
+                    'customer_phone' => $phone,
+                    'city' => $city,
+                    'address' => $address,
+                    'comment' => $comment !== '' ? $comment : null,
+                    'promo_code' => $this->appliedPromo,
+                ]);
+            } catch (CheckoutException $e) {
+                Cache::forget('checkout:'.$this->checkoutToken);
+                $this->dispatch('toast', message: $e->getMessage(), type: 'error');
+
+                return;
+            } catch (\Throwable $e) {
+                Cache::forget('checkout:'.$this->checkoutToken);
+                report($e);
+                $this->dispatch('toast', message: __('We could not place your order. Please try again or contact us.'), type: 'error');
+
+                return;
+            }
+
+            foreach (array_keys($rateKeys) as $rateKey) {
+                RateLimiter::hit($rateKey, 3600);
+            }
+        } finally {
+            $lock->release();
         }
 
         $customer->update([

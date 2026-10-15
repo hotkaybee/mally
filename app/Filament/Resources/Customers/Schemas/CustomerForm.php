@@ -36,6 +36,7 @@ class CustomerForm
                         'friend' => __('Friend'),
                         'instagram' => __('Instagram'),
                         'telegram' => __('Telegram'),
+                        'website' => __('Website'),
                     ])
                     ->required(),
             ]);

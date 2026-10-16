@@ -322,7 +322,7 @@
                 </div>
 
                 <div class="text-sm sm:text-base text-[#2C2A29] font-serif leading-relaxed">
-                    {{ $currentProduct['description'] ?: '100% оригинальная косметика от официальных ритейлеров США (Sephora, Ulta). Проверено экспертами Mally.' }}
+                    <p class="whitespace-pre-line">{{ $currentProduct['description'] ?: '100% оригинальная косметика от официальных ритейлеров США (Sephora, Ulta). Проверено экспертами Mally.' }}</p>
                 </div>
 
                 @if(!empty($currentProduct['features']) && is_array($currentProduct['features']))

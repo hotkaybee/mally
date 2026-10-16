@@ -212,6 +212,15 @@ class StorefrontLivewireTest extends TestCase
             ->assertDontSee('findy.uz');
     }
 
+    public function test_description_keeps_line_breaks_and_stays_escaped(): void
+    {
+        $this->product()->update(['description' => "Line one\nLine two <b>bold</b>"]);
+
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertSee('<p class="whitespace-pre-line">Line one'."\n".'Line two &lt;b&gt;bold&lt;/b&gt;</p>', false);
+    }
+
     public function test_admin_comment_never_reaches_the_storefront(): void
     {
         $product = $this->product();

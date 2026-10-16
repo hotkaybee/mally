@@ -28,7 +28,7 @@ class OrdersTable
                     ->formatStateUsing(fn ($record) => $record->customer
                         ? $record->customer->first_name.' '.$record->customer->last_name
                         : $record->customer_name)
-                    ->searchable(['customer.first_name', 'customer.last_name']),
+                    ->searchable(['first_name', 'last_name']),
                 TextColumn::make('amount')
                     ->label(__('amount'))
                     ->money('USD')

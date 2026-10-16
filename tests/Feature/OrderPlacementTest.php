@@ -19,8 +19,8 @@ use App\Services\OrderService;
 use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
 

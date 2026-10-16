@@ -43,9 +43,10 @@ editing `.env` restart it by hand.
 **Money.** Prices and every stored order amount are USD (`selling_price`,
 `orders.amount`, `order_product.price`). UZS is display-only, converted with
 the CBU rate (`ExchangeRateService`, cached, refreshed hourly by
-`exchange-rate:refresh`). Each order stores `exchange_rate` and `amount_uzs` as
-a snapshot; correcting `amount` later recomputes `amount_uzs` at that stored
-rate, never today's. Totals, discounts and prices are always computed on the
+`exchange-rate:refresh`). Each order stores only `exchange_rate` as a snapshot;
+`Order::amount_uzs` is computed from `amount` at that stored rate, never
+today's, so correcting `amount` updates it. An order is paid when
+`amount_paid >= amount` (`Order::isPaid()`); there is no stored payment status. Totals, discounts and prices are always computed on the
 server from the DB; anything the browser or bot sends is ignored. The promo
 code comes from `STORE_PROMO_CODE` / `STORE_PROMO_PERCENT`.
 

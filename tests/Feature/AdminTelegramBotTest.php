@@ -131,6 +131,24 @@ class AdminTelegramBotTest extends TestCase
         $this->assertStringContainsString('+998950057404', $messages[0][0]['text']);
     }
 
+    public function test_order_card_shows_the_paid_state_and_som_total_from_the_order(): void
+    {
+        Bus::fake([NotifyAdminsAboutOrder::class]);
+        $order = $this->order();
+        $bot = app(AdminTelegramBot::class);
+
+        $bot->handleUpdate($this->message((string) $order->order_number));
+        $text = $this->sent('sendMessage')[0][0]['text'];
+        $this->assertStringContainsString('(ожидает оплаты)', $text);
+        $this->assertStringContainsString('ИТОГО К ОПЛАТЕ: $50.00 (≈ 600 000 сум)', $text);
+
+        $order->update(['amount_paid' => 50]);
+        $bot->handleUpdate($this->message((string) $order->order_number));
+        $text = $this->sent('sendMessage')[1][0]['text'];
+        $this->assertStringContainsString('(оплачен)', $text);
+        $this->assertStringContainsString('💳 Оплачено: $50.00', $text);
+    }
+
     public function test_admin_gets_a_product_card_by_sku_with_exact_stock_and_cost(): void
     {
         $this->product();

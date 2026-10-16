@@ -238,7 +238,7 @@
         default => -1,
     };
 
-    $isPaidOrHigher = in_array($statusNormalized, ['PAYMENT_RECEIVED', 'PACKING', 'SHIPPED', 'DELIVERED'], true) || $order->payment_status === 'PAID';
+    $isPaidOrHigher = in_array($statusNormalized, ['PAYMENT_RECEIVED', 'PACKING', 'SHIPPED', 'DELIVERED'], true) || $order->isPaid();
 
     $statusTheme = match ($statusNormalized) {
         'PAYMENT_RECEIVED' => [

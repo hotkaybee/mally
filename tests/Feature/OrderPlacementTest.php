@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exceptions\CheckoutException;
+use App\Filament\Resources\Reviews\Pages\EditReview;
 use App\Livewire\Storefront\CheckoutPage;
 use App\Livewire\Storefront\OrderReceiptPage;
 use App\Livewire\Storefront\ProfilePage;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\ExchangeRateService;
 use App\Services\OrderService;
 use App\Services\StorefrontService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -388,7 +390,63 @@ class OrderPlacementTest extends TestCase
         $this->getJson('/api/orders/track?order='.$order->order_number.'&hash=wrong')->assertNotFound();
         $this->getJson('/api/orders/track?order='.$order->order_number.'&hash='.$order->secure_hash)
             ->assertOk()
-            ->assertJsonMissingPath('order.city');
+            ->assertJsonMissingPath('order.city')
+            ->assertJsonMissingPath('order.paymentStatus')
+            ->assertJsonPath('order.isPaid', false);
+    }
+
+    public function test_api_ignores_a_payment_method_from_the_bot(): void
+    {
+        config(['services.store.orders_api_token' => 'secret-token']);
+        $product = $this->product();
+
+        $this->postJson('/api/orders', [
+            'customerName' => 'Ali', 'customerPhone' => '+998 93 555 44 33',
+            'paymentMethod' => 'anything',
+            'items' => [['id' => $product->id, 'quantity' => 1]],
+        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
+
+        $this->assertSame(1, Order::count());
+    }
+
+    // ---------------------------------------------------- derived order fields
+
+    public function test_payment_and_som_columns_are_not_stored(): void
+    {
+        foreach (['amount_uzs', 'payment_status', 'payment_method'] as $column) {
+            $this->assertFalse(Schema::hasColumn('orders', $column), $column);
+        }
+        $this->assertTrue(Schema::hasColumn('orders', 'exchange_rate'));
+    }
+
+    public function test_som_total_follows_an_edited_amount_at_the_saved_rate(): void
+    {
+        $product = $this->product(10, [10]);
+        $order = $this->place($this->customer(), [$product->id => 1]);
+        $this->assertSame((int) round(10 * self::RATE), $order->fresh()->amount_uzs);
+
+        // Today's rate changes; the order keeps its own.
+        Cache::put(ExchangeRateService::CACHE_KEY, ['rate' => 99999.0, 'source' => 'cbu.uz', 'isLive' => true], 3600);
+        $order->update(['amount' => 25]);
+
+        $this->assertSame((int) round(25 * self::RATE), $order->fresh()->amount_uzs);
+    }
+
+    public function test_an_order_is_paid_only_when_the_paid_amount_covers_it(): void
+    {
+        $order = new Order(['amount' => 50, 'amount_paid' => 0]);
+        $this->assertFalse($order->isPaid());
+
+        $order->amount_paid = 49.99;
+        $this->assertFalse($order->isPaid());
+
+        $order->amount_paid = 50;
+        $this->assertTrue($order->isPaid());
+
+        $order->amount_paid = 60;
+        $this->assertTrue($order->isPaid());
+
+        $this->assertFalse((new Order(['amount' => 0, 'amount_paid' => 0]))->isPaid());
     }
 
     // ------------------------------------------------------- receipt & profile
@@ -510,7 +568,7 @@ class OrderPlacementTest extends TestCase
         $this->assertSame($order->id, $review->order_id);
         $this->assertTrue($review->order->is($order));
         $this->assertFalse($review->is_approved);
-        $this->assertSame($product->name, $review->product_title);
+        $this->assertSame($product->name, $review->product->name);
         $this->assertSame(['https://img.example.com/a.jpg'], $review->photos);
         $this->assertSame([], app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id));
 
@@ -523,5 +581,88 @@ class OrderPlacementTest extends TestCase
 
         $review->update(['is_approved' => true]);
         $this->assertCount(1, app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id));
+    }
+
+    private function review(Order $order, Product $product, array $attrs = []): Review
+    {
+        return Review::create(array_merge([
+            'order_id' => $order->id, 'product_id' => $product->id,
+            'rating' => 4, 'comment' => 'Nice', 'is_approved' => true,
+        ], $attrs));
+    }
+
+    public function test_reviews_store_only_their_links(): void
+    {
+        $this->assertEqualsCanonicalizing(
+            ['id', 'order_id', 'product_id', 'rating', 'comment', 'photos', 'is_approved', 'created_at', 'updated_at'],
+            Schema::getColumnListing('reviews')
+        );
+    }
+
+    public function test_review_title_follows_a_renamed_product(): void
+    {
+        $product = $this->product(10, [10]);
+        $this->review($this->deliveredOrder($this->customer(), $product), $product);
+
+        $product->update(['name' => 'Renamed Brush']);
+
+        $this->assertSame('Renamed Brush', app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id)[0]['title']);
+    }
+
+    public function test_review_shows_first_name_and_initial_and_only_a_real_city(): void
+    {
+        $product = $this->product(10, [10]);
+        $aziza = $this->customer(['first_name' => 'Aziza', 'last_name' => 'Karimova', 'city' => null]);
+        $review = $this->review($this->deliveredOrder($aziza, $product), $product);
+
+        $shown = app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id)[0];
+        $this->assertSame('Aziza K.', $shown['author']);
+        $this->assertNull($shown['city']);
+
+        $aziza->update(['city' => 'Бухара']);
+        $this->assertSame('Бухара', $review->fresh()->author_city);
+
+        $aziza->update(['first_name' => '', 'last_name' => '']);
+        $this->assertSame(__('Mally customer'), $review->fresh()->author_name);
+    }
+
+    public function test_deleting_an_order_deletes_its_reviews(): void
+    {
+        $product = $this->product(10, [10]);
+        $order = $this->deliveredOrder($this->customer(), $product);
+        $this->review($order, $product);
+
+        $order->delete();
+
+        $this->assertSame(0, Review::count());
+    }
+
+    public function test_one_review_per_order_and_product(): void
+    {
+        $product = $this->product(10, [10]);
+        $order = $this->deliveredOrder($this->customer(), $product);
+        $this->review($order, $product);
+
+        $this->expectException(QueryException::class);
+        $this->review($order, $product, ['comment' => 'Again']);
+    }
+
+    public function test_admin_cannot_change_what_the_customer_wrote(): void
+    {
+        $product = $this->product(10, [10]);
+        $review = $this->review($this->deliveredOrder($this->customer(), $product), $product, ['rating' => 2, 'is_approved' => false]);
+
+        config(['app.env' => 'local']);
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(EditReview::class, ['record' => $review->getRouteKey()])
+            ->fillForm(['rating' => 5, 'comment' => 'Edited by admin', 'is_approved' => true])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $review->refresh();
+        $this->assertSame(2, $review->rating);
+        $this->assertSame('Nice', $review->comment);
+        $this->assertTrue($review->is_approved);
     }
 }

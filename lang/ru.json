@@ -164,5 +164,6 @@
     "Please wait, the bot will reply in a few seconds…": "Подождите, бот ответит через несколько секунд…",
     "Payments received": "Получено оплат",
     "Calculated from the order lines": "Считается по товарам заказа",
-    "You already have unpaid orders. Please pay for them or contact us before placing a new one.": "У вас уже есть неоплаченные заказы. Оплатите их или свяжитесь с нами, прежде чем оформить новый."
+    "You already have unpaid orders. Please pay for them or contact us before placing a new one.": "У вас уже есть неоплаченные заказы. Оплатите их или свяжитесь с нами, прежде чем оформить новый.",
+    "Mally customer": "Покупатель Mally"
 }

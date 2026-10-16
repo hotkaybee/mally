@@ -9,21 +9,30 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ReviewsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['product', 'order.customer']))
             ->defaultSort('id', 'desc')
             ->columns([
-                TextColumn::make('product_title')
+                TextColumn::make('product.name')
                     ->label(__('Product'))
                     ->searchable()
                     ->limit(40),
+                // author_name is computed from the order's customer.
                 TextColumn::make('author_name')
                     ->label(__('Author'))
-                    ->searchable(),
+                    ->searchable(query: fn (Builder $query, string $search) => $query->whereHas(
+                        'order.customer',
+                        fn (Builder $customerQuery) => $customerQuery->where(
+                            fn (Builder $q) => $q->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                        )
+                    )),
                 TextColumn::make('rating')
                     ->label(__('Rating'))
                     ->sortable(),

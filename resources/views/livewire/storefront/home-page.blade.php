@@ -368,7 +368,7 @@
                         <div class="flex justify-between items-start">
                             <div>
                                 <h4 class="font-serif font-bold text-sm text-[#1C1917]">{{ $rev['title'] }}</h4>
-                                <span class="text-xs text-[#8C827A]">{{ $rev['author'] }}, {{ $rev['city'] }}</span>
+                                <span class="text-xs text-[#8C827A]">{{ $rev['author'] }}@if($rev['city']), {{ $rev['city'] }}@endif</span>
                             </div>
                             <span class="text-amber-500 text-xs">{{ str_repeat('★', $rev['rating']) }}{{ str_repeat('☆', 5 - $rev['rating']) }}</span>
                         </div>

@@ -34,15 +34,25 @@ class Order extends Model
         'amount',
         'amount_paid',
         'exchange_rate',
-        'amount_uzs',
         'status',
-        'payment_method',
-        'payment_status',
     ];
 
     protected function orderNumber(): Attribute
     {
         return Attribute::get(fn () => $this->id ? $this->id + self::NUMBER_OFFSET : null);
+    }
+
+    /** So'm total at the rate saved with the order (not stored). */
+    protected function amountUzs(): Attribute
+    {
+        return Attribute::get(fn () => (float) $this->exchange_rate > 0
+            ? (int) round((float) $this->amount * (float) $this->exchange_rate)
+            : null);
+    }
+
+    public function isPaid(): bool
+    {
+        return (float) $this->amount > 0 && (float) $this->amount_paid >= (float) $this->amount;
     }
 
     /** Find an order by its customer-facing number. */

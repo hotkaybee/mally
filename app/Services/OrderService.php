@@ -35,7 +35,7 @@ class OrderService
 
     /**
      * @param  array<int, int>  $quantities  product id => quantity
-     * @param  array{customer_name: string, customer_phone: string, city?: ?string, address?: ?string, comment?: ?string, promo_code?: ?string, payment_method?: ?string}  $details
+     * @param  array{customer_name: string, customer_phone: string, city?: ?string, address?: ?string, comment?: ?string, promo_code?: ?string}  $details
      *
      * @throws CheckoutException
      */
@@ -63,8 +63,6 @@ class OrderService
                 'amount' => 0,
                 'amount_paid' => 0,
                 'status' => 'processing',
-                'payment_method' => $details['payment_method'] ?? 'card_fast',
-                'payment_status' => 'PENDING',
             ]);
 
             $subtotal = 0.0;
@@ -80,7 +78,6 @@ class OrderService
             $order->discount_amount = $discount;
             $order->amount = $amount;
             $order->exchange_rate = $rate > 0 ? $rate : null;
-            $order->amount_uzs = $rate > 0 ? (int) round($amount * $rate) : null;
             $order->save();
 
             return $order;

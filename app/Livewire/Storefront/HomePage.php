@@ -135,16 +135,17 @@ class HomePage extends Component
         };
 
         // Only real reviews approved in the admin panel.
-        $reviews = Review::where('is_approved', true)
+        $reviews = Review::with(['product', 'order.customer'])
+            ->where('is_approved', true)
             ->latest('id')
             ->limit(4)
             ->get()
             ->map(fn (Review $rev) => [
                 'id' => 'db_'.$rev->id,
                 'author' => $rev->author_name,
-                'city' => $rev->city ?: 'Ташкент',
+                'city' => $rev->author_city,
                 'date' => $rev->created_at?->timezone('Asia/Tashkent')->format('d.m.Y'),
-                'title' => $rev->product_title ?: 'Mally',
+                'title' => $rev->product?->name ?: 'Mally',
                 'text' => $rev->comment,
                 'rating' => max(1, min(5, (int) $rev->rating)),
             ])

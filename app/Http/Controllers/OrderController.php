@@ -32,7 +32,6 @@ class OrderController extends Controller
             'customerPhone' => 'required|string|max:50',
             'city' => 'nullable|string|max:100',
             'address' => 'nullable|string|max:500',
-            'paymentMethod' => 'nullable|string|max:50',
             'comment' => 'nullable|string|max:1000',
             'promoCode' => 'nullable|string|max:50',
             'items' => 'required|array|min:1|max:50',
@@ -95,7 +94,6 @@ class OrderController extends Controller
                 'address' => $validated['address'] ?? null,
                 'comment' => $validated['comment'] ?? null,
                 'promo_code' => $validated['promoCode'] ?? null,
-                'payment_method' => $validated['paymentMethod'] ?? 'card_fast',
             ]);
         } catch (CheckoutException $e) {
             $idempotencyCacheKey && Cache::forget($idempotencyCacheKey);
@@ -146,7 +144,8 @@ class OrderController extends Controller
             'order' => [
                 'orderNumber' => $order->order_number,
                 'status' => $order->status,
-                'paymentStatus' => $order->payment_status,
+                'isPaid' => $order->isPaid(),
+                'amountPaid' => (float) $order->amount_paid,
                 'totalAmount' => (float) $order->amount,
                 'currency' => 'USD',
                 'createdAt' => $order->created_at?->toIso8601String(),

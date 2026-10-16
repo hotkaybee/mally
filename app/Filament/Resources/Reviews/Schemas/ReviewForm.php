@@ -9,13 +9,19 @@ use Filament\Schemas\Schema;
 
 class ReviewForm
 {
+    /**
+     * A moderator only publishes or hides a review; what the customer
+     * wrote (rating, text, photos) is read-only.
+     */
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('product_title')
+                TextInput::make('product_id')
                     ->label(__('Product'))
-                    ->disabled(),
+                    ->formatStateUsing(fn ($record) => $record?->product?->name)
+                    ->disabled()
+                    ->dehydrated(false),
                 TextInput::make('order_id')
                     ->label(__('Order number'))
                     ->formatStateUsing(fn ($record) => $record?->order?->order_number)
@@ -23,18 +29,18 @@ class ReviewForm
                     ->dehydrated(false),
                 TextInput::make('author_name')
                     ->label(__('Author'))
-                    ->required()
-                    ->maxLength(255),
+                    ->formatStateUsing(fn ($record) => $record?->author_name)
+                    ->disabled()
+                    ->dehydrated(false),
                 TextInput::make('rating')
                     ->label(__('Rating'))
-                    ->numeric()
-                    ->minValue(1)
-                    ->maxValue(5)
-                    ->required(),
+                    ->disabled()
+                    ->dehydrated(false),
                 Textarea::make('comment')
                     ->label(__('comment'))
-                    ->required()
                     ->rows(5)
+                    ->disabled()
+                    ->dehydrated(false)
                     ->columnSpanFull(),
                 Textarea::make('photos')
                     ->label(__('Photos'))

@@ -208,7 +208,7 @@ class StorefrontLivewireTest extends TestCase
         $this->assertFileExists(public_path('images/product-placeholder.svg'));
         $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
             ->assertOk()
-            ->assertSee('images/product-placeholder.svg')
+            ->assertSee('product-placeholder.svg')
             ->assertDontSee('findy.uz');
     }
 

@@ -225,6 +225,7 @@ class StorefrontAuthTest extends TestCase
         $this->assertSame('Ташкент', $customer->city);
         $this->assertSame('Amir Temur 1', $customer->address);
         $this->assertNull($customer->instagram);
+        $this->assertSame('website', $customer->source);
         $this->assertSame($customer->id, session('mally_customer_id'));
     }
 

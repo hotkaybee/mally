@@ -233,7 +233,7 @@ trait InteractsWithStore
                 'city' => $city,
                 'address' => $address !== '' ? $address : null,
                 'email' => 'client_'.Str::lower(Str::random(12)).'@mally.uz',
-                'source' => 'instagram',
+                'source' => 'website',
             ]);
         });
 

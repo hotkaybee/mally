@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -170,6 +171,60 @@ class TelegramAuthTest extends TestCase
         $component->set('authTelegramCode', $real)->call('verifyTelegramCode')->assertSet('authStep', 'telegram-wait');
         $this->assertNull(session('mally_customer_id'));
         $this->assertSame(0, User::count());
+    }
+
+    public function test_code_is_not_checked_once_attempts_are_used_up_even_if_correct(): void
+    {
+        $component = $this->throughBot();
+        $request = TelegramLoginRequest::sole();
+
+        // State after five parallel wrong guesses that all read the request
+        // before any of them could burn it.
+        for ($i = 0; $i < TelegramAuthService::MAX_CODE_ATTEMPTS; $i++) {
+            RateLimiter::hit('tg-login-code:'.$request->id, TelegramAuthService::CODE_TTL_SECONDS);
+        }
+
+        $component->set('authTelegramCode', $this->codeSentByBot())->call('verifyTelegramCode')->assertSet('authStep', 'telegram-wait');
+        $this->assertNull(session('mally_customer_id'));
+        $this->assertNotSame('used', $request->fresh()->status);
+    }
+
+    public function test_successful_code_check_resets_the_attempt_counter(): void
+    {
+        $component = $this->throughBot();
+        $request = TelegramLoginRequest::sole();
+        $real = $this->codeSentByBot();
+        $wrong = $real === '000000' ? '111111' : '000000';
+
+        for ($i = 0; $i < TelegramAuthService::MAX_CODE_ATTEMPTS - 1; $i++) {
+            $component->set('authTelegramCode', $wrong)->call('verifyTelegramCode')->assertSet('authStep', 'telegram-code');
+        }
+
+        $component->set('authTelegramCode', $real)->call('verifyTelegramCode')->assertSet('authStep', 'telegram-register');
+        $this->assertSame(0, RateLimiter::attempts('tg-login-code:'.$request->id));
+    }
+
+    public function test_new_code_resets_the_attempt_counter(): void
+    {
+        $component = $this->throughBot();
+        $request = TelegramLoginRequest::sole();
+        $wrong = $this->codeSentByBot() === '000000' ? '111111' : '000000';
+
+        for ($i = 0; $i < TelegramAuthService::MAX_CODE_ATTEMPTS - 1; $i++) {
+            $component->set('authTelegramCode', $wrong)->call('verifyTelegramCode');
+        }
+
+        // The bot issues a fresh code for the same request.
+        $request->update(['status' => TelegramLoginRequest::STATUS_CONTACT_REQUESTED]);
+        $this->botContact();
+        $real = $this->codeSentByBot();
+        $wrong = $real === '000000' ? '111111' : '000000';
+
+        for ($i = 0; $i < TelegramAuthService::MAX_CODE_ATTEMPTS - 1; $i++) {
+            $component->set('authTelegramCode', $wrong)->call('verifyTelegramCode')->assertSet('authStep', 'telegram-code');
+        }
+
+        $component->set('authTelegramCode', $real)->call('verifyTelegramCode')->assertSet('authStep', 'telegram-register');
     }
 
     public function test_request_expires(): void

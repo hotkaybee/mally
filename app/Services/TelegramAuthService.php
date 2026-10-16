@@ -150,11 +150,21 @@ class TelegramAuthService
             return ['result' => self::EXPIRED];
         }
 
+        // Count the attempt atomically before checking, so parallel requests
+        // can't all read a stale counter and test more than MAX_CODE_ATTEMPTS codes.
+        $attemptsKey = $this->codeAttemptsKey($request);
+        $attempts = RateLimiter::hit($attemptsKey, self::CODE_TTL_SECONDS);
+        $request->update(['attempts' => $attempts]);
+        if ($attempts > self::MAX_CODE_ATTEMPTS) {
+            $this->burn($request);
+
+            return ['result' => self::EXPIRED];
+        }
+
         $code = preg_replace('/\D/', '', $code);
 
         if ($code === '' || ! Hash::check($code, $request->code_hash)) {
-            $request->increment('attempts');
-            if ($request->attempts >= self::MAX_CODE_ATTEMPTS) {
+            if ($attempts >= self::MAX_CODE_ATTEMPTS) {
                 $this->burn($request);
 
                 return ['result' => self::EXPIRED];
@@ -162,6 +172,8 @@ class TelegramAuthService
 
             return ['result' => self::INVALID];
         }
+
+        RateLimiter::clear($attemptsKey);
 
         // Consume atomically: only one request can flip code_sent -> used.
         $consumed = TelegramLoginRequest::whereKey($request->id)
@@ -301,6 +313,7 @@ class TelegramAuthService
             'status' => TelegramLoginRequest::STATUS_CODE_SENT,
             'expires_at' => now()->addSeconds(self::CODE_TTL_SECONDS),
         ]);
+        RateLimiter::clear($this->codeAttemptsKey($request));
 
         $this->sendMessage(
             $chatId,
@@ -379,6 +392,11 @@ class TelegramAuthService
         } catch (Throwable $e) {
             Log::warning('Telegram sendMessage failed', ['error' => str_replace($token, '***', $e->getMessage())]);
         }
+    }
+
+    private function codeAttemptsKey(TelegramLoginRequest $request): string
+    {
+        return 'tg-login-code:'.$request->id;
     }
 
     private function burn(TelegramLoginRequest $request): void

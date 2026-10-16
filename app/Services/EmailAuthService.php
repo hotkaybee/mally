@@ -346,6 +346,7 @@ class EmailAuthService
         Cache::put($cooldownKey, time() + self::COOLDOWN_SECONDS, self::COOLDOWN_SECONDS);
         RateLimiter::hit($emailRateKey, 3600);
         RateLimiter::hit($ipRateKey, 3600);
+        RateLimiter::clear($this->codeAttemptsKey($email, $purpose));
 
         $msg = $purpose === AuthCode::PURPOSE_RESET
             ? 'Если указанный email зарегистрирован, мы отправили на него код подтверждения.'
@@ -360,7 +361,7 @@ class EmailAuthService
 
     /**
      * Verify a 6-digit code for (email, purpose).
-     * Checks: not used, not expired, attempts < 5, Hash::check.
+     * Checks: not used, not expired, at most 5 attempts, Hash::check.
      *
      * @return array{success: bool, error?: string, message: string, authCode?: AuthCode}
      */
@@ -398,7 +399,13 @@ class EmailAuthService
             ];
         }
 
-        if ((int) $authCode->attempts >= self::MAX_CODE_ATTEMPTS) {
+        // Count the attempt atomically before checking, so parallel requests
+        // can't all read a stale counter and test more than 5 codes.
+        $attemptsKey = $this->codeAttemptsKey($email, $purpose);
+        $attempts = RateLimiter::hit($attemptsKey, self::CODE_TTL_MINUTES * 60);
+        $authCode->update(['attempts' => $attempts]);
+
+        if ($attempts > self::MAX_CODE_ATTEMPTS) {
             $authCode->update(['used_at' => now()]);
 
             return [
@@ -409,14 +416,9 @@ class EmailAuthService
         }
 
         if (! Hash::check($code, (string) $authCode->code_hash)) {
-            $newAttempts = (int) $authCode->attempts + 1;
-            $updates = ['attempts' => $newAttempts];
-            if ($newAttempts >= self::MAX_CODE_ATTEMPTS) {
-                $updates['used_at'] = now();
-            }
-            $authCode->update($updates);
+            if ($attempts >= self::MAX_CODE_ATTEMPTS) {
+                $authCode->update(['used_at' => now()]);
 
-            if ($newAttempts >= self::MAX_CODE_ATTEMPTS) {
                 return [
                     'success' => false,
                     'error' => 'max_attempts',
@@ -432,6 +434,7 @@ class EmailAuthService
         }
 
         $authCode->update(['used_at' => now()]);
+        RateLimiter::clear($attemptsKey);
 
         return [
             'success' => true,
@@ -554,6 +557,11 @@ class EmailAuthService
     public function ipHourlyRateKey(string $ip): string
     {
         return 'auth_code_hourly_ip:'.sha1(trim($ip));
+    }
+
+    public function codeAttemptsKey(string $rawEmail, string $purpose): string
+    {
+        return 'auth_code_attempts:'.sha1($this->normalizeEmail($rawEmail).'|'.$purpose);
     }
 
     public function loginRateKey(string $rawEmail, string $ip): string

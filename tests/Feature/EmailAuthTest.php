@@ -743,6 +743,72 @@ class EmailAuthTest extends TestCase
             ->assertHasErrors(['authCode']);
     }
 
+    private function sendRegisterCode(EmailAuthService $service, string $email): string
+    {
+        $code = null;
+        Mail::fake();
+        Cache::forget($service->cooldownCacheKey($email));
+        $this->assertTrue($service->sendCode($email, AuthCode::PURPOSE_REGISTER, '10.0.0.9')['success']);
+        Mail::assertSent(AuthCodeMail::class, function (AuthCodeMail $mail) use (&$code) {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        return $code;
+    }
+
+    private function wrongCode(string $code): string
+    {
+        return $code === '000000' ? '111111' : '000000';
+    }
+
+    public function test_code_is_not_checked_once_attempts_are_used_up_even_if_correct(): void
+    {
+        $service = app(EmailAuthService::class);
+        $code = $this->sendRegisterCode($service, 'race@example.com');
+
+        // State after five parallel wrong guesses that all read the code
+        // before any of them could burn it.
+        for ($i = 0; $i < EmailAuthService::MAX_CODE_ATTEMPTS; $i++) {
+            RateLimiter::hit($service->codeAttemptsKey('race@example.com', AuthCode::PURPOSE_REGISTER), 600);
+        }
+
+        $res = $service->verifyCode('race@example.com', AuthCode::PURPOSE_REGISTER, $code);
+        $this->assertFalse($res['success']);
+        $this->assertSame('max_attempts', $res['error']);
+    }
+
+    public function test_successful_code_check_resets_the_attempt_counter(): void
+    {
+        $service = app(EmailAuthService::class);
+        $code = $this->sendRegisterCode($service, 'reset@example.com');
+
+        for ($i = 0; $i < EmailAuthService::MAX_CODE_ATTEMPTS - 1; $i++) {
+            $this->assertSame('wrong_code', $service->verifyCode('reset@example.com', AuthCode::PURPOSE_REGISTER, $this->wrongCode($code))['error']);
+        }
+
+        $this->assertTrue($service->verifyCode('reset@example.com', AuthCode::PURPOSE_REGISTER, $code)['success']);
+        $this->assertSame(0, RateLimiter::attempts($service->codeAttemptsKey('reset@example.com', AuthCode::PURPOSE_REGISTER)));
+    }
+
+    public function test_new_code_resets_the_attempt_counter(): void
+    {
+        $service = app(EmailAuthService::class);
+        $code = $this->sendRegisterCode($service, 'again@example.com');
+
+        for ($i = 0; $i < EmailAuthService::MAX_CODE_ATTEMPTS - 1; $i++) {
+            $service->verifyCode('again@example.com', AuthCode::PURPOSE_REGISTER, $this->wrongCode($code));
+        }
+
+        $code = $this->sendRegisterCode($service, 'again@example.com');
+        for ($i = 0; $i < EmailAuthService::MAX_CODE_ATTEMPTS - 1; $i++) {
+            $this->assertSame('wrong_code', $service->verifyCode('again@example.com', AuthCode::PURPOSE_REGISTER, $this->wrongCode($code))['error']);
+        }
+
+        $this->assertTrue($service->verifyCode('again@example.com', AuthCode::PURPOSE_REGISTER, $code)['success']);
+    }
+
     public function test_hourly_rate_limits_for_email_and_ip_block_sixth_request(): void
     {
         Mail::fake();

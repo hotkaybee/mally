@@ -16,9 +16,11 @@ class ReviewForm
                 TextInput::make('product_title')
                     ->label(__('Product'))
                     ->disabled(),
-                TextInput::make('order_number')
+                TextInput::make('order_id')
                     ->label(__('Order number'))
-                    ->disabled(),
+                    ->formatStateUsing(fn ($record) => $record?->order?->order_number)
+                    ->disabled()
+                    ->dehydrated(false),
                 TextInput::make('author_name')
                     ->label(__('Author'))
                     ->required()

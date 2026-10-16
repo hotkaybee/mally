@@ -31,7 +31,7 @@ class ReviewsTable
                     ->label(__('comment'))
                     ->limit(60)
                     ->wrap(),
-                TextColumn::make('order_number')
+                TextColumn::make('order.order_number')
                     ->label(__('Order number'))
                     ->toggleable(),
                 ToggleColumn::make('is_approved')

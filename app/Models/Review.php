@@ -12,7 +12,7 @@ class Review extends Model
         'product_sku',
         'product_title',
         'customer_id',
-        'order_number',
+        'order_id',
         'author_name',
         'city',
         'rating',
@@ -33,6 +33,11 @@ class Review extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
     }
 
     public function customer(): BelongsTo

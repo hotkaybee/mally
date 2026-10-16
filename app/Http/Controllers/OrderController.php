@@ -95,7 +95,7 @@ class OrderController extends Controller
         $hash = trim((string) $request->query('hash', ''));
 
         $order = ctype_digit($number) && $hash !== ''
-            ? Order::with('orderProducts.product')->where('order_number', (int) $number)->first()
+            ? Order::with('orderProducts.product')->withNumber((int) $number)->first()
             : null;
 
         if (! $order || empty($order->secure_hash) || ! hash_equals((string) $order->secure_hash, $hash)) {

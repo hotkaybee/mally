@@ -177,7 +177,7 @@ class ProfilePage extends Component
         }
 
         $alreadyReviewed = Review::where('customer_id', $customer->id)
-            ->where('order_number', $order->order_number)
+            ->where('order_id', $order->id)
             ->where('product_id', $product->id)
             ->exists();
         if ($alreadyReviewed) {
@@ -198,7 +198,7 @@ class ProfilePage extends Component
             'product_sku' => $product->sku,
             'product_title' => $product->name,
             'customer_id' => $customer->id,
-            'order_number' => $order->order_number,
+            'order_id' => $order->id,
             'author_name' => trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')) ?: 'Покупатель Mally',
             'city' => $customer->city ?: 'Ташкент',
             'rating' => max(1, min(5, (int) $this->reviewRating)),
@@ -228,7 +228,7 @@ class ProfilePage extends Component
         }
 
         return Order::where('customer_id', $customer->id)
-            ->where('order_number', $orderNumber)
+            ->withNumber($orderNumber)
             ->where('status', 'delivered')
             ->whereHas('orderProducts', fn ($q) => $q->where('product_id', $productId))
             ->first();
@@ -255,7 +255,7 @@ class ProfilePage extends Component
                 ->get();
 
             foreach (Review::where('customer_id', $customer->id)->get() as $rev) {
-                $ordKey = (int) ($rev->order_number ?? 0);
+                $ordKey = (int) ($rev->order_id ?? 0);
                 if ($rev->product_id) {
                     $reviewedKeys[$ordKey.':'.$rev->product_id] = true;
                 }

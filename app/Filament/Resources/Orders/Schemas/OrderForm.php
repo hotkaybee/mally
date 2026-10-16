@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Models\OrderProduct;
+use App\Models\Product;
 use App\Models\ProductReceipt;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -29,7 +30,7 @@ class OrderForm
                     ->schema([
                         Select::make('product_id')
                             ->label(__('Product'))
-                            ->options(\App\Models\Product::orderBy('name')->pluck('name', 'id'))
+                            ->options(Product::orderBy('name')->pluck('name', 'id'))
                             ->searchable()
                             ->required()
                             ->reactive()

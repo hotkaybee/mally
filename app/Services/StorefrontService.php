@@ -762,7 +762,7 @@ class StorefrontService
             'isNew' => $p->created_at && $p->created_at->gt(now()->subDays(30)),
             'image' => $img,
             'images' => [$img],
-            'description' => $p->description ?: ($p->comment ?: 'Премиальная оригинальная продукция из США.'),
+            'description' => $p->description ?: 'Премиальная оригинальная продукция из США.',
             'features' => ['100% Оригинал из США', 'Сертифицированная косметика'],
             'howToUse' => 'Наносите в соответствии с рекомендациями производителя.',
             'reviews' => $withReviews ? $this->getDatabaseReviewsForProduct($p->id) : [],

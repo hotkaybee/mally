@@ -199,4 +199,19 @@ class StorefrontLivewireTest extends TestCase
         $this->app->forgetInstance(StorefrontService::class);
         $this->assertSame('—', app(StorefrontService::class)->formatPrice(57.15));
     }
+
+    public function test_admin_comment_never_reaches_the_storefront(): void
+    {
+        $product = $this->product();
+        $product->update(['description' => null, 'comment' => 'SECRET-SUPPLIER-NOTE']);
+
+        $data = app(StorefrontService::class)->formatProduct($product->fresh(), true);
+
+        $this->assertStringNotContainsString('SECRET-SUPPLIER-NOTE', json_encode($data, JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame('', $data['description']);
+
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertDontSee('SECRET-SUPPLIER-NOTE');
+    }
 }

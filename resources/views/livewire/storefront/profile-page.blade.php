@@ -331,7 +331,7 @@
 
                             @foreach($orders as $order)
                                 @php
-                                    $orderNum = $order->order_number ?: $order->id;
+                                    $orderNum = $order->order_number;
                                     $receiptUrl = $order->secure_hash
                                         ? route('checkout.receipt', ['orderNumber' => $orderNum, 'orderHash' => $order->secure_hash])
                                         : route('checkout.receipt', ['orderNumber' => $orderNum]);
@@ -444,7 +444,7 @@
 
                                                             @if($isDelivered && $prod)
                                                                 @php
-                                                                    $ordKeyInt = (int) $orderNum;
+                                                                    $ordKeyInt = (int) $order->id;
                                                                     $hasReview = !empty($reviewedKeys[$ordKeyInt.':'.$prod->id])
                                                                         || ($prod->sku && !empty($reviewedKeys[$ordKeyInt.':'.$prod->sku]));
                                                                     $reviewedLabel = match ($locale) {

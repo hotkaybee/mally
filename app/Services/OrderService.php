@@ -67,9 +67,6 @@ class OrderService
                 'payment_status' => 'PENDING',
             ]);
 
-            // Numbers come from the auto-increment id, so parallel orders can't collide.
-            $order->order_number = 1000 + $order->id;
-
             $subtotal = 0.0;
             ksort($quantities); // stable lock order across concurrent orders
 

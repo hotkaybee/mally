@@ -4,6 +4,9 @@ namespace App\Models;
 
 use App\Observers\OrderObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,9 +18,11 @@ class Order extends Model
 {
     use HasFactory;
 
+    /** Customer-facing order number = id + NUMBER_OFFSET (not stored). */
+    public const NUMBER_OFFSET = 1000;
+
     protected $fillable = [
         'customer_id',
-        'order_number',
         'secure_hash',
         'customer_name',
         'customer_phone',
@@ -34,6 +39,18 @@ class Order extends Model
         'payment_method',
         'payment_status',
     ];
+
+    protected function orderNumber(): Attribute
+    {
+        return Attribute::get(fn () => $this->id ? $this->id + self::NUMBER_OFFSET : null);
+    }
+
+    /** Find an order by its customer-facing number. */
+    #[Scope]
+    protected function withNumber(Builder $query, int $number): void
+    {
+        $query->whereKey($number - self::NUMBER_OFFSET);
+    }
 
     public function customer(): BelongsTo
     {

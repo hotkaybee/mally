@@ -1,5 +1,5 @@
 @php
-    $orderNum = $order->order_number ?: $order->id;
+    $orderNum = $order->order_number;
     // Order amounts are stored in USD. So'm values use the CBU rate saved
     // with the order, never today's rate.
     $rate = (float) ($order->exchange_rate ?? 0);

@@ -336,4 +336,40 @@ class StorefrontLivewireTest extends TestCase
         $this->app->forgetInstance(StorefrontService::class);
         $this->assertSame('—', app(StorefrontService::class)->formatPrice(57.15));
     }
+
+    public function test_product_without_photo_uses_the_local_placeholder(): void
+    {
+        $data = app(StorefrontService::class)->formatProduct($this->product());
+
+        $this->assertSame(Product::placeholderUrl(), $data['image']);
+        $this->assertFileExists(public_path('images/product-placeholder.svg'));
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertSee('product-placeholder.svg')
+            ->assertDontSee('findy.uz');
+    }
+
+    public function test_description_keeps_line_breaks_and_stays_escaped(): void
+    {
+        $this->product()->update(['description' => "Line one\nLine two <b>bold</b>"]);
+
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertSee('<p class="whitespace-pre-line">Line one'."\n".'Line two &lt;b&gt;bold&lt;/b&gt;</p>', false);
+    }
+
+    public function test_admin_comment_never_reaches_the_storefront(): void
+    {
+        $product = $this->product();
+        $product->update(['description' => null, 'comment' => 'SECRET-SUPPLIER-NOTE']);
+
+        $data = app(StorefrontService::class)->formatProduct($product->fresh(), true);
+
+        $this->assertStringNotContainsString('SECRET-SUPPLIER-NOTE', json_encode($data, JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame('', $data['description']);
+
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertDontSee('SECRET-SUPPLIER-NOTE');
+    }
 }

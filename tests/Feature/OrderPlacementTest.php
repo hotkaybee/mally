@@ -20,6 +20,7 @@ use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -257,9 +258,14 @@ class OrderPlacementTest extends TestCase
         $a = $this->place($this->customer(), [$product->id => 1]);
         $b = $this->place($this->customer(['phone_number' => '+998 91 111 11 11']), [$product->id => 1]);
 
-        $this->assertSame(1000 + $a->id, (int) $a->order_number);
-        $this->assertSame(1000 + $b->id, (int) $b->order_number);
+        $this->assertSame(1000 + $a->id, $a->order_number);
+        $this->assertSame(1000 + $b->id, $b->order_number);
         $this->assertNotSame($a->order_number, $b->order_number);
+
+        // The number is derived from the id, not stored.
+        $this->assertFalse(Schema::hasColumn('orders', 'order_number'));
+        $this->assertSame($b->id, Order::withNumber($b->order_number)->value('id'));
+        $this->assertNull(Order::withNumber($b->id)->value('id'));
     }
 
     public function test_technical_errors_are_not_shown_to_the_customer(): void
@@ -501,6 +507,8 @@ class OrderPlacementTest extends TestCase
             ->call('submitReview');
 
         $review = Review::sole();
+        $this->assertSame($order->id, $review->order_id);
+        $this->assertTrue($review->order->is($order));
         $this->assertFalse($review->is_approved);
         $this->assertSame($product->name, $review->product_title);
         $this->assertSame(['https://img.example.com/a.jpg'], $review->photos);

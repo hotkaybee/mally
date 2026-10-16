@@ -35,7 +35,7 @@ class OrderReceiptPage extends Component
         abort_unless(ctype_digit($this->orderNumber), 404);
 
         $order = Order::with(['customer', 'orderProducts.product'])
-            ->where('order_number', (int) $this->orderNumber)
+            ->withNumber((int) $this->orderNumber)
             ->firstOrFail();
 
         // Access: the secret link from checkout, or the signed-in owner of the order.

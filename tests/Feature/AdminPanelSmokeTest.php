@@ -3,9 +3,13 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Orders\Pages\EditOrder;
+use App\Filament\Resources\Orders\Pages\ListOrders;
+use App\Filament\Resources\Reviews\Pages\EditReview;
+use App\Filament\Resources\Reviews\Pages\ListReviews;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Review;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -77,5 +81,27 @@ class AdminPanelSmokeTest extends TestCase
 
         $this->assertEquals(75.0, (float) $order->fresh()->amount);
         $this->assertSame(0, $receipt->fresh()->quantity_remaining);
+    }
+
+    public function test_orders_and_reviews_show_the_derived_order_number(): void
+    {
+        config(['app.env' => 'local']);
+        $this->actingAs(User::factory()->admin()->create());
+
+        $first = Order::create(['amount' => 10, 'status' => 'processing']);
+        $second = Order::create(['amount' => 20, 'status' => 'processing']);
+        $review = Review::create(['order_id' => $second->id, 'author_name' => 'A', 'comment' => 'Nice', 'rating' => 5]);
+
+        Livewire::test(ListOrders::class)
+            ->searchTable((string) $second->order_number)
+            ->assertCanSeeTableRecords([$second])
+            ->assertCanNotSeeTableRecords([$first])
+            ->searchTable('')
+            ->sortTable('order_number', 'desc')
+            ->assertCanSeeTableRecords([$second, $first], inOrder: true);
+
+        Livewire::test(ListReviews::class)->assertSee((string) $second->order_number);
+        Livewire::test(EditReview::class, ['record' => $review->getRouteKey()])
+            ->assertSchemaStateSet(['order_id' => $second->order_number]);
     }
 }

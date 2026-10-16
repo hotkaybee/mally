@@ -26,18 +26,6 @@ class OrderObserver
     }
 
     /**
-     * Order numbers come from the auto-increment id (never max + 1), for
-     * admin orders as well as checkout ones.
-     */
-    public function created(Order $order): void
-    {
-        if (! $order->order_number) {
-            $order->order_number = 1000 + $order->id;
-            $order->saveQuietly();
-        }
-    }
-
-    /**
      * Payment status follows the money actually received.
      */
     public function saving(Order $order): void

@@ -299,7 +299,7 @@ class InventoryTest extends TestCase
     {
         $order = $this->makeOrder();
 
-        $this->assertSame(1000 + $order->id, (int) $order->fresh()->order_number);
+        $this->assertSame(1000 + $order->id, $order->fresh()->order_number);
         $this->assertSame(32, strlen($order->fresh()->secure_hash));
         $this->assertSame('PENDING', $order->fresh()->payment_status);
 

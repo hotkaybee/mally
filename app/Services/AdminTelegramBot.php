@@ -136,7 +136,7 @@ class AdminTelegramBot
 
         $query = trim((string) preg_replace('/^[#№\s]+/u', '', $text));
         $order = $command !== '/sku' && ctype_digit($query)
-            ? Order::where('order_number', (int) $query)->first()
+            ? Order::withNumber((int) $query)->first()
             : null;
         $product = $command !== '/order' ? Product::where('sku', $query)->first() : null;
 

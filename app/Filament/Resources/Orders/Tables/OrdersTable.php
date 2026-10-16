@@ -8,6 +8,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class OrdersTable
 {
@@ -16,10 +17,11 @@ class OrdersTable
         return $table
             ->modifyQueryUsing(fn ($query) => $query->with('customer'))
             ->columns([
+                // Not a column: Order::order_number is derived from the id.
                 TextColumn::make('order_number')
                     ->label(__('Order number'))
-                    ->searchable()
-                    ->sortable(),
+                    ->searchable(query: fn (Builder $query, string $search) => ctype_digit($search) ? $query->withNumber((int) $search) : $query)
+                    ->sortable(query: fn (Builder $query, string $direction) => $query->orderBy('id', $direction)),
                 TextColumn::make('customer.first_name')
                     ->label(__('Customer'))
                     // The customer may have been deleted; the order keeps the recipient name.

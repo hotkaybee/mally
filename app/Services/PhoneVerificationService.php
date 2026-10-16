@@ -72,10 +72,11 @@ class PhoneVerificationService
         RateLimiter::hit('otp-hour:'.$digits, 3600);
         RateLimiter::hit('otp-ip:'.$ip, 3600);
 
+        // Reset the counter before the new code becomes checkable.
+        RateLimiter::clear($this->attemptsKey($digits));
         Cache::put($this->cacheKey($digits), [
             'hash' => Hash::make($code),
         ], self::CODE_TTL_SECONDS);
-        RateLimiter::clear($this->attemptsKey($digits));
 
         session([self::SESSION_PENDING => $phone]);
         session()->forget(self::SESSION_VERIFIED);

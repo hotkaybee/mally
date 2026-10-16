@@ -111,7 +111,7 @@
                         <div class="relative aspect-square w-full rounded-xl overflow-hidden bg-[#FAF7F5]">
                             <a href="{{ $productUrl }}" wire:navigate class="block w-full h-full">
                                 <img
-                                    src="{{ $item['image'] ?? 'https://findy.uz/cdn/shop/files/sample.jpg' }}"
+                                    src="{{ $item['image'] ?? \App\Models\Product::placeholderUrl() }}"
                                     alt="{{ $item['title'] }}"
                                     class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                                 />

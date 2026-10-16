@@ -5,9 +5,9 @@
     $qtyInCart = $store->getItemQuantityInCart($prodKey);
     $images = !empty($currentProduct['images']) && is_array($currentProduct['images'])
         ? array_values(array_filter($currentProduct['images']))
-        : [$currentProduct['image'] ?? 'https://findy.uz/cdn/shop/files/sample.jpg'];
+        : [$currentProduct['image'] ?? \App\Models\Product::placeholderUrl()];
     if (empty($images)) {
-        $images = ['https://findy.uz/cdn/shop/files/sample.jpg'];
+        $images = [\App\Models\Product::placeholderUrl()];
     }
     $isOutOfStock = empty($currentProduct['inStock']);
     $canIncrease = $qtyInCart > 0 && $store->canIncrease($prodKey);

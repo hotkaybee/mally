@@ -200,6 +200,18 @@ class StorefrontLivewireTest extends TestCase
         $this->assertSame('—', app(StorefrontService::class)->formatPrice(57.15));
     }
 
+    public function test_product_without_photo_uses_the_local_placeholder(): void
+    {
+        $data = app(StorefrontService::class)->formatProduct($this->product());
+
+        $this->assertSame(Product::placeholderUrl(), $data['image']);
+        $this->assertFileExists(public_path('images/product-placeholder.svg'));
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertSee('images/product-placeholder.svg')
+            ->assertDontSee('findy.uz');
+    }
+
     public function test_admin_comment_never_reaches_the_storefront(): void
     {
         $product = $this->product();

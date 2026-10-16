@@ -402,7 +402,7 @@
                                                         $prod = $item->product;
                                                         $img = $prod?->image
                                                             ? (str_starts_with($prod->image, 'http') ? $prod->image : asset($prod->image))
-                                                            : 'https://findy.uz/cdn/shop/files/sample.jpg';
+                                                            : \App\Models\Product::placeholderUrl();
                                                     @endphp
                                                     <div class="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between gap-4">
                                                         <div class="flex items-center gap-3 flex-1 min-w-0">

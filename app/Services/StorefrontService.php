@@ -740,7 +740,7 @@ class StorefrontService
         $category = $p->category;
         $catNameRu = $category?->name_ru ?: ($category?->name ?: 'Косметика');
         $price = round((float) $p->selling_price, 2);
-        $img = $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset($p->image)) : 'https://findy.uz/cdn/shop/files/sample.jpg';
+        $img = $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset($p->image)) : Product::placeholderUrl();
         $inStock = $this->isSellable($p);
 
         return [

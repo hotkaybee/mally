@@ -64,4 +64,9 @@ class Product extends Model
             ->using(OrderProduct::class)
             ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
     }
+
+    public static function placeholderUrl(): string
+    {
+        return asset('images/product-placeholder.svg');
+    }
 }

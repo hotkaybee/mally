@@ -346,7 +346,6 @@ class EmailAuthService
         Cache::put($cooldownKey, time() + self::COOLDOWN_SECONDS, self::COOLDOWN_SECONDS);
         RateLimiter::hit($emailRateKey, 3600);
         RateLimiter::hit($ipRateKey, 3600);
-        RateLimiter::clear($this->codeAttemptsKey($email, $purpose));
 
         $msg = $purpose === AuthCode::PURPOSE_RESET
             ? 'Если указанный email зарегистрирован, мы отправили на него код подтверждения.'
@@ -401,7 +400,8 @@ class EmailAuthService
 
         // Count the attempt atomically before checking, so parallel requests
         // can't all read a stale counter and test more than 5 codes.
-        $attemptsKey = $this->codeAttemptsKey($email, $purpose);
+        // Each code has its own budget, so a new code starts from zero.
+        $attemptsKey = $this->codeAttemptsKey($authCode);
         $attempts = RateLimiter::hit($attemptsKey, self::CODE_TTL_MINUTES * 60);
         $authCode->update(['attempts' => $attempts]);
 
@@ -559,9 +559,9 @@ class EmailAuthService
         return 'auth_code_hourly_ip:'.sha1(trim($ip));
     }
 
-    public function codeAttemptsKey(string $rawEmail, string $purpose): string
+    public function codeAttemptsKey(AuthCode $authCode): string
     {
-        return 'auth_code_attempts:'.sha1($this->normalizeEmail($rawEmail).'|'.$purpose);
+        return 'auth_code_attempts:'.$authCode->id;
     }
 
     public function loginRateKey(string $rawEmail, string $ip): string

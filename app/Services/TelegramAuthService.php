@@ -306,6 +306,8 @@ class TelegramAuthService
 
         $code = (string) random_int(100000, 999999);
 
+        // Reset the counter before the new code becomes checkable.
+        RateLimiter::clear($this->codeAttemptsKey($request));
         $request->update([
             'phone' => $phone,
             'code_hash' => Hash::make($code),
@@ -313,7 +315,6 @@ class TelegramAuthService
             'status' => TelegramLoginRequest::STATUS_CODE_SENT,
             'expires_at' => now()->addSeconds(self::CODE_TTL_SECONDS),
         ]);
-        RateLimiter::clear($this->codeAttemptsKey($request));
 
         $this->sendMessage(
             $chatId,

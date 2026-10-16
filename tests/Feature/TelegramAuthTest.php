@@ -187,7 +187,8 @@ class TelegramAuthTest extends TestCase
 
         $component->set('authTelegramCode', $this->codeSentByBot())->call('verifyTelegramCode')->assertSet('authStep', 'telegram-wait');
         $this->assertNull(session('mally_customer_id'));
-        $this->assertNotSame('used', $request->fresh()->status);
+        $this->assertNull($request->fresh()->code_hash);
+        $this->assertSame(0, User::count());
     }
 
     public function test_successful_code_check_resets_the_attempt_counter(): void

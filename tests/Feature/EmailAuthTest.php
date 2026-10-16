@@ -773,7 +773,7 @@ class EmailAuthTest extends TestCase
         // State after five parallel wrong guesses that all read the code
         // before any of them could burn it.
         for ($i = 0; $i < EmailAuthService::MAX_CODE_ATTEMPTS; $i++) {
-            RateLimiter::hit($service->codeAttemptsKey('race@example.com', AuthCode::PURPOSE_REGISTER), 600);
+            RateLimiter::hit($service->codeAttemptsKey(AuthCode::where('email', 'race@example.com')->sole()), 600);
         }
 
         $res = $service->verifyCode('race@example.com', AuthCode::PURPOSE_REGISTER, $code);
@@ -791,7 +791,7 @@ class EmailAuthTest extends TestCase
         }
 
         $this->assertTrue($service->verifyCode('reset@example.com', AuthCode::PURPOSE_REGISTER, $code)['success']);
-        $this->assertSame(0, RateLimiter::attempts($service->codeAttemptsKey('reset@example.com', AuthCode::PURPOSE_REGISTER)));
+        $this->assertSame(0, RateLimiter::attempts($service->codeAttemptsKey(AuthCode::where('email', 'reset@example.com')->sole())));
     }
 
     public function test_new_code_resets_the_attempt_counter(): void

@@ -8,6 +8,10 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     *
+     * Order amounts stay in USD. exchange_rate records the CBU rate at the
+     * moment of the order, so the so'm total on the receipt doesn't change
+     * when the rate does.
      */
     public function up(): void
     {
@@ -20,8 +24,7 @@ return new class extends Migration
             $table->text('comment')->nullable()->after('address');
             $table->string('promo_code')->nullable()->after('comment');
             $table->decimal('discount_amount', 10, 2)->default(0)->after('promo_code');
-            $table->string('payment_method')->default('card_fast')->after('discount_amount');
-            $table->string('payment_status')->default('PENDING')->after('payment_method');
+            $table->decimal('exchange_rate', 12, 2)->nullable()->after('amount_paid');
         });
     }
 
@@ -40,8 +43,7 @@ return new class extends Migration
                 'comment',
                 'promo_code',
                 'discount_amount',
-                'payment_method',
-                'payment_status',
+                'exchange_rate',
             ]);
         });
     }

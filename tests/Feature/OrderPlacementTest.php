@@ -318,7 +318,63 @@ class OrderPlacementTest extends TestCase
         $this->getJson('/api/orders/track?order='.$order->order_number.'&hash=wrong')->assertNotFound();
         $this->getJson('/api/orders/track?order='.$order->order_number.'&hash='.$order->secure_hash)
             ->assertOk()
-            ->assertJsonMissingPath('order.city');
+            ->assertJsonMissingPath('order.city')
+            ->assertJsonMissingPath('order.paymentStatus')
+            ->assertJsonPath('order.isPaid', false);
+    }
+
+    public function test_api_ignores_a_payment_method_from_the_bot(): void
+    {
+        config(['services.store.orders_api_token' => 'secret-token']);
+        $product = $this->product();
+
+        $this->postJson('/api/orders', [
+            'customerName' => 'Ali', 'customerPhone' => '+998 93 555 44 33',
+            'paymentMethod' => 'anything',
+            'items' => [['id' => $product->id, 'quantity' => 1]],
+        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
+
+        $this->assertSame(1, Order::count());
+    }
+
+    // ---------------------------------------------------- derived order fields
+
+    public function test_payment_and_som_columns_are_not_stored(): void
+    {
+        foreach (['amount_uzs', 'payment_status', 'payment_method'] as $column) {
+            $this->assertFalse(Schema::hasColumn('orders', $column), $column);
+        }
+        $this->assertTrue(Schema::hasColumn('orders', 'exchange_rate'));
+    }
+
+    public function test_som_total_follows_an_edited_amount_at_the_saved_rate(): void
+    {
+        $product = $this->product(10, [10]);
+        $order = $this->place($this->customer(), [$product->id => 1]);
+        $this->assertSame((int) round(10 * self::RATE), $order->fresh()->amount_uzs);
+
+        // Today's rate changes; the order keeps its own.
+        Cache::put(ExchangeRateService::CACHE_KEY, ['rate' => 99999.0, 'source' => 'cbu.uz', 'isLive' => true], 3600);
+        $order->update(['amount' => 25]);
+
+        $this->assertSame((int) round(25 * self::RATE), $order->fresh()->amount_uzs);
+    }
+
+    public function test_an_order_is_paid_only_when_the_paid_amount_covers_it(): void
+    {
+        $order = new Order(['amount' => 50, 'amount_paid' => 0]);
+        $this->assertFalse($order->isPaid());
+
+        $order->amount_paid = 49.99;
+        $this->assertFalse($order->isPaid());
+
+        $order->amount_paid = 50;
+        $this->assertTrue($order->isPaid());
+
+        $order->amount_paid = 60;
+        $this->assertTrue($order->isPaid());
+
+        $this->assertFalse((new Order(['amount' => 0, 'amount_paid' => 0]))->isPaid());
     }
 
     // ------------------------------------------------------- receipt & profile

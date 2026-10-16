@@ -74,8 +74,8 @@ class PhoneVerificationService
 
         Cache::put($this->cacheKey($digits), [
             'hash' => Hash::make($code),
-            'attempts' => 0,
         ], self::CODE_TTL_SECONDS);
+        RateLimiter::clear($this->attemptsKey($digits));
 
         session([self::SESSION_PENDING => $phone]);
         session()->forget(self::SESSION_VERIFIED);
@@ -98,29 +98,37 @@ class PhoneVerificationService
             return self::EXPIRED;
         }
 
-        $key = $this->cacheKey($this->digits($phone));
+        $digits = $this->digits($phone);
+        $key = $this->cacheKey($digits);
         $entry = Cache::get($key);
         if (! is_array($entry)) {
+            return self::EXPIRED;
+        }
+
+        // Count the attempt atomically before checking, so parallel requests
+        // can't all read a stale counter and test more than MAX_ATTEMPTS codes.
+        $attempts = RateLimiter::hit($this->attemptsKey($digits), self::CODE_TTL_SECONDS);
+        if ($attempts > self::MAX_ATTEMPTS) {
+            Cache::forget($key);
+
             return self::EXPIRED;
         }
 
         $code = preg_replace('/\D/', '', $code);
         if ($code !== '' && Hash::check($code, $entry['hash'])) {
             Cache::forget($key);
+            RateLimiter::clear($this->attemptsKey($digits));
             session()->forget(self::SESSION_PENDING);
             session([self::SESSION_VERIFIED => ['phone' => $phone, 'until' => now()->addSeconds(self::VERIFIED_TTL_SECONDS)->timestamp]]);
 
             return self::VERIFIED;
         }
 
-        $entry['attempts']++;
-        if ($entry['attempts'] >= self::MAX_ATTEMPTS) {
+        if ($attempts >= self::MAX_ATTEMPTS) {
             Cache::forget($key);
 
             return self::EXPIRED;
         }
-
-        Cache::put($key, $entry, self::CODE_TTL_SECONDS);
 
         return self::INVALID;
     }
@@ -165,5 +173,10 @@ class PhoneVerificationService
     private function cacheKey(string $digits): string
     {
         return 'otp:'.$digits;
+    }
+
+    private function attemptsKey(string $digits): string
+    {
+        return 'otp-verify:'.$digits;
     }
 }

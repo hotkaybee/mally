@@ -8,6 +8,7 @@ use App\Services\PhoneVerificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -110,6 +111,56 @@ class StorefrontAuthTest extends TestCase
         $component->assertSet('authStep', 'phone');
         $component->set('authCode', $this->lastCode)->call('verifyAuthCode');
         $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_code_is_not_checked_once_attempts_are_used_up_even_if_correct(): void
+    {
+        $service = app(PhoneVerificationService::class);
+        $service->send(self::PHONE, '127.0.0.1');
+
+        // State after five parallel wrong guesses that all read the code
+        // before any of them could delete it.
+        for ($i = 0; $i < PhoneVerificationService::MAX_ATTEMPTS; $i++) {
+            RateLimiter::hit('otp-verify:998901234567', PhoneVerificationService::CODE_TTL_SECONDS);
+        }
+
+        $this->assertSame(PhoneVerificationService::EXPIRED, $service->verify($this->lastCode));
+        $this->assertNull($service->verifiedPhone());
+    }
+
+    public function test_successful_check_resets_the_attempt_counter(): void
+    {
+        $service = app(PhoneVerificationService::class);
+        $service->send(self::PHONE, '127.0.0.1');
+        $wrong = $this->lastCode === '000000' ? '111111' : '000000';
+
+        for ($i = 0; $i < PhoneVerificationService::MAX_ATTEMPTS - 1; $i++) {
+            $this->assertSame(PhoneVerificationService::INVALID, $service->verify($wrong));
+        }
+
+        $this->assertSame(PhoneVerificationService::VERIFIED, $service->verify($this->lastCode));
+        $this->assertSame(0, RateLimiter::attempts('otp-verify:998901234567'));
+    }
+
+    public function test_new_code_resets_the_attempt_counter(): void
+    {
+        $service = app(PhoneVerificationService::class);
+        $service->send(self::PHONE, '127.0.0.1');
+        $wrong = $this->lastCode === '000000' ? '111111' : '000000';
+
+        for ($i = 0; $i < PhoneVerificationService::MAX_ATTEMPTS - 1; $i++) {
+            $service->verify($wrong);
+        }
+
+        $this->travel(PhoneVerificationService::RESEND_SECONDS + 1)->seconds();
+        $this->assertSame(PhoneVerificationService::SENT, $service->send(self::PHONE, '127.0.0.1'));
+        $wrong = $this->lastCode === '000000' ? '111111' : '000000';
+
+        for ($i = 0; $i < PhoneVerificationService::MAX_ATTEMPTS - 1; $i++) {
+            $this->assertSame(PhoneVerificationService::INVALID, $service->verify($wrong));
+        }
+
+        $this->assertSame(PhoneVerificationService::VERIFIED, $service->verify($this->lastCode));
     }
 
     public function test_code_cannot_be_reused(): void

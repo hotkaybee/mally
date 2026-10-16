@@ -70,7 +70,7 @@ class CustomerAccountService
             'last_name' => $last,
             'email' => $email,
             'phone_number' => $user->phone,
-            'source' => $user->telegram_id ? 'telegram' : 'instagram',
+            'source' => $user->telegram_id ? 'telegram' : 'website',
         ]);
     }
 

@@ -133,6 +133,7 @@ class TelegramAuthTest extends TestCase
         $customer = Customer::sole();
         $this->assertSame($user->id, $customer->user_id);
         $this->assertSame('@ali_tg', $customer->telegram);
+        $this->assertSame('telegram', $customer->source);
         $this->assertSame($customer->id, session('mally_customer_id'));
         $this->assertNotSame($sessionBefore, session()->getId(), 'session id must be regenerated on login');
 

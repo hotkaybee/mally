@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Storefront\HomePage;
 use App\Mail\AuthCodeMail;
 use App\Models\AuthCode;
+use App\Models\Customer;
 use App\Models\User;
 use App\Services\EmailAuthService;
 use Exception;
@@ -562,6 +563,7 @@ class EmailAuthTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'tampered@example.com']);
         $this->assertSame($user->id, session('mally_user_id'));
         $this->assertNotNull(session('mally_customer_id'));
+        $this->assertSame('website', Customer::findOrFail(session('mally_customer_id'))->source);
     }
 
     public function test_password_reset_flow_sends_reset_code_verifies_updates_hashed_password_and_logs_in_immediately(): void

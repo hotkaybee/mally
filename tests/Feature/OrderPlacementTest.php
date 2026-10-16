@@ -534,8 +534,9 @@ class OrderPlacementTest extends TestCase
 
     public function test_deleting_an_order_deletes_its_reviews(): void
     {
+        // The cascade is a database rule, so a not-yet-delivered order is enough here.
         $product = $this->product(10, [10]);
-        $order = $this->deliveredOrder($this->customer(), $product);
+        $order = $this->place($this->customer(), [$product->id => 1]);
         $this->review($order, $product);
 
         $order->delete();

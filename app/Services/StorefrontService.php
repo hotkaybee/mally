@@ -243,7 +243,7 @@ class StorefrontService
             return [];
         }
 
-        return Review::query()
+        return Review::with(['product', 'order.customer'])
             ->where('is_approved', true)
             ->where('product_id', $productId)
             ->latest('id')
@@ -251,10 +251,10 @@ class StorefrontService
             ->map(fn (Review $rev) => [
                 'id' => 'db_rev_'.$rev->id,
                 'author' => $rev->author_name,
-                'city' => $rev->city ?: 'Ташкент',
+                'city' => $rev->author_city,
                 'rating' => (int) $rev->rating,
                 'date' => $rev->created_at?->timezone('Asia/Tashkent')->format('d.m.Y'),
-                'title' => $rev->product_title ?: '',
+                'title' => $rev->product?->name ?: '',
                 'comment' => $rev->comment,
                 'text' => $rev->comment,
                 'photos' => is_array($rev->photos) ? $rev->photos : [],

@@ -176,7 +176,7 @@ class ProfilePage extends Component
             return;
         }
 
-        $alreadyReviewed = Review::where('customer_id', $customer->id)
+        $alreadyReviewed = Review::whereHas('order', fn ($q) => $q->where('customer_id', $customer->id))
             ->where('order_id', $order->id)
             ->where('product_id', $product->id)
             ->exists();
@@ -195,12 +195,7 @@ class ProfilePage extends Component
 
         Review::create([
             'product_id' => $product->id,
-            'product_sku' => $product->sku,
-            'product_title' => $product->name,
-            'customer_id' => $customer->id,
             'order_id' => $order->id,
-            'author_name' => trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')) ?: 'Покупатель Mally',
-            'city' => $customer->city ?: 'Ташкент',
             'rating' => max(1, min(5, (int) $this->reviewRating)),
             'comment' => $commentText,
             'photos' => $photos,
@@ -254,14 +249,10 @@ class ProfilePage extends Component
                 ->latest('id')
                 ->get();
 
-            foreach (Review::where('customer_id', $customer->id)->get() as $rev) {
-                $ordKey = (int) ($rev->order_id ?? 0);
-                if ($rev->product_id) {
-                    $reviewedKeys[$ordKey.':'.$rev->product_id] = true;
-                }
-                if ($rev->product_sku) {
-                    $reviewedKeys[$ordKey.':'.$rev->product_sku] = true;
-                }
+            $reviews = Review::whereHas('order', fn ($q) => $q->where('customer_id', $customer->id))
+                ->get(['order_id', 'product_id']);
+            foreach ($reviews as $rev) {
+                $reviewedKeys[$rev->order_id.':'.$rev->product_id] = true;
             }
         }
 

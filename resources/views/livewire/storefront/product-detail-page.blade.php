@@ -493,7 +493,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         @foreach($productReviews as $rev)
                             @php
-                                $revAuthor = (string) ($rev['author'] ?? 'Покупатель Mally');
+                                $revAuthor = (string) ($rev['author'] ?? __('Mally customer'));
                                 $revCity = (string) ($rev['city'] ?? '');
                                 $revDate = (string) ($rev['date'] ?? '');
                                 $revRating = max(1, min(5, (int) ($rev['rating'] ?? 5)));

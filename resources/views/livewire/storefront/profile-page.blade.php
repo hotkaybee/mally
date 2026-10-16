@@ -430,8 +430,7 @@
                                                             @if($isDelivered && $prod)
                                                                 @php
                                                                     $ordKeyInt = (int) $order->id;
-                                                                    $hasReview = !empty($reviewedKeys[$ordKeyInt.':'.$prod->id])
-                                                                        || ($prod->sku && !empty($reviewedKeys[$ordKeyInt.':'.$prod->sku]));
+                                                                    $hasReview = !empty($reviewedKeys[$ordKeyInt.':'.$prod->id]);
                                                                     $reviewedLabel = match ($locale) {
                                                                         'uz' => 'Sharh qoldirildi',
                                                                         'en' => 'Reviewed',

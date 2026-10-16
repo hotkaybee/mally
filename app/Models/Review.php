@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -9,12 +10,7 @@ class Review extends Model
 {
     protected $fillable = [
         'product_id',
-        'product_sku',
-        'product_title',
-        'customer_id',
         'order_id',
-        'author_name',
-        'city',
         'rating',
         'comment',
         'photos',
@@ -40,8 +36,25 @@ class Review extends Model
         return $this->belongsTo(Order::class);
     }
 
-    public function customer(): BelongsTo
+    /** Public name: "Aziza K." */
+    protected function authorName(): Attribute
     {
-        return $this->belongsTo(Customer::class);
+        return Attribute::get(function () {
+            $customer = $this->order?->customer;
+            $first = trim((string) $customer?->first_name);
+            $last = trim((string) $customer?->last_name);
+
+            if ($first === '') {
+                return __('Mally customer');
+            }
+
+            return $last === '' ? $first : $first.' '.mb_substr($last, 0, 1).'.';
+        });
+    }
+
+    /** The author's own city, if they have one (no default). */
+    protected function authorCity(): Attribute
+    {
+        return Attribute::get(fn () => trim((string) $this->order?->customer?->city) ?: null);
     }
 }

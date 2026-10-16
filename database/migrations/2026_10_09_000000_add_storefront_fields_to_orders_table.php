@@ -12,8 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->unsignedBigInteger('order_number')->nullable()->unique()->after('id');
-            $table->string('secure_hash', 64)->nullable()->after('order_number');
+            $table->string('secure_hash', 64)->nullable()->after('id');
             $table->string('customer_name')->nullable()->after('customer_id');
             $table->string('customer_phone')->nullable()->after('customer_name');
             $table->string('city')->nullable()->after('customer_phone');
@@ -33,7 +32,6 @@ return new class extends Migration
     {
         Schema::table('orders', function (Blueprint $table) {
             $table->dropColumn([
-                'order_number',
                 'secure_hash',
                 'customer_name',
                 'customer_phone',

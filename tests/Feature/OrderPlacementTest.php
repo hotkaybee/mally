@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exceptions\CheckoutException;
+use App\Filament\Resources\Reviews\Pages\EditReview;
 use App\Livewire\Storefront\CheckoutPage;
 use App\Livewire\Storefront\OrderReceiptPage;
 use App\Livewire\Storefront\ProfilePage;
@@ -13,9 +14,11 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductReceipt;
 use App\Models\Review;
+use App\Models\User;
 use App\Services\ExchangeRateService;
 use App\Services\OrderService;
 use App\Services\StorefrontService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -415,7 +418,7 @@ class OrderPlacementTest extends TestCase
         $this->assertSame($order->id, $review->order_id);
         $this->assertTrue($review->order->is($order));
         $this->assertFalse($review->is_approved);
-        $this->assertSame($product->name, $review->product_title);
+        $this->assertSame($product->name, $review->product->name);
         $this->assertSame(['https://img.example.com/a.jpg'], $review->photos);
         $this->assertSame([], app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id));
 
@@ -428,5 +431,88 @@ class OrderPlacementTest extends TestCase
 
         $review->update(['is_approved' => true]);
         $this->assertCount(1, app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id));
+    }
+
+    private function review(Order $order, Product $product, array $attrs = []): Review
+    {
+        return Review::create(array_merge([
+            'order_id' => $order->id, 'product_id' => $product->id,
+            'rating' => 4, 'comment' => 'Nice', 'is_approved' => true,
+        ], $attrs));
+    }
+
+    public function test_reviews_store_only_their_links(): void
+    {
+        $this->assertEqualsCanonicalizing(
+            ['id', 'order_id', 'product_id', 'rating', 'comment', 'photos', 'is_approved', 'created_at', 'updated_at'],
+            Schema::getColumnListing('reviews')
+        );
+    }
+
+    public function test_review_title_follows_a_renamed_product(): void
+    {
+        $product = $this->product(10, [10]);
+        $this->review($this->deliveredOrder($this->customer(), $product), $product);
+
+        $product->update(['name' => 'Renamed Brush']);
+
+        $this->assertSame('Renamed Brush', app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id)[0]['title']);
+    }
+
+    public function test_review_shows_first_name_and_initial_and_only_a_real_city(): void
+    {
+        $product = $this->product(10, [10]);
+        $aziza = $this->customer(['first_name' => 'Aziza', 'last_name' => 'Karimova', 'city' => null]);
+        $review = $this->review($this->deliveredOrder($aziza, $product), $product);
+
+        $shown = app(StorefrontService::class)->getDatabaseReviewsForProduct($product->id)[0];
+        $this->assertSame('Aziza K.', $shown['author']);
+        $this->assertNull($shown['city']);
+
+        $aziza->update(['city' => 'Бухара']);
+        $this->assertSame('Бухара', $review->fresh()->author_city);
+
+        $aziza->update(['first_name' => '', 'last_name' => '']);
+        $this->assertSame(__('Mally customer'), $review->fresh()->author_name);
+    }
+
+    public function test_deleting_an_order_deletes_its_reviews(): void
+    {
+        $product = $this->product(10, [10]);
+        $order = $this->deliveredOrder($this->customer(), $product);
+        $this->review($order, $product);
+
+        $order->delete();
+
+        $this->assertSame(0, Review::count());
+    }
+
+    public function test_one_review_per_order_and_product(): void
+    {
+        $product = $this->product(10, [10]);
+        $order = $this->deliveredOrder($this->customer(), $product);
+        $this->review($order, $product);
+
+        $this->expectException(QueryException::class);
+        $this->review($order, $product, ['comment' => 'Again']);
+    }
+
+    public function test_admin_cannot_change_what_the_customer_wrote(): void
+    {
+        $product = $this->product(10, [10]);
+        $review = $this->review($this->deliveredOrder($this->customer(), $product), $product, ['rating' => 2, 'is_approved' => false]);
+
+        config(['app.env' => 'local']);
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(EditReview::class, ['record' => $review->getRouteKey()])
+            ->fillForm(['rating' => 5, 'comment' => 'Edited by admin', 'is_approved' => true])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $review->refresh();
+        $this->assertSame(2, $review->rating);
+        $this->assertSame('Nice', $review->comment);
+        $this->assertTrue($review->is_approved);
     }
 }

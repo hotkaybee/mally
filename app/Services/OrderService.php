@@ -90,8 +90,8 @@ class OrderService
 
     /**
      * Recomputes the order total from its saved lines (for orders edited in
-     * the admin): Σ line totals − the stored discount. amount_uzs follows at
-     * the order's own rate (OrderObserver).
+     * the admin): Σ line totals − the stored discount. Order::amount_uzs
+     * follows from it at the order's own rate.
      */
     public function recalculateAmount(Order $order): void
     {

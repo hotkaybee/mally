@@ -295,19 +295,19 @@ class InventoryTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
 
-    public function test_admin_order_gets_a_number_a_receipt_hash_and_a_payment_status(): void
+    public function test_admin_order_gets_a_number_a_receipt_hash_and_a_paid_state(): void
     {
         $order = $this->makeOrder();
 
         $this->assertSame(1000 + $order->id, $order->fresh()->order_number);
         $this->assertSame(32, strlen($order->fresh()->secure_hash));
-        $this->assertSame('PENDING', $order->fresh()->payment_status);
+        $this->assertFalse($order->fresh()->isPaid());
 
         $order->update(['amount' => 100, 'amount_paid' => 40]);
-        $this->assertSame('PARTIAL', $order->fresh()->payment_status);
+        $this->assertFalse($order->fresh()->isPaid());
 
         $order->update(['amount_paid' => 100]);
-        $this->assertSame('PAID', $order->fresh()->payment_status);
+        $this->assertTrue($order->fresh()->isPaid());
     }
 
     public function test_catalog_seeders_never_wipe_a_live_shop(): void

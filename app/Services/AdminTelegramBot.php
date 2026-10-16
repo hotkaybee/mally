@@ -256,7 +256,7 @@ class AdminTelegramBot
             : '—';
 
         $address = collect([$order->city, $order->address])->filter(fn ($v) => filled($v))->implode(', ');
-        $paid = $order->payment_status === 'PAID' ? 'оплачен' : 'ожидает оплаты';
+        $paid = $order->isPaid() ? 'оплачен' : 'ожидает оплаты';
         $phoneDigits = preg_replace('/\D/', '', (string) $order->customer_phone);
 
         $text = ($isNew ? '🛍 НОВЫЙ ЗАКАЗ' : '🧾 ЗАКАЗ')." № {$order->order_number} в Mally!\n"

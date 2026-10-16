@@ -90,7 +90,8 @@ class AdminPanelSmokeTest extends TestCase
 
         $first = Order::create(['amount' => 10, 'status' => 'processing']);
         $second = Order::create(['amount' => 20, 'status' => 'processing']);
-        $review = Review::create(['order_id' => $second->id, 'author_name' => 'A', 'comment' => 'Nice', 'rating' => 5]);
+        $product = Product::create(['name' => 'Blush', 'quantity' => 0, 'selling_price' => 0, 'status' => 'in_stock']);
+        $review = Review::create(['order_id' => $second->id, 'product_id' => $product->id, 'comment' => 'Nice', 'rating' => 5]);
 
         Livewire::test(ListOrders::class)
             ->searchTable((string) $second->order_number)

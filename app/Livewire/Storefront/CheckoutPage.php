@@ -200,7 +200,7 @@ class CheckoutPage extends Component
         try {
             $openUnpaid = Order::where('customer_id', $customer->id)
                 ->where('status', 'processing')
-                ->where('payment_status', 'PENDING')
+                ->where('amount_paid', '<=', 0)
                 ->count();
             if ($openUnpaid >= self::MAX_OPEN_UNPAID_ORDERS) {
                 $this->dispatch('toast', message: __('You already have unpaid orders. Please pay for them or contact us before placing a new one.'), type: 'error');

@@ -35,7 +35,8 @@ class ProductForm
                     ->unique(ignoreRecord: true),
                 Textarea::make('description')
                     ->label(__('description'))
-                    ->columnSpanFull(),
+                    ->columnSpanFull()
+                    ->rows(6),
                 Textarea::make('comment')
                     ->label(__('comment'))
                     ->columnSpanFull(),

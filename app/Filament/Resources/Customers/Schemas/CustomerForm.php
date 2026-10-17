@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Customers\Schemas;
 
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
@@ -25,6 +26,11 @@ class CustomerForm
                 TextInput::make('phone_number')
                     ->label(__('phone_number'))
                     ->tel(),
+                TextInput::make('city')
+                    ->label(__('city')),
+                Textarea::make('address')
+                    ->label(__('address'))
+                    ->rows(2),
                 TextInput::make('telegram')
                     ->label(__('telegram')),
                 TextInput::make('instagram')

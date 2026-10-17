@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\ExchangeRateService;
+use App\Services\StorefrontService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +13,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(ExchangeRateService::class);
+        $this->app->singleton(StorefrontService::class);
     }
 
     /**

@@ -38,6 +38,8 @@ class AdminPanelSmokeTest extends TestCase
             'products create' => ['/admin/products/create'],
             'categories list' => ['/admin/categories'],
             'categories create' => ['/admin/categories/create'],
+            'reviews list' => ['/admin/reviews'],
+            'customers create' => ['/admin/customers/create'],
         ];
     }
 }

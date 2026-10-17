@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Mally is a Laravel 12 + Filament 4 + Livewire 3 small-scale e-commerce app (cosmetics shop, Uzbekistan). Two halves:
 
-- **Admin / back-office** — Filament panel at `/admin`: Customers, Brands, Categories, Products, Product receipts (stock batches), Orders (with `OrderProduct` lines).
+- **Admin / back-office** — Filament panel at `/admin`: Customers, Brands, Categories, Products, Product receipts (stock batches), Orders (with `OrderProduct` lines), Reviews (moderation of storefront reviews).
 - **Storefront** — public Livewire pages in `app/Livewire/Storefront` (catalog, product, cart, checkout, receipt, profile, contact), routed in `routes/web.php`.
 
 `routes/api.php` holds a small JSON API used by the Telegram bot (`OrderController`, `ProductController`, `CategoryController`).
@@ -70,7 +70,8 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 
 **Storefront / orders**
 - The storefront only reads the catalog. Never create `Product`, `Brand` or `Category` from checkout or any customer action.
-- Don't generate order numbers with `max + 1`.
+- Order number = `id + Order::NUMBER_OFFSET`, calculated, not stored. Never generate numbers with `max + 1`.
+- Don't store values that can be calculated from other columns (order number, so'm total = `amount × exchange_rate`, paid = `amount_paid >= amount`). Calculate them in the model.
 - Don't write addresses or anything else into `customers.instagram`.
 - Don't let anyone see an order they don't own (no lookups by bare order number or phone).
 
@@ -85,6 +86,7 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 
 **Scope / config**
 - Don't bring back React or add new UI frameworks, API layers or admin sections beyond the ticket.
+- **Ownership.** Admin / back-end is owned by @hotkaybee: `app/Filament/**`, `app/Providers/Filament/**`, `database/seeders/**`, migrations of existing core tables (customers, products, product_receipts, orders, order_product, brands, categories), `InventoryService`, observers. Storefront tickets don't change these. If a storefront change needs one, ask first or say so in the PR description.
 - Don't change shared settings (`composer dev` script, `vite.config.js`, `config/app.php` timezone — stays UTC, convert to `Asia/Tashkent` only when displaying) without team agreement.
 - Don't commit secrets, `.env`, local DBs or diagnostic dumps.
 
@@ -93,8 +95,9 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 - Don't claim a fix works until a test for it passes.
 
 **Git**
-- Branch from current `main`, one ticket per PR, PR title `MAL-<n>: <ticket title>`.
-- No `git reset --hard`, force push, history rewrites, branch deletion or PR merges without explicit permission. Don't run destructive migrations or wipe data.
+- Branch from current `main`, one ticket per PR, PR title `MAL-<n>: <ticket title>`. Small fixes without a ticket: branch `hotfix/<short-name>`, PR title `fix: <what>`.
+- While a PR is not merged into `main`, change its own migrations directly instead of adding new ones; add a new migration only for tables/migrations that are already on `main`.
+- No `git reset --hard`, force push, history rewrites, branch deletion or PR merges without explicit permission. Don't run destructive migrations or wipe data — except `migrate:fresh` on your own local database.
 
 ## Gotchas
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Receipts\Schemas;
 
+use App\Models\ProductReceipt;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -32,12 +33,15 @@ class ReceiptForm
                     ->relationship('product', 'name')
                     ->searchable()
                     ->preload()
+                    // A receipt with sales belongs to that product for good.
+                    ->disabled(fn (?ProductReceipt $record) => $record?->orderProducts()->exists() ?? false)
                     ->required(),
                 TextInput::make('quantity')
                     ->label(__('quantity'))
                     ->required()
                     ->numeric()
-                    ->minValue(1)
+                    // Can't go below the units already sold from this receipt.
+                    ->minValue(fn (?ProductReceipt $record) => max(1, $record ? (int) $record->quantity - (int) $record->quantity_remaining : 1))
                     ->default(1),
                 DatePicker::make('received_at')
                     ->label(__('received_at'))

@@ -3,16 +3,23 @@
 namespace Database\Seeders;
 
 use App\Models\Brand;
+use Database\Seeders\Concerns\ProtectsLiveCatalog;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class BrandSeeder extends Seeder
 {
+    use ProtectsLiveCatalog;
+
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
+        if ($this->wouldWipeLiveCatalog()) {
+            return;
+        }
+
         DB::table('brands')->delete();
 
         $brands = [

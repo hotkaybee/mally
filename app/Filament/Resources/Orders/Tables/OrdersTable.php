@@ -8,24 +8,34 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class OrdersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with('customer'))
             ->columns([
+                // Not a column: Order::order_number is derived from the id.
+                TextColumn::make('order_number')
+                    ->label(__('Order number'))
+                    ->searchable(query: fn (Builder $query, string $search) => ctype_digit($search) ? $query->withNumber((int) $search) : $query)
+                    ->sortable(query: fn (Builder $query, string $direction) => $query->orderBy('id', $direction)),
                 TextColumn::make('customer.first_name')
                     ->label(__('Customer'))
-                    ->formatStateUsing(fn ($record) => $record->customer->first_name . ' ' . $record->customer->last_name)
-                    ->searchable(['customer.first_name', 'customer.last_name']),
+                    // The customer may have been deleted; the order keeps the recipient name.
+                    ->formatStateUsing(fn ($record) => $record->customer
+                        ? $record->customer->first_name.' '.$record->customer->last_name
+                        : $record->customer_name)
+                    ->searchable(['first_name', 'last_name']),
                 TextColumn::make('amount')
                     ->label(__('amount'))
-                    ->numeric()
+                    ->money('USD')
                     ->sortable(),
                 TextColumn::make('amount_paid')
                     ->label(__('amount_paid'))
-                    ->numeric()
+                    ->money('USD')
                     ->sortable(),
                 TextColumn::make('status')
                     ->label(__('status'))

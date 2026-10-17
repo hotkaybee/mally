@@ -28,25 +28,32 @@ set +a
 echo "Step 1: Pulling latest image from registry..."
 docker compose -f $COMPOSE_FILE pull
 
-echo "Step 2: Starting containers..."
-docker compose -f $COMPOSE_FILE up -d
-
-echo "Step 3: Waiting for services to be healthy..."
-sleep 10
-
-# Check if containers are running
-if ! docker compose -f $COMPOSE_FILE ps | grep -q "Up"; then
-    echo "Error: Containers failed to start!"
-    docker compose -f $COMPOSE_FILE logs
-    exit 1
+# Migrations run when the container starts (entrypoint), so back up first.
+if docker compose -f $COMPOSE_FILE ps --status running --services | grep -qx mysql; then
+    echo "Step 2: Backing up the database..."
+    mkdir -p backups
+    docker compose -f $COMPOSE_FILE exec -T mysql sh -c \
+        'exec mysqldump --single-transaction --routines -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+        | gzip > "backups/mally-$(date +%Y%m%d-%H%M%S).sql.gz"
 fi
 
-echo "Step 4: Running post-deployment tasks..."
-docker compose -f $COMPOSE_FILE exec -T app php artisan migrate --force
-docker compose -f $COMPOSE_FILE exec -T app php artisan config:cache
-docker compose -f $COMPOSE_FILE exec -T app php artisan route:cache
-docker compose -f $COMPOSE_FILE exec -T app php artisan view:cache
-docker compose -f $COMPOSE_FILE exec -T app php artisan filament:optimize
+echo "Step 3: Starting containers..."
+docker compose -f $COMPOSE_FILE up -d
+
+# The entrypoint migrates and caches config/routes/views; running them again
+# here would race it. Wait until the app answers /up.
+echo "Step 4: Waiting for the app to become healthy..."
+status=starting
+for i in $(seq 1 60); do
+    status=$(docker inspect -f '{{.State.Health.Status}}' mally-app 2>/dev/null || echo starting)
+    [ "$status" = "healthy" ] && break
+    sleep 5
+done
+if [ "$status" != "healthy" ]; then
+    echo "Error: the app did not become healthy!"
+    docker compose -f $COMPOSE_FILE logs --tail=100 app
+    exit 1
+fi
 
 echo "Step 5: Cleaning up old images..."
 docker image prune -f

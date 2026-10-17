@@ -49,7 +49,7 @@ class MonthlyRevenueChart extends ChartWidget
 
             $monthlyRevenue = Order::whereYear('created_at', $month->year)
                 ->whereMonth('created_at', $month->month)
-                ->sum('amount');
+                ->sum('amount_paid');
 
             $revenue[] = $monthlyRevenue;
         }

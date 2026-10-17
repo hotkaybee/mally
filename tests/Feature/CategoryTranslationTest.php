@@ -6,6 +6,7 @@ use App\Filament\Resources\Categories\CategoryResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
+use Database\Seeders\CategorySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -81,7 +82,7 @@ class CategoryTranslationTest extends TestCase
 
     public function test_the_seeded_catalogue_is_fully_translated(): void
     {
-        $this->seed(\Database\Seeders\CategorySeeder::class);
+        $this->seed(CategorySeeder::class);
 
         $this->assertSame(27, Category::count());
         $this->assertSame(0, Category::whereNull('name_ru')->orWhereNull('name_uz')->count());
@@ -145,7 +146,7 @@ class CategoryTranslationTest extends TestCase
     public function test_product_list_shows_the_category_in_the_active_locale(): void
     {
         config(['app.env' => 'local']);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $category = $this->makeCategory();
         Product::create([

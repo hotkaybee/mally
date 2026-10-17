@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -11,12 +12,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-//        User::factory()->create([
-//            'name' => 'Test User',
-//            'email' => 'test@example.com',
-//        ]);
+        // Development admin only; production admins are created with
+        // make:filament-user + admin:grant.
+        if (app()->environment('local')) {
+            User::firstOrCreate(
+                ['email' => 'admin@mally.uz'],
+                [
+                    'name' => 'Администратор Mally',
+                    'password' => 'admin12345',
+                ]
+            )->forceFill(['is_admin' => true])->save();
+        }
 
         $this->call([
             BrandSeeder::class,

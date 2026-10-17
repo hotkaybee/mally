@@ -74,15 +74,30 @@ jobs:
             echo "Pulling latest image..."
             docker compose -f docker-compose.prod.yml pull
 
+            # Migrations run on start (entrypoint), so back up first.
+            if docker compose -f docker-compose.prod.yml ps --status running --services | grep -qx mysql; then
+              echo "Backing up the database..."
+              mkdir -p backups
+              docker compose -f docker-compose.prod.yml exec -T mysql sh -c \
+                'exec mysqldump --single-transaction --routines -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+                | gzip > "backups/mally-$(date +%Y%m%d-%H%M%S).sql.gz"
+            fi
+
             echo "Restarting containers..."
             docker compose -f docker-compose.prod.yml up -d
 
-            echo "Running post-deploy tasks..."
-            docker compose -f docker-compose.prod.yml exec -T app php artisan migrate --force
-            docker compose -f docker-compose.prod.yml exec -T app php artisan config:cache
-            docker compose -f docker-compose.prod.yml exec -T app php artisan route:cache
-            docker compose -f docker-compose.prod.yml exec -T app php artisan view:cache
-            docker compose -f docker-compose.prod.yml exec -T app php artisan filament:optimize
+            # The entrypoint migrates and caches config/routes/views; running
+            # them again here would race it. Wait until the app answers /up.
+            echo "Waiting for the app to become healthy..."
+            for i in $(seq 1 60); do
+              status=$(docker inspect -f '{{.State.Health.Status}}' mally-app 2>/dev/null || echo starting)
+              [ "$status" = "healthy" ] && break
+              sleep 5
+            done
+            if [ "$status" != "healthy" ]; then
+              docker compose -f docker-compose.prod.yml logs --tail=100 app
+              exit 1
+            fi
 
             echo "Cleaning up old images..."
             docker image prune -f

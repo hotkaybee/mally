@@ -57,3 +57,22 @@ Dockerfile
 # OS
 .DS_Store
 Thumbs.db
+
+# Local databases, diagnostics and agent files (never ship them in the image)
+database/*.sqlite
+database/*.sqlite-journal
+mally-diagnostic-*.txt
+logic.md
+report.md
+.claude
+.agents
+plan.md
+
+# Caches built on a developer machine (dev package lists, compiled views,
+# sessions); the image builds its own at start.
+/bootstrap/cache/*.php
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/app/private/*
+/storage/app/public/*

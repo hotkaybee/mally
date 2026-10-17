@@ -20,8 +20,9 @@ class SalesOverviewWidget extends BaseWidget
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color('success'),
 
-            Stat::make(__('Total Revenue'), '$' . number_format(Order::sum('amount'), 2))
-                ->description(__('All time revenue'))
+            // Money actually received, not the total of unpaid orders.
+            Stat::make(__('Total Revenue'), '$'.number_format((float) Order::sum('amount_paid'), 2))
+                ->description(__('Payments received'))
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('primary'),
 

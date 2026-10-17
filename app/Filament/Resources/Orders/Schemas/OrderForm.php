@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Models\OrderProduct;
+use App\Models\Product;
 use App\Models\ProductReceipt;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -28,7 +30,7 @@ class OrderForm
                     ->schema([
                         Select::make('product_id')
                             ->label(__('Product'))
-                            ->options(\App\Models\Product::orderBy('name')->pluck('name', 'id'))
+                            ->options(Product::orderBy('name')->pluck('name', 'id'))
                             ->searchable()
                             ->required()
                             ->reactive()
@@ -93,17 +95,20 @@ class OrderForm
                             ->minValue(1)
                             ->required()
                             ->reactive()
-                            // On the order create page stock is accurate, so cap at the
-                            // receipt's remaining. On edit the InventoryService releases the
-                            // line's original units before re-consuming, so we don't cap.
-                            ->maxValue(function (Get $get, string $operation) {
-                                if ($operation !== 'create') {
+                            // Cap at what the receipt can give. An existing line already
+                            // holds its units (they are returned before re-drawing), so
+                            // those count as available for the same receipt.
+                            ->maxValue(function (Get $get, $record) {
+                                $receipt = ($id = $get('product_receipt_id')) ? ProductReceipt::find($id) : null;
+                                if (! $receipt) {
                                     return null;
                                 }
 
-                                $receipt = ($id = $get('product_receipt_id')) ? ProductReceipt::find($id) : null;
+                                $held = $record instanceof OrderProduct && (int) $record->getOriginal('product_receipt_id') === (int) $receipt->id
+                                    ? (int) $record->getOriginal('quantity')
+                                    : 0;
 
-                                return $receipt?->quantity_remaining;
+                                return (int) $receipt->quantity_remaining + $held;
                             })
                             ->afterStateUpdated(function ($state, Set $set, Get $get) {
                                 $price = $get('price') ?: 0;
@@ -131,14 +136,20 @@ class OrderForm
                     ->addActionLabel(__('Add Product'))
                     ->collapsible(),
 
+                // Computed on the server from the saved lines minus the discount.
                 TextInput::make('amount')
                     ->label(__('amount'))
-                    ->required()
-                    ->numeric(),
+                    ->prefix('$')
+                    ->numeric()
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->helperText(__('Calculated from the order lines')),
                 TextInput::make('amount_paid')
                     ->label(__('amount_paid'))
+                    ->prefix('$')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->default(0.0),
                 Select::make('status')
                     ->label(__('status'))

@@ -9,8 +9,10 @@ services:
     #   dockerfile: Dockerfile
     container_name: mally-app
     restart: unless-stopped
+    # Only the host's HTTPS reverse proxy may reach the app: it trusts the
+    # proxy's X-Forwarded-* headers (TRUSTED_PROXIES).
     ports:
-      - "${APP_PORT:-8080}:80"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:80"
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
@@ -28,18 +30,20 @@ services:
       - QUEUE_CONNECTION=database
     volumes:
       - ./.env:/var/www/html/.env:ro
+      # Product photos live in storage/app/public (linked at start).
       - ./storage:/var/www/html/storage
-      - ./public/storage:/var/www/html/public/storage
     networks:
       - mally-network
     depends_on:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "php", "-v"]
+      # nginx + php-fpm + Laravel answer, not just "php exists".
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/up"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 120s
 
   mysql:
     image: mysql:8.0

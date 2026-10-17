@@ -418,15 +418,14 @@ class ProductSeeder extends Seeder
             ->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])
             ->all();
 
-        $defaultCategory = Category::first();
-
-        if (! $defaultCategory) {
+        if (! $categoryIds) {
             $this->command->error('No categories found. Please run CategorySeeder first.');
 
             return;
         }
 
         $skippedBrands = [];
+        $uncategorized = [];
         $receiptCount = 0;
 
         foreach ($this->groupedRows() as $rows) {
@@ -439,7 +438,11 @@ class ProductSeeder extends Seeder
                 $skippedBrands[$brandCode] = true;
             }
 
-            $categoryId = $this->resolveCategoryId($name, $categoryIds, $defaultCategory->id);
+            $categoryId = $this->resolveCategoryId($name, $brandCode, $categoryIds);
+
+            if (! $categoryId) {
+                $uncategorized[] = "{$name} ({$brandCode})";
+            }
 
             // Catalog product. quantity and selling_price are caches that the
             // ProductReceipt observer fills in from the receipts below.
@@ -477,6 +480,10 @@ class ProductSeeder extends Seeder
 
         if ($skippedBrands) {
             $this->command->warn('Brands not found (products left unlinked): '.implode(', ', array_keys($skippedBrands)));
+        }
+
+        if ($uncategorized) {
+            $this->command->warn('No category: '.implode(', ', $uncategorized));
         }
     }
 
@@ -534,9 +541,27 @@ class ProductSeeder extends Seeder
         return max(0, $markup);
     }
 
-    private function resolveCategoryId(string $name, array $categoryIds, int $defaultId): int
+    /**
+     * Pick a category from the product name. Exact `name|brand code`
+     * exceptions are checked first; a product no rule matches gets no
+     * category, so it can be assigned in the admin.
+     */
+    private function resolveCategoryId(string $name, string $brandCode, array $categoryIds): ?int
     {
         $n = mb_strtolower($name);
+
+        $exceptions = [
+            'mist|rare beauty' => null,          // setting spray: no category yet
+            'primer spf|cht' => null,            // primer: no category yet
+            'face pallete|natasha denona' => 'blush',
+            'skin glow|shiseido' => null,        // unclear product, assigned in the admin
+        ];
+
+        $key = $n.'|'.mb_strtolower($brandCode);
+
+        if (array_key_exists($key, $exceptions)) {
+            return $categoryIds[$exceptions[$key]] ?? null;
+        }
 
         $rules = [
             'lip liner' => 'lip pencil',
@@ -581,9 +606,16 @@ class ProductSeeder extends Seeder
             'aitr' => 'perfume',
             'parfume' => 'perfume',
             'mist' => 'perfume',
+            'shimmer oil' => 'body lotion',
+            'moisturise' => 'moisturizer',
+            'all about eyes' => 'moisturizer',
             'cream' => 'moisturizer',
+            'eyes to mesmerise' => 'eyeshadow',
+            'skin glow' => 'foundation',
             'brush' => 'wand',
             'wand' => 'wand',
+            // Last, so "bomshell lotion" / "bomshell mist" match their own rules first.
+            'bomshell' => 'perfume',
         ];
 
         foreach ($rules as $keyword => $catEn) {
@@ -592,6 +624,6 @@ class ProductSeeder extends Seeder
             }
         }
 
-        return $defaultId;
+        return null;
     }
 }

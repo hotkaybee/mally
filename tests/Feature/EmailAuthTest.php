@@ -337,6 +337,10 @@ class EmailAuthTest extends TestCase
         $this->assertSame('rate_limit', $service->attemptLogin('owner@example.com', 'OwnerPass123', '10.7.0.1')['error'] ?? null);
         // ...but the owner's known IP still gets in.
         $this->assertTrue($service->attemptLogin('owner@example.com', 'OwnerPass123', '10.8.0.1')['success']);
+
+        // A password reset lifts the account-wide block for new IPs too.
+        $this->assertTrue($service->resetPassword('owner@example.com', 'NewPass1234')['success']);
+        $this->assertTrue($service->attemptLogin('owner@example.com', 'NewPass1234', '10.7.0.1')['success']);
     }
 
     public function test_login_rate_limiting_blocks_sixth_attempt_within_a_minute(): void

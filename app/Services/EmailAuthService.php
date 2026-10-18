@@ -530,6 +530,7 @@ class EmailAuthService
             ]);
 
             $this->invalidateActiveCodes($email, AuthCode::PURPOSE_RESET);
+            $this->clearLoginFailures($user);
 
             $customer = $this->accounts()->customerFor($user);
 
@@ -596,6 +597,17 @@ class EmailAuthService
     public function loginAccountIpRateKey(string $identifier, string $ip): string
     {
         return 'auth_login_failures_account_ip:'.sha1(mb_strtolower(trim($identifier)).'|'.trim($ip));
+    }
+
+    /**
+     * After the owner proved who they are (password reset by email code or
+     * Telegram), lift the account-wide block so a lockout can't outlast it.
+     */
+    public function clearLoginFailures(User $user): void
+    {
+        foreach (array_filter([$this->normalizeEmail((string) $user->email), PhoneNumber::normalize((string) $user->phone)]) as $identifier) {
+            RateLimiter::clear($this->loginAccountRateKey($identifier));
+        }
     }
 
     private function trustedIpKey(string $identifier, string $ip): string

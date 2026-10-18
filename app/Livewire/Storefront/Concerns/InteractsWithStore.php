@@ -630,6 +630,7 @@ trait InteractsWithStore
 
         if ($telegramUser) {
             $this->accounts()->changePassword($telegramUser, $this->authPassword);
+            $this->emailAuth()->clearLoginFailures($telegramUser);
             $res = ['success' => true, 'user' => $telegramUser->fresh()];
         } else {
             $res = $this->emailAuth()->resetPassword($verifiedEmail, $this->authPassword);

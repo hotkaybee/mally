@@ -320,6 +320,18 @@ class EmailAuthTest extends TestCase
             ->assertSee('Введите пароль.');
     }
 
+    public function test_failed_logins_from_other_ips_do_not_lock_the_owner_out(): void
+    {
+        User::factory()->create(['email' => 'owner@example.com', 'password' => Hash::make('OwnerPass123')]);
+        $service = app(EmailAuthService::class);
+
+        for ($i = 1; $i <= EmailAuthService::MAX_LOGIN_FAILURES_PER_ACCOUNT + 2; $i++) {
+            $this->assertFalse($service->attemptLogin('owner@example.com', 'wrong-'.$i, '10.9.0.'.$i)['success']);
+        }
+
+        $this->assertTrue($service->attemptLogin('owner@example.com', 'OwnerPass123', '10.8.0.1')['success']);
+    }
+
     public function test_login_rate_limiting_blocks_sixth_attempt_within_a_minute(): void
     {
         User::factory()->create([

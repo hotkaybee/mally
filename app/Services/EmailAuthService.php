@@ -37,7 +37,10 @@ class EmailAuthService
 
     public const LOGIN_IP_DECAY_SECONDS = 900;
 
-    /** Failed logins for one account from any IPs (distributed guessing). */
+    /**
+     * Failed logins for one account from one IP within 15 minutes. Keyed per
+     * IP so strangers' failures elsewhere can't lock the owner out.
+     */
     public const MAX_LOGIN_FAILURES_PER_ACCOUNT = 10;
 
     public const GENERIC_LOGIN_ERROR = 'Wrong email, phone number or password.';
@@ -575,23 +578,23 @@ class EmailAuthService
         return 'auth_login_failures_ip:'.sha1(trim($ip));
     }
 
-    /** Failed logins for one email/phone from all IPs together. */
-    public function loginAccountRateKey(string $identifier): string
+    /** Failed logins for one email/phone from one IP (15-minute window). */
+    public function loginAccountRateKey(string $identifier, string $ip): string
     {
-        return 'auth_login_failures_account:'.sha1(mb_strtolower(trim($identifier)));
+        return 'auth_login_failures_account:'.sha1(mb_strtolower(trim($identifier)).'|'.trim($ip));
     }
 
     private function loginThrottled(string $loginKey, string $ip, string $identifier): bool
     {
         return RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)
             || RateLimiter::tooManyAttempts($this->loginIpRateKey($ip), self::MAX_LOGIN_FAILURES_PER_IP)
-            || RateLimiter::tooManyAttempts($this->loginAccountRateKey($identifier), self::MAX_LOGIN_FAILURES_PER_ACCOUNT);
+            || RateLimiter::tooManyAttempts($this->loginAccountRateKey($identifier, $ip), self::MAX_LOGIN_FAILURES_PER_ACCOUNT);
     }
 
     private function recordFailedLogin(string $loginKey, string $ip, string $identifier): void
     {
         RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
         RateLimiter::hit($this->loginIpRateKey($ip), self::LOGIN_IP_DECAY_SECONDS);
-        RateLimiter::hit($this->loginAccountRateKey($identifier), self::LOGIN_IP_DECAY_SECONDS);
+        RateLimiter::hit($this->loginAccountRateKey($identifier, $ip), self::LOGIN_IP_DECAY_SECONDS);
     }
 }

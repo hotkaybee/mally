@@ -560,7 +560,7 @@ class OrderPlacementTest extends TestCase
         $review = $this->review($this->deliveredOrder($this->customer(), $product), $product, ['rating' => 2, 'is_approved' => false]);
 
         config(['app.env' => 'local']);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         Livewire::test(EditReview::class, ['record' => $review->getRouteKey()])
             ->fillForm(['rating' => 5, 'comment' => 'Edited by admin', 'is_approved' => true])

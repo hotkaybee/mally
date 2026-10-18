@@ -29,6 +29,7 @@ php artisan test tests/Feature/ExampleTest.php::test_method  # single method
 
 # Create an admin user for the Filament panel (required to log in)
 php artisan make:filament-user
+php artisan admin:grant you@example.com   # shoppers share `users`; only is_admin users open /admin
 
 # After changing locale, translation files, or Filament config:
 php artisan optimize:clear

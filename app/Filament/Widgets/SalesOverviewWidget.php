@@ -20,7 +20,7 @@ class SalesOverviewWidget extends BaseWidget
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color('success'),
 
-            Stat::make(__('Total Revenue'), '$' . number_format(Order::sum('amount'), 2))
+            Stat::make(__('Total Revenue'), '$'.number_format(Order::sum('amount'), 2))
                 ->description(__('All time revenue'))
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('primary'),

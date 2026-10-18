@@ -32,6 +32,8 @@ class InventoryService
         }
 
         $product->saveQuietly();
+
+        StorefrontService::forgetProductsCache();
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\StorefrontService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,6 +37,12 @@ class Product extends Model
         'selling_price' => 'decimal:2',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(fn () => StorefrontService::forgetProductsCache());
+        static::deleted(fn () => StorefrontService::forgetProductsCache());
+    }
+
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
@@ -56,5 +63,10 @@ class Product extends Model
         return $this->belongsToMany(Order::class)
             ->using(OrderProduct::class)
             ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
+    }
+
+    public static function placeholderUrl(): string
+    {
+        return asset('images/product-placeholder.svg');
     }
 }

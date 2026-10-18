@@ -17,7 +17,7 @@ class OrdersTable
             ->columns([
                 TextColumn::make('customer.first_name')
                     ->label(__('Customer'))
-                    ->formatStateUsing(fn ($record) => $record->customer->first_name . ' ' . $record->customer->last_name)
+                    ->formatStateUsing(fn ($record) => $record->customer->first_name.' '.$record->customer->last_name)
                     ->searchable(['customer.first_name', 'customer.last_name']),
                 TextColumn::make('amount')
                     ->label(__('amount'))

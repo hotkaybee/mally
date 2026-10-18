@@ -320,15 +320,22 @@ class EmailAuthTest extends TestCase
             ->assertSee('Введите пароль.');
     }
 
-    public function test_failed_logins_from_other_ips_do_not_lock_the_owner_out(): void
+    public function test_distributed_guessing_is_capped_but_does_not_lock_out_a_known_ip(): void
     {
         User::factory()->create(['email' => 'owner@example.com', 'password' => Hash::make('OwnerPass123')]);
         $service = app(EmailAuthService::class);
 
-        for ($i = 1; $i <= EmailAuthService::MAX_LOGIN_FAILURES_PER_ACCOUNT + 2; $i++) {
-            $this->assertFalse($service->attemptLogin('owner@example.com', 'wrong-'.$i, '10.9.0.'.$i)['success']);
+        // The owner signed in from this IP before.
+        $this->assertTrue($service->attemptLogin('owner@example.com', 'OwnerPass123', '10.8.0.1')['success']);
+
+        // Guesses from many different IPs, each under its own per-IP limits.
+        for ($i = 1; $i <= EmailAuthService::MAX_LOGIN_FAILURES_PER_ACCOUNT; $i++) {
+            $service->attemptLogin('owner@example.com', 'wrong-'.$i, '10.9.0.'.$i);
         }
 
+        // A new IP is now blocked even with the right password...
+        $this->assertSame('rate_limit', $service->attemptLogin('owner@example.com', 'OwnerPass123', '10.7.0.1')['error'] ?? null);
+        // ...but the owner's known IP still gets in.
         $this->assertTrue($service->attemptLogin('owner@example.com', 'OwnerPass123', '10.8.0.1')['success']);
     }
 

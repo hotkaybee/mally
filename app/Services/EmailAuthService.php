@@ -37,11 +37,17 @@ class EmailAuthService
 
     public const LOGIN_IP_DECAY_SECONDS = 900;
 
+    /** Failed logins for one account from one IP within 15 minutes. */
+    public const MAX_LOGIN_FAILURES_PER_ACCOUNT_IP = 10;
+
     /**
-     * Failed logins for one account from one IP within 15 minutes. Keyed per
-     * IP so strangers' failures elsewhere can't lock the owner out.
+     * Failed logins for one account from all IPs together (distributed
+     * guessing). An IP the owner already signed in from isn't blocked by it,
+     * so strangers can't lock the owner out.
      */
-    public const MAX_LOGIN_FAILURES_PER_ACCOUNT = 10;
+    public const MAX_LOGIN_FAILURES_PER_ACCOUNT = 30;
+
+    public const TRUSTED_IP_DAYS = 30;
 
     public const GENERIC_LOGIN_ERROR = 'Wrong email, phone number or password.';
 
@@ -150,6 +156,7 @@ class EmailAuthService
             }
 
             RateLimiter::clear($loginKey);
+            $this->trustIp($normalizedPhone, $ipAddress);
             $customer = $this->accounts()->customerFor($user);
 
             return [
@@ -211,6 +218,7 @@ class EmailAuthService
         }
 
         RateLimiter::clear($loginKey);
+        $this->trustIp($email, $ipAddress);
 
         $customer = $this->accounts()->customerFor($user);
 
@@ -578,23 +586,43 @@ class EmailAuthService
         return 'auth_login_failures_ip:'.sha1(trim($ip));
     }
 
-    /** Failed logins for one email/phone from one IP (15-minute window). */
-    public function loginAccountRateKey(string $identifier, string $ip): string
+    /** Failed logins for one email/phone from all IPs together. */
+    public function loginAccountRateKey(string $identifier): string
     {
-        return 'auth_login_failures_account:'.sha1(mb_strtolower(trim($identifier)).'|'.trim($ip));
+        return 'auth_login_failures_account:'.sha1(mb_strtolower(trim($identifier)));
+    }
+
+    /** Failed logins for one email/phone from one IP (15-minute window). */
+    public function loginAccountIpRateKey(string $identifier, string $ip): string
+    {
+        return 'auth_login_failures_account_ip:'.sha1(mb_strtolower(trim($identifier)).'|'.trim($ip));
+    }
+
+    private function trustedIpKey(string $identifier, string $ip): string
+    {
+        return 'auth_login_trusted_ip:'.sha1(mb_strtolower(trim($identifier)).'|'.trim($ip));
+    }
+
+    /** Remember the IP of a successful login for the account-wide limit. */
+    private function trustIp(string $identifier, string $ip): void
+    {
+        Cache::put($this->trustedIpKey($identifier, $ip), true, now()->addDays(self::TRUSTED_IP_DAYS));
     }
 
     private function loginThrottled(string $loginKey, string $ip, string $identifier): bool
     {
         return RateLimiter::tooManyAttempts($loginKey, self::MAX_LOGIN_ATTEMPTS)
             || RateLimiter::tooManyAttempts($this->loginIpRateKey($ip), self::MAX_LOGIN_FAILURES_PER_IP)
-            || RateLimiter::tooManyAttempts($this->loginAccountRateKey($identifier, $ip), self::MAX_LOGIN_FAILURES_PER_ACCOUNT);
+            || RateLimiter::tooManyAttempts($this->loginAccountIpRateKey($identifier, $ip), self::MAX_LOGIN_FAILURES_PER_ACCOUNT_IP)
+            || (RateLimiter::tooManyAttempts($this->loginAccountRateKey($identifier), self::MAX_LOGIN_FAILURES_PER_ACCOUNT)
+                && ! Cache::has($this->trustedIpKey($identifier, $ip)));
     }
 
     private function recordFailedLogin(string $loginKey, string $ip, string $identifier): void
     {
         RateLimiter::hit($loginKey, self::LOGIN_DECAY_SECONDS);
         RateLimiter::hit($this->loginIpRateKey($ip), self::LOGIN_IP_DECAY_SECONDS);
-        RateLimiter::hit($this->loginAccountRateKey($identifier, $ip), self::LOGIN_IP_DECAY_SECONDS);
+        RateLimiter::hit($this->loginAccountIpRateKey($identifier, $ip), self::LOGIN_IP_DECAY_SECONDS);
+        RateLimiter::hit($this->loginAccountRateKey($identifier), self::LOGIN_IP_DECAY_SECONDS);
     }
 }

@@ -48,7 +48,10 @@ class OrderController extends Controller
             $quantities[(int) $item['id']] = ($quantities[(int) $item['id']] ?? 0) + (int) $item['quantity'];
         }
 
-        $customer = Customer::wherePhone($phone)->first();
+        // The bot's phone is typed, not verified: reuse only a CRM/bot customer
+        // row, never one owned by a storefront account (its orders would show
+        // up in that account's profile).
+        $customer = Customer::wherePhone($phone)->whereNull('user_id')->first();
         if (! $customer) {
             $parts = explode(' ', $name, 2);
             $customer = Customer::create([

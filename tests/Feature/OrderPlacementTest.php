@@ -136,6 +136,26 @@ class OrderPlacementTest extends TestCase
         }
     }
 
+    public function test_api_order_is_never_attached_to_a_storefront_account_by_phone(): void
+    {
+        config(['services.store.orders_api_token' => 'secret-token']);
+        $product = $this->product(57.15);
+        // A shopper account that typed (but never verified) this phone.
+        $user = User::factory()->create(['phone' => '+998 93 555 44 33']);
+        $account = $this->customer(['user_id' => $user->id, 'phone_number' => '+998 93 555 44 33']);
+
+        $this->postJson('/api/orders', [
+            'customerName' => 'Ali Valiev',
+            'customerPhone' => '+998 93 555 44 33',
+            'address' => 'Real owner street 1',
+            'items' => [['id' => $product->id, 'quantity' => 1]],
+        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
+
+        $order = Order::sole();
+        $this->assertNotSame($account->id, $order->customer_id);
+        $this->assertNull($order->customer->user_id);
+    }
+
     public function test_client_prices_and_discounts_are_ignored(): void
     {
         $product = $this->product(80.00);

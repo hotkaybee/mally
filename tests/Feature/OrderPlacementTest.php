@@ -95,7 +95,8 @@ class OrderPlacementTest extends TestCase
         session(['mally_customer_id' => $customer->id]);
         app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
         app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
-        app(StorefrontService::class)->applyPromoCode('MALLY10');
+        config(['services.store.promo_code' => 'TESTPROMO', 'services.store.promo_percent' => 10]);
+        app(StorefrontService::class)->applyPromoCode('TESTPROMO');
 
         Livewire::test(CheckoutPage::class)
             ->assertSet('city', 'Самарканд')

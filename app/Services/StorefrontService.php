@@ -364,7 +364,9 @@ class StorefrontService
                 }
 
                 if ($qty > $available) {
-                    $qty = $available;
+                    // Keep the current amount instead of jumping to the stock level,
+                    // which would reveal the exact number of units left.
+                    $qty = min(max(1, (int) ($item['quantity'] ?? 1)), $available);
                     $warning = __('No more units of this product are available.');
                 }
 

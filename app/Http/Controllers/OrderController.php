@@ -10,7 +10,6 @@ use App\Services\OrderService;
 use App\Services\StorefrontService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
@@ -51,13 +50,12 @@ class OrderController extends Controller
         $customer = Customer::wherePhone($phone)->first();
         if (! $customer) {
             $parts = explode(' ', $name, 2);
-            $customer = Customer::create([
+            // createOrFirst: if a parallel order just created this phone, use that customer.
+            $customer = Customer::createOrFirst(['phone_number' => $phone], [
                 'first_name' => $parts[0] ?: 'Покупатель',
                 'last_name' => $parts[1] ?? '',
-                'phone_number' => $phone,
                 'city' => $validated['city'] ?? null,
                 'address' => $validated['address'] ?? null,
-                'email' => 'tg_'.Str::lower(Str::random(12)).'@mally.uz',
                 'source' => 'telegram',
             ]);
         }

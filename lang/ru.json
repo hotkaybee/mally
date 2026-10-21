@@ -136,5 +136,6 @@
     "Rating": "Оценка",
     "Photos": "Фото",
     "Published": "Опубликован",
-    "Mally customer": "Покупатель Mally"
+    "Mally customer": "Покупатель Mally",
+    "A customer with this phone number already exists.": "Клиент с таким номером телефона уже существует."
 }

@@ -63,7 +63,7 @@ class StorefrontAuthTest extends TestCase
 
         $this->assertSame($customer->id, session('mally_customer_id'));
         // Signing in doesn't rewrite the stored phone.
-        $this->assertSame('+998901234567', $customer->fresh()->phone_number);
+        $this->assertSame(self::PHONE, $customer->fresh()->phone_number);
     }
 
     public function test_old_universal_codes_are_rejected(): void
@@ -226,6 +226,7 @@ class StorefrontAuthTest extends TestCase
         $this->assertSame('Amir Temur 1', $customer->address);
         $this->assertNull($customer->instagram);
         $this->assertSame('website', $customer->source);
+        $this->assertNull($customer->email);
         $this->assertSame($customer->id, session('mally_customer_id'));
     }
 

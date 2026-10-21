@@ -6,7 +6,6 @@ use App\Models\Customer;
 use App\Services\PhoneVerificationService;
 use App\Services\StorefrontService;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
@@ -232,7 +231,6 @@ trait InteractsWithStore
                 'last_name' => $lastName,
                 'city' => $city,
                 'address' => $address !== '' ? $address : null,
-                'email' => 'client_'.Str::lower(Str::random(12)).'@mally.uz',
                 'source' => 'website',
             ]);
         });

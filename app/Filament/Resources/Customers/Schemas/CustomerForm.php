@@ -2,10 +2,13 @@
 
 namespace App\Filament\Resources\Customers\Schemas;
 
+use App\Models\Customer;
+use Closure;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class CustomerForm
 {
@@ -22,10 +25,22 @@ class CustomerForm
                 TextInput::make('email')
                     ->label(__('Email address'))
                     ->email()
-                    ->required(),
+                    ->unique(ignoreRecord: true),
                 TextInput::make('phone_number')
                     ->label(__('phone_number'))
-                    ->tel(),
+                    ->tel()
+                    // The same number typed in another format is still taken.
+                    ->rules([
+                        fn (?Customer $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record) {
+                            $taken = filled($value) && Customer::wherePhone((string) $value)
+                                ->when($record, fn (Builder $query) => $query->whereKeyNot($record->getKey()))
+                                ->exists();
+
+                            if ($taken) {
+                                $fail(__('A customer with this phone number already exists.'));
+                            }
+                        },
+                    ]),
                 TextInput::make('city')
                     ->label(__('city')),
                 Textarea::make('address')

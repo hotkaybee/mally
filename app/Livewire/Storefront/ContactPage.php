@@ -34,7 +34,7 @@ class ContactPage extends Component
         }
     }
 
-    public function onCustomerAuthenticated(Customer $customer): void
+    protected function onCustomerAuthenticated(Customer $customer): void
     {
         $this->fillFromCustomer($customer);
     }

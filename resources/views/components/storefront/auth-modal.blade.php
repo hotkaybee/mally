@@ -8,385 +8,910 @@
 
 @php
     $store = $store ?? app(\App\Services\StorefrontService::class);
-    $locale = $store->getLocale();
     $isOpen = $isOpen ?? ($this->isAuthModalOpen ?? false);
-    $step = $step ?? ($this->authStep ?? 'phone');
-    $phone = $phone ?? ($this->authPhone ?? '+998 ');
-    $message = $message ?? ($this->authModalMessage ?? '');
-
-    $texts = match ($locale) {
-        'uz' => [
-            'title_auth' => "Kirish va Ro'yxatdan o'tish",
-            'title_complete' => "Ma'lumotlarni to'ldirish",
-            'phone_label' => 'Telefon raqami',
-            'phone_hint' => "Parolsiz: kirish uchun kodni tasdiqlash kifoya (+998 va 9 ta raqam)",
-            'get_code' => 'Kirish kodini olish',
-            'or' => 'yoki',
-            'tg_login' => 'Telegram-bot orqali kirish',
-            'code_sent_to' => 'Kod ushbu raqamga yuborildi:',
-            'enter_code' => 'Tasdiqlash kodini kiriting',
-            'sign_in_btn' => 'Akkauntga kirish',
-            'change_phone' => "Raqamni o'zgartirish",
-            'resend_code' => 'Kodni qayta yuborish',
-            'phone_verified' => 'Raqam tasdiqlandi:',
-            'first_name' => 'Ism',
-            'last_name' => 'Familiya',
-            'city' => 'Shahar',
-            'city_placeholder' => 'Toshkent',
-            'address' => 'Yetkazib berish manzili',
-            'address_placeholder' => "Ko'cha, uy, xonadon",
-            'finish_reg' => "Ro'yxatdan o'tishni yakunlash",
-            'tg_desc' => 'Raqamingizni SMSsiz Telegram-botimiz orqali bir bosishda tasdiqlang.',
-            'open_tg_bot' => 'Telegram-botni ochish',
-            'tg_step1' => 'Botga kiring va <b>Start</b> tugmasini bosing',
-            'tg_step2' => '<b>«📱 Kontaktni ulashish»</b> tugmasini bosing',
-            'tg_step3' => 'Sayt avtomatik ravishda tizimga kiradi!',
-            'tg_waiting' => 'Botda tasdiqlash kutilmoqda...',
-            'back_to_phone' => '← Telefon raqami orqali kirishga qaytish',
-        ],
-        'en' => [
-            'title_auth' => 'Sign In & Register',
-            'title_complete' => 'Complete Your Profile',
-            'phone_label' => 'Phone Number',
-            'phone_hint' => 'Passwordless login: just verify your code (+998 and 9 digits)',
-            'get_code' => 'Get Verification Code',
-            'or' => 'or',
-            'tg_login' => 'Sign in via Telegram Bot',
-            'code_sent_to' => 'Verification code sent to:',
-            'enter_code' => 'Enter verification code',
-            'sign_in_btn' => 'Sign In',
-            'change_phone' => 'Change phone number',
-            'resend_code' => 'Resend code',
-            'phone_verified' => 'Phone number verified:',
-            'first_name' => 'First Name',
-            'last_name' => 'Last Name',
-            'city' => 'City',
-            'city_placeholder' => 'Tashkent',
-            'address' => 'Delivery Address',
-            'address_placeholder' => 'Street, building, apartment',
-            'finish_reg' => 'Complete Registration',
-            'tg_desc' => 'Verify your phone number in one click via our official Telegram bot without SMS.',
-            'open_tg_bot' => 'Open Telegram Bot',
-            'tg_step1' => 'Open the bot and press <b>Start</b>',
-            'tg_step2' => 'Tap <b>"📱 Share Contact"</b>',
-            'tg_step3' => 'The website will sign you in automatically!',
-            'tg_waiting' => 'Waiting for confirmation in Telegram...',
-            'back_to_phone' => '← Back to phone number login',
-        ],
-        default => [
-            'title_auth' => 'Вход и Регистрация',
-            'title_complete' => 'Завершение профиля',
-            'phone_label' => 'Номер телефона',
-            'phone_hint' => 'Без паролей: введите номер в формате +998 и 9 цифр',
-            'get_code' => 'Получить код для входа',
-            'or' => 'или',
-            'tg_login' => 'Войти через Telegram-бота',
-            'code_sent_to' => 'Код отправлен на номер:',
-            'enter_code' => 'Введите проверочный код',
-            'sign_in_btn' => 'Войти в аккаунт',
-            'change_phone' => 'Изменить номер',
-            'resend_code' => 'Отправить код повторно',
-            'phone_verified' => 'Номер подтвержден:',
-            'first_name' => 'Имя',
-            'last_name' => 'Фамилия',
-            'city' => 'Город',
-            'city_placeholder' => 'Ташкент',
-            'address' => 'Адрес доставки',
-            'address_placeholder' => 'Улица, дом, квартира',
-            'finish_reg' => 'Завершить регистрацию',
-            'tg_desc' => 'Подтвердите ваш номер в один клик через нашего Telegram-бота без SMS.',
-            'open_tg_bot' => 'Открыть Telegram-бота',
-            'tg_step1' => 'Перейдите в бота и нажмите <b>Start</b>',
-            'tg_step2' => 'Нажмите кнопку <b>«📱 Поделиться контактом»</b>',
-            'tg_step3' => 'Сайт автоматически завершит вход!',
-            'tg_waiting' => 'Ожидаем подтверждения в боте...',
-            'back_to_phone' => '← Вернуться ко входу по номеру телефона',
-        ],
-    };
+    $step = $step ?? ($this->authStep ?? 'login');
+    $verifiedRegisterEmail = (string) session('mally_verified_register_email', $this->authEmail ?? '');
+    $verifiedResetEmail = (string) session('mally_verified_reset_email', $this->authEmail ?? '');
 @endphp
 
 @if($isOpen)
     <div
-        wire:click="closeAuthModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn"
+        wire:click.self="closeAuthModal"
     >
         <div
-            wire:click.stop
-            class="relative w-full max-w-md bg-white rounded-3xl border border-[#EAE3DE] shadow-2xl overflow-hidden p-6 sm:p-8"
+            class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#EAE3DE] p-6 sm:p-8 overflow-hidden"
+            @click.stop
         >
             <!-- Кнопка закрытия -->
             <button
-                wire:click="closeAuthModal"
                 type="button"
-                class="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#FAF7F5] hover:bg-[#EAE3DE] text-[#78716C] hover:text-[#1C1917] flex items-center justify-center text-sm transition cursor-pointer"
+                wire:click="closeAuthModal"
                 aria-label="Close"
+                class="absolute top-5 right-5 w-9 h-9 rounded-full bg-[#FAF7F5] hover:bg-[#EAE3DE] flex items-center justify-center text-[#78716C] hover:text-[#1C1917] transition cursor-pointer"
             >
-                <i class="fa-solid fa-xmark"></i>
+                <i class="fa-solid fa-xmark text-sm"></i>
             </button>
 
-            <!-- Заголовок -->
-            <div class="text-center mb-6">
-                <span class="text-[10px] tracking-[0.25em] uppercase font-bold text-[#A8A29E] block mb-1">
-                    Mally Store Uzbekistan
-                </span>
-                <h2 class="font-serif text-2xl font-bold text-[#1C1917]">
-                    {{ $step === 'complete-profile' ? $texts['title_complete'] : $texts['title_auth'] }}
-                </h2>
-                @if($message && ($step === 'phone' || $step === 'telegram'))
-                    <div class="mt-2.5 text-xs text-[#57534E] bg-[#FAF7F5] border border-[#EAE3DE] rounded-xl py-2 px-3">
-                        {{ $message }}
+            <!-- Логотип (тот же markup, что в header.blade.php) -->
+            <div class="flex justify-center mb-5">
+                <div class="flex flex-col items-center text-center">
+                    <div class="font-serif text-3xl sm:text-4xl font-bold tracking-wider text-[#1C1917] leading-none">
+                        mally
                     </div>
-                @endif
+                    <span class="text-[8px] sm:text-[9px] uppercase tracking-[0.22em] sm:tracking-[0.3em] text-[#8C827A] font-medium mt-1 whitespace-nowrap">
+                        Beauty without limits
+                    </span>
+                </div>
             </div>
 
-            <!-- ШАГ 1: ВВОД НОМЕРА ТЕЛЕФОНА -->
-            @if($step === 'phone')
-                <form wire:submit.prevent="sendAuthCode" class="space-y-4">
-                    <div
-                        x-data="{
-                            formatUzPhone(e) {
-                                let digits = (e.target.value || '').replace(/\D/g, '');
-                                if (digits.startsWith('998')) {
-                                    digits = digits.slice(3);
+            @if($step === 'login' || $step === 'email' || $step === 'password')
+                <!-- ЭКРАН 1: ВХОД В АККАУНТ -->
+                <div x-data="{ showPassword: false }">
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-5">
+                        {{ __('Sign in to your account') }}
+                    </h2>
+
+                    @if($this->authNotice)
+                        <p class="mb-4 p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-800 font-medium text-center">{{ $this->authNotice }}</p>
+                    @endif
+                    @error('authTelegram')
+                        <p role="alert" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
+                    @enderror
+
+                    <form wire:submit="loginWithPassword" class="space-y-4" novalidate>
+                        <!-- Поле Email или Телефон -->
+                        <div>
+                            <label for="mally-login-email" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
+                                {{ __('Email or phone') }}
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-stone-400 pointer-events-none">
+                                    <i class="fa-regular fa-user text-xs"></i>
+                                </span>
+                                <input
+                                    id="mally-login-email"
+                                    type="text"
+                                    wire:model="authEmail"
+                                    placeholder="{{ __('name@example.com or +998 90 123 45 67') }}"
+                                    autocomplete="username"
+                                    class="w-full pl-10 pr-4 py-3.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm font-medium text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                                />
+                            </div>
+                            @error('authEmail')
+                                <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Поле Пароль -->
+                        <div>
+                            <label for="mally-login-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
+                                {{ __('Password') }}
+                            </label>
+                            <div class="relative">
+                                <input
+                                    id="mally-login-password"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPassword"
+                                    placeholder="{{ __('Enter your password') }}"
+                                    autocomplete="current-password"
+                                    class="w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm font-medium text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPassword = !showPassword"
+                                    :aria-label="showPassword ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-stone-500 hover:text-[#1C1917] transition cursor-pointer"
+                                >
+                                    <i class="fa-regular text-sm" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPassword')
+                                <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+
+                            <!-- Ссылка «Забыли пароль?» под полем пароля -->
+                            <div class="mt-2 flex justify-end">
+                                <button
+                                    type="button"
+                                    wire:click="openForgotPassword"
+                                    class="text-xs font-medium text-[#78716C] hover:text-[#1C1917] underline underline-offset-4 transition cursor-pointer"
+                                >
+                                    {{ __('Forgot password?') }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Кнопка «Войти» -->
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <span>{{ __('Sign in') }}</span>
+                        </button>
+                    </form>
+
+                    <!-- Крупная заметная кнопка «Зарегистрироваться» и «Продолжить через Telegram» внизу окна -->
+                    <div class="mt-5 pt-5 border-t border-[#EAE3DE] space-y-2.5">
+                        <button
+                            type="button"
+                            wire:click="openRegister"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#FAF7F5] hover:bg-[#F2EAE4] border-2 border-[#1C1917] text-[#1C1917] text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <span>{{ __('Sign up') }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="startTelegramAuth"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Continue with Telegram') }}</span>
+                        </button>
+                    </div>
+                </div>
+
+            @elseif($step === 'register-email')
+                <!-- РЕГИСТРАЦИЯ: ШАГ 1 — ВВОД EMAIL -->
+                <div>
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('Sign up') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-5 leading-relaxed">
+                        {{ __('Enter your email to receive a 6-digit confirmation code.') }}
+                    </p>
+
+                    <form wire:submit="sendRegisterCode" class="space-y-4" novalidate>
+                        <div>
+                            <label for="mally-register-email" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
+                                {{ __('Email') }}
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-stone-400 pointer-events-none">
+                                    <i class="fa-regular fa-envelope text-xs"></i>
+                                </span>
+                                <input
+                                    id="mally-register-email"
+                                    type="email"
+                                    wire:model="authEmail"
+                                    placeholder="name@example.com"
+                                    autocomplete="email"
+                                    class="w-full pl-10 pr-4 py-3.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm font-medium text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                                />
+                            </div>
+                            @error('authEmail')
+                                <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <span>{{ __('Get code') }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="startTelegramAuth"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3 px-4 rounded-xl bg-[#0088CC]/10 hover:bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0077B5] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('No email? Continue with Telegram') }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="backToLogin"
+                            class="w-full py-2.5 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                            <span>{{ __('Back') }}</span>
+                        </button>
+                    </form>
+                </div>
+
+            @elseif($step === 'register-code')
+                <!-- РЕГИСТРАЦИЯ: ШАГ 2 — ВВОД 6-ЗНАЧНОГО КОДА -->
+                <div
+                    x-data="{
+                        seconds: @entangle('authCooldownSeconds'),
+                        timer: null,
+                        init() {
+                            this.timer = setInterval(() => {
+                                if (this.seconds > 0) {
+                                    this.seconds--;
                                 }
-                                digits = digits.slice(0, 9);
-                                let formatted = '+998';
-                                if (digits.length > 0) formatted += ' ' + digits.slice(0, 2);
-                                if (digits.length > 2) formatted += ' ' + digits.slice(2, 5);
-                                if (digits.length > 5) formatted += ' ' + digits.slice(5, 7);
-                                if (digits.length > 7) formatted += ' ' + digits.slice(7, 9);
-                                e.target.value = formatted;
-                                $wire.set('authPhone', formatted, false);
-                            }
-                        }"
-                    >
-                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
-                            {{ $texts['phone_label'] }}
-                        </label>
-                        <div class="relative">
+                            }, 1000);
+                        }
+                    }"
+                >
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('Email confirmation') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-1.5 leading-relaxed">
+                        {{ __('We sent a 6-digit confirmation code to:') }}
+                        <span class="font-semibold text-[#1C1917] break-all">{{ $this->authEmail }}</span>
+                    </p>
+                    <p class="text-[11px] text-[#9E8B89] text-center mb-5">
+                        {{ __('The code is valid for 10 minutes') }}
+                    </p>
+
+                    <form wire:submit="verifyRegisterCode" class="space-y-4" novalidate>
+                        <div>
                             <input
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="6"
+                                wire:model="authCode"
+                                placeholder="000000"
+                                autocomplete="one-time-code"
+                                class="w-full px-4 py-3.5 rounded-xl bg-[#FCECEC]/50 border border-[#E3DBD5] text-center text-2xl font-mono tracking-[0.45em] font-bold text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                            />
+                            @error('authCode')
+                                <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium text-center">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md cursor-pointer"
+                        >
+                            {{ __('Confirm') }}
+                        </button>
+                    </form>
+
+                    <div class="mt-4 text-center space-y-2">
+                        <template x-if="seconds > 0">
+                            <p class="text-xs text-[#78716C]">
+                                {{ __('Resend in') }} <span class="font-mono font-semibold text-[#1C1917]" x-text="seconds"></span> {{ __('sec.') }}
+                            </p>
+                        </template>
+                        <template x-if="seconds <= 0">
+                            <button
+                                type="button"
+                                wire:click="resendRegisterCode"
+                                wire:loading.attr="disabled"
+                                class="text-xs font-semibold text-[#1C1917] hover:underline underline-offset-4 transition cursor-pointer"
+                            >
+                                {{ __('Resend') }}
+                            </button>
+                        </template>
+
+                        <div>
+                            <button
+                                type="button"
+                                wire:click="setAuthStep('register-email')"
+                                class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                                <span>{{ __('Back') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            @elseif($step === 'register-profile')
+                <!-- РЕГИСТРАЦИЯ: ШАГ 3 — ИМЯ, ТЕЛЕФОН С МАСКОЙ +998, ПАРОЛЬ И ПОДТВЕРЖДЕНИЕ -->
+                <div x-data="{ showPassword: false, showPasswordConfirm: false }">
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('Complete sign-up') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
+                        {{ __('Fill in your contact details and set a password') }}
+                    </p>
+
+                    <div class="mb-4 px-3.5 py-2.5 rounded-xl bg-[#FAF7F5] border border-[#EAE3DE] flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-xs flex-shrink-0"></i>
+                            <span class="text-xs font-medium text-[#1C1917] truncate">{{ $verifiedRegisterEmail }}</span>
+                        </div>
+                    </div>
+
+                    <form wire:submit="completeEmailRegistration" class="space-y-3.5" novalidate>
+                        <!-- Имя -->
+                        <div>
+                            <label for="mally-reg-name" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Name *') }}
+                            </label>
+                            <input
+                                id="mally-reg-name"
+                                type="text"
+                                wire:model="authName"
+                                placeholder="{{ __('For example, Malika') }}"
+                                autocomplete="name"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                            />
+                            @error('authName')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Телефон с фиксированным префиксом +998 и маской +998 XX XXX XX XX -->
+                        <div
+                            x-data="{
+                                formatUzPhone(e) {
+                                    let digits = (e.target.value || '').replace(/\D/g, '');
+                                    if (digits.startsWith('998')) {
+                                        digits = digits.slice(3);
+                                    }
+                                    digits = digits.slice(0, 9);
+                                    let formatted = '+998';
+                                    if (digits.length > 0) formatted += ' ' + digits.slice(0, 2);
+                                    if (digits.length > 2) formatted += ' ' + digits.slice(2, 5);
+                                    if (digits.length > 5) formatted += ' ' + digits.slice(5, 7);
+                                    if (digits.length > 7) formatted += ' ' + digits.slice(7, 9);
+                                    e.target.value = formatted;
+                                    $wire.set('authPhone', formatted, false);
+                                }
+                            }"
+                        >
+                            <label for="mally-reg-phone" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Phone *') }}
+                            </label>
+                            <input
+                                id="mally-reg-phone"
                                 type="tel"
-                                required
-                                autofocus
                                 maxlength="17"
-                                placeholder="+998 99 822 28 80"
                                 wire:model="authPhone"
+                                placeholder="+998 90 123 45 67"
+                                autocomplete="tel"
                                 @input="formatUzPhone($event)"
                                 @focus="if (!$event.target.value || !$event.target.value.startsWith('+998')) { $event.target.value = '+998 '; $wire.set('authPhone', '+998 ', false); }"
-                                class="w-full px-4 py-3 text-base font-mono font-medium bg-[#FAF8F6] border border-[#E3DBD5] rounded-2xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm font-mono text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
                             />
-                            <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400">
-                                <i class="fa-solid fa-phone text-xs"></i>
-                            </span>
+                            @error('authPhone')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+
+                            @if($this->authSuggestTelegram ?? false)
+                                <button
+                                    type="button"
+                                    wire:click="startTelegramAuth"
+                                    wire:loading.attr="disabled"
+                                    class="mt-2 w-full py-2.5 px-4 rounded-xl bg-[#0088CC]/10 hover:bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0077B5] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <i class="fa-brands fa-telegram text-base"></i>
+                                    <span>{{ __('Continue with Telegram') }}</span>
+                                </button>
+                            @endif
                         </div>
-                        <p class="text-[11px] text-[#A8A29E] mt-1.5">
-                            {{ $texts['phone_hint'] }}
-                        </p>
+
+                        <!-- Пароль -->
+                        <div>
+                            <label for="mally-reg-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Password (at least 8 characters) *') }}
+                            </label>
+                            <div class="relative">
+                                <input
+                                    id="mally-reg-password"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPassword"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPassword = !showPassword"
+                                    :aria-label="showPassword ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
+                                >
+                                    <i class="fa-regular text-xs" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPassword')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Подтверждение пароля -->
+                        <div>
+                            <label for="mally-reg-password-confirm" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Confirm password *') }}
+                            </label>
+                            <div class="relative">
+                                <input
+                                    id="mally-reg-password-confirm"
+                                    :type="showPasswordConfirm ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPasswordConfirmation"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPasswordConfirm = !showPasswordConfirm"
+                                    :aria-label="showPasswordConfirm ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
+                                >
+                                    <i class="fa-regular text-xs" :class="showPasswordConfirm ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPasswordConfirmation')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md mt-2 cursor-pointer"
+                        >
+                            {{ __('Sign up') }}
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="openRegister"
+                            class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                            <span>{{ __('Back') }}</span>
+                        </button>
+                    </form>
+                </div>
+
+            @elseif($step === 'reset-email')
+                <!-- ВОССТАНОВЛЕНИЕ ПАРОЛЯ: ШАГ A — ВВОД EMAIL -->
+                <div>
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('Password reset') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-5 leading-relaxed">
+                        {{ __('Enter your email and we will send a 6-digit code to reset your password.') }}
+                    </p>
+
+                    <form wire:submit="sendPasswordResetCode" class="space-y-4" novalidate>
+                        <div>
+                            <label for="mally-reset-email" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
+                                {{ __('Email') }}
+                            </label>
+                            <input
+                                id="mally-reset-email"
+                                type="email"
+                                wire:model="authEmail"
+                                placeholder="name@example.com"
+                                autocomplete="email"
+                                class="w-full px-4 py-3.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm font-medium text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                            />
+                            @error('authEmail')
+                                <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md cursor-pointer"
+                        >
+                            {{ __('Send code') }}
+                        </button>
+
+                        @error('authTelegram')
+                            <p role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
+                        @enderror
+
+                        <!-- Сброс через Telegram — для аккаунтов, зарегистрированных через бота -->
+                        <button
+                            type="button"
+                            wire:click="startTelegramReset"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Reset via Telegram') }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="backToLogin"
+                            class="w-full py-2.5 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                            <span>{{ __('Back') }}</span>
+                        </button>
+                    </form>
+                </div>
+
+            @elseif($step === 'reset-code')
+                <!-- ВОССТАНОВЛЕНИЕ ПАРОЛЯ: ШАГ B — ВВОД 6-ЗНАЧНОГО КОДА -->
+                <div
+                    x-data="{
+                        seconds: @entangle('authCooldownSeconds'),
+                        timer: null,
+                        init() {
+                            this.timer = setInterval(() => {
+                                if (this.seconds > 0) {
+                                    this.seconds--;
+                                }
+                            }, 1000);
+                        }
+                    }"
+                >
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('Reset code') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-1.5 leading-relaxed">
+                        {{ __('Enter the 6-digit code sent to:') }}
+                        <span class="font-semibold text-[#1C1917] break-all">{{ $this->authEmail }}</span>
+                    </p>
+                    <p class="text-[11px] text-[#9E8B89] text-center mb-5">
+                        {{ __('The code is valid for 10 minutes') }}
+                    </p>
+
+                    <form wire:submit="verifyPasswordResetCode" class="space-y-4" novalidate>
+                        <div>
+                            <input
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="6"
+                                wire:model="authCode"
+                                placeholder="000000"
+                                autocomplete="one-time-code"
+                                class="w-full px-4 py-3.5 rounded-xl bg-[#FCECEC]/50 border border-[#E3DBD5] text-center text-2xl font-mono tracking-[0.45em] font-bold text-[#1C1917] focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                            />
+                            @error('authCode')
+                                <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium text-center">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md cursor-pointer"
+                        >
+                            {{ __('Confirm') }}
+                        </button>
+                    </form>
+
+                    <div class="mt-4 text-center space-y-2">
+                        <template x-if="seconds > 0">
+                            <p class="text-xs text-[#78716C]">
+                                {{ __('Resend in') }} <span class="font-mono font-semibold text-[#1C1917]" x-text="seconds"></span> {{ __('sec.') }}
+                            </p>
+                        </template>
+                        <template x-if="seconds <= 0">
+                            <button
+                                type="button"
+                                wire:click="resendPasswordResetCode"
+                                wire:loading.attr="disabled"
+                                class="text-xs font-semibold text-[#1C1917] hover:underline underline-offset-4 transition cursor-pointer"
+                            >
+                                {{ __('Resend') }}
+                            </button>
+                        </template>
+
+                        <div>
+                            <button
+                                type="button"
+                                wire:click="openForgotPassword"
+                                class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                                <span>{{ __('Back') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            @elseif($step === 'reset-password')
+                <!-- ВОССТАНОВЛЕНИЕ ПАРОЛЯ: ШАГ C — НОВЫЙ ПАРОЛЬ И ПОДТВЕРЖДЕНИЕ -->
+                <div x-data="{ showPassword: false, showPasswordConfirm: false }">
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('New password') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
+                        {{ __('Set a new password of at least 8 characters.') }}
+                    </p>
+
+                    <div class="mb-4 px-3.5 py-2.5 rounded-xl bg-[#FAF7F5] border border-[#EAE3DE] flex items-center gap-2">
+                        <i class="fa-solid fa-key text-stone-600 text-xs flex-shrink-0"></i>
+                        <span class="text-xs font-medium text-[#1C1917] truncate">{{ $verifiedResetEmail }}</span>
                     </div>
 
-                    <button
-                        type="submit"
-                        class="w-full py-3.5 px-4 bg-[#1C1917] hover:bg-[#2C2724] active:scale-[0.98] text-[#FAF7F5] rounded-2xl text-xs font-bold tracking-wider uppercase transition shadow-lg hover:shadow-xl flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                        <span>{{ $texts['get_code'] }}</span>
-                        <i class="fa-solid fa-arrow-right text-xs"></i>
-                    </button>
-
-                    <!-- Разделитель -->
-                    <div class="relative my-4">
-                        <div class="absolute inset-0 flex items-center">
-                            <div class="w-full border-t border-[#EAE3DE]"></div>
+                    <form wire:submit="completePasswordReset" class="space-y-3.5" novalidate>
+                        <div>
+                            <label for="mally-reset-new-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('New password (at least 8 characters) *') }}
+                            </label>
+                            <div class="relative">
+                                <input
+                                    id="mally-reset-new-password"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPassword"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPassword = !showPassword"
+                                    :aria-label="showPassword ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
+                                >
+                                    <i class="fa-regular text-xs" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPassword')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
                         </div>
-                        <div class="relative flex justify-center text-[10px] uppercase tracking-wider">
-                            <span class="bg-white px-2 text-[#A8A29E]">{{ $texts['or'] }}</span>
-                        </div>
-                    </div>
 
-                    <!-- Кнопка входа через Telegram-бота -->
+                        <div>
+                            <label for="mally-reset-confirm-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Confirm password *') }}
+                            </label>
+                            <div class="relative">
+                                <input
+                                    id="mally-reset-confirm-password"
+                                    :type="showPasswordConfirm ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPasswordConfirmation"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPasswordConfirm = !showPasswordConfirm"
+                                    :aria-label="showPasswordConfirm ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
+                                >
+                                    <i class="fa-regular text-xs" :class="showPasswordConfirm ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPasswordConfirmation')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md mt-2 cursor-pointer"
+                        >
+                            {{ __('Save and sign in') }}
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="openForgotPassword"
+                            class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                            <span>{{ __('Back') }}</span>
+                        </button>
+                    </form>
+                </div>
+
+            @elseif($step === 'telegram-wait')
+                <!-- TELEGRAM: ШАГ 1 — ОТКРЫТЬ БОТА И ПОДЕЛИТЬСЯ КОНТАКТОМ -->
+                <div @if($this->authTelegramBotUrl) wire:poll.2s.keep-alive="checkTelegramAuthStatus" @endif class="space-y-4">
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
+                        {{ ($this->authTelegramPurpose ?? 'login') === 'reset' ? __('Password reset via Telegram') : __('Sign in with Telegram') }}
+                    </h2>
+
+                    @error('authTelegram')
+                        <p role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
+                    @enderror
+
+                    @if($this->authTelegramBotUrl)
+                        <div class="p-4 rounded-2xl bg-[#F0F9FF] border border-[#BAE6FD] space-y-2.5 text-xs text-[#0C4A6E]">
+                            <ol class="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed text-[#0369A1]">
+                                <li>{{ __('Open the bot with the button below and press Start.') }}</li>
+                                <li>{{ __('Share your contact with the "📱 Share contact" button.') }}</li>
+                                <li>{{ __('The bot will send you a 6-digit code — enter it here.') }}</li>
+                            </ol>
+                        </div>
+
+                        <a
+                            href="{{ $this->authTelegramBotUrl }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Open Telegram bot') }}</span>
+                            <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+                        </a>
+
+                        <div class="flex items-center justify-center gap-2 py-1 text-[11px] text-[#78716C]">
+                            <i class="fa-solid fa-spinner fa-spin text-[#0088CC]"></i>
+                            <span>{{ ($this->authTelegramStatus ?? 'pending') === 'contact_requested' ? __('Waiting for your contact in the bot…') : __('Please wait, the bot will reply in a few seconds…') }}</span>
+                        </div>
+                    @else
+                        <button
+                            type="button"
+                            wire:click="startTelegramAuth"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Start again') }}</span>
+                        </button>
+                    @endif
+
                     <button
                         type="button"
-                        wire:click="setAuthStep('telegram')"
-                        class="w-full py-3 px-4 bg-[#EBF6FC] hover:bg-[#DDF0FA] active:scale-[0.98] text-[#24A1DE] border border-[#BCE1F5] rounded-2xl text-xs font-bold tracking-wide transition flex items-center justify-center gap-2.5 cursor-pointer"
+                        wire:click="backToLogin"
+                        class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                        <i class="fa-brands fa-telegram text-base"></i>
-                        <span>{{ $texts['tg_login'] }}</span>
+                        <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                        <span>{{ __('Back') }}</span>
                     </button>
-                </form>
-            @endif
+                </div>
 
-            <!-- ШАГ 2: ВВОД КОДА ПОДТВЕРЖДЕНИЯ -->
-            @if($step === 'code')
-                <form wire:submit.prevent="verifyAuthCode" class="space-y-4">
-                    <div class="text-center">
-                        <span class="text-xs text-[#78716C]">{{ $texts['code_sent_to'] }}</span>
-                        <div class="font-mono font-bold text-sm text-[#1C1917] mt-0.5">
-                            {{ $phone }}
-                        </div>
-                    </div>
+            @elseif($step === 'telegram-code')
+                <!-- TELEGRAM: ШАГ 2 — КОД ИЗ БОТА -->
+                <div class="space-y-4">
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
+                        {{ __('Code from Telegram') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center leading-relaxed">
+                        {{ __('Enter the 6-digit code the bot has just sent you. Never share it with anyone.') }}
+                    </p>
 
-                    <!-- Поле ввода проверочного кода -->
-                    <div>
-                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1.5 text-center">
-                            {{ $texts['enter_code'] }}
-                        </label>
+                    <form wire:submit="verifyTelegramCode" class="space-y-3" novalidate>
                         <input
                             type="text"
-                            required
-                            autofocus
-                            maxlength="6"
-                            placeholder="• • • • • •"
+                            wire:model="authTelegramCode"
                             inputmode="numeric"
                             autocomplete="one-time-code"
-                            wire:model="authCode"
-                            class="w-full text-center tracking-[0.5em] text-2xl font-mono font-bold py-3 bg-[#FAF8F6] border border-[#E3DBD5] rounded-2xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                            maxlength="6"
+                            placeholder="• • • • • •"
+                            autofocus
+                            class="w-full text-center tracking-[0.5em] text-2xl font-mono font-bold py-3 bg-[#FAF8F6] border border-[#E3DBD5] rounded-2xl focus:outline-none focus:border-[#1C1917]"
                         />
-                    </div>
+                        @error('authTelegramCode')
+                            <p role="alert" class="text-xs text-rose-600 font-medium text-center">{{ $message }}</p>
+                        @enderror
+
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition shadow-md cursor-pointer"
+                        >
+                            {{ __('Confirm') }}
+                        </button>
+                    </form>
 
                     <button
-                        type="submit"
-                        class="w-full py-3.5 px-4 bg-[#1C1917] hover:bg-[#2C2724] active:scale-[0.98] text-[#FAF7F5] rounded-2xl text-xs font-bold tracking-wider uppercase transition shadow-lg hover:shadow-xl flex items-center justify-center gap-2 cursor-pointer"
+                        type="button"
+                        wire:click="backToLogin"
+                        class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                        <span>{{ $texts['sign_in_btn'] }}</span>
-                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                        <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                        <span>{{ __('Back') }}</span>
                     </button>
+                </div>
 
-                    <div class="flex justify-between items-center text-xs text-[#78716C] pt-1">
-                        <button
-                            type="button"
-                            wire:click="setAuthStep('phone')"
-                            class="hover:text-[#1C1917] underline transition cursor-pointer"
-                        >
-                            {{ $texts['change_phone'] }}
-                        </button>
-                        <button
-                            type="button"
-                            wire:click="sendAuthCode"
-                            class="hover:text-[#1C1917] underline transition cursor-pointer"
-                        >
-                            {{ $texts['resend_code'] }}
-                        </button>
-                    </div>
-                </form>
-            @endif
+            @elseif($step === 'telegram-register')
+                <!-- ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ ЧЕРЕЗ TELEGRAM: номер уже подтверждён ботом; пароль — для входа по номеру телефона -->
+                <div x-data="{ showPassword: false, showPasswordConfirm: false }">
+                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
+                        {{ __('Sign up with Telegram') }}
+                    </h2>
+                    <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
+                        {{ __('Your number is confirmed by Telegram. Choose a password: next time sign in with your phone and password or through the bot again.') }}
+                    </p>
 
-            <!-- ШАГ 3: ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ НОВОГО ПОКУПАТЕЛЯ (без username) -->
-            @if($step === 'complete-profile')
-                <form wire:submit.prevent="completeAuthRegister" class="space-y-3.5">
-                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-center">
-                        <div class="flex items-center justify-center gap-2 text-xs font-semibold">
-                            <i class="fa-solid fa-circle-check text-emerald-600"></i>
-                            <span>{{ $texts['phone_verified'] }}</span>
+                    <div class="mb-4 px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <i class="fa-brands fa-telegram text-[#0088CC] text-base flex-shrink-0"></i>
+                            <div class="min-w-0">
+                                <span class="block text-[10px] uppercase tracking-wider text-emerald-700 font-bold">{{ __('Confirmed number') }}</span>
+                                <span class="text-xs font-mono font-bold text-[#1C1917]">{{ $this->authPhone }}</span>
+                            </div>
                         </div>
-                        <p class="font-mono font-bold text-sm text-emerald-900 mt-0.5">
-                            {{ $phone }}
-                        </p>
+                        <i class="fa-solid fa-circle-check text-emerald-600 text-sm flex-shrink-0"></i>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
+                    <form wire:submit="completeTelegramRegistration" class="space-y-3.5" novalidate>
+                        <!-- Имя (обязательно) -->
                         <div>
-                            <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ $texts['first_name'] }} <span class="text-rose-500">*</span>
+                            <label for="mally-tg-reg-name" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Name *') }}
                             </label>
                             <input
+                                id="mally-tg-reg-name"
                                 type="text"
-                                required
-                                placeholder="{{ $texts['first_name'] }}"
-                                wire:model="authFirstName"
-                                class="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
+                                wire:model="authName"
+                                placeholder="{{ __('For example, Malika') }}"
+                                autocomplete="name"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
                             />
+                            @error('authName')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
                         </div>
 
+                        <!-- Пароль -->
                         <div>
-                            <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ $texts['last_name'] }} <span class="text-rose-500">*</span>
+                            <label for="mally-tg-reg-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Password (at least 8 characters) *') }}
                             </label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="{{ $texts['last_name'] }}"
-                                wire:model="authLastName"
-                                class="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
-                            />
+                            <div class="relative">
+                                <input
+                                    id="mally-tg-reg-password"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPassword"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPassword = !showPassword"
+                                    :aria-label="showPassword ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
+                                >
+                                    <i class="fa-regular text-xs" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPassword')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
                         </div>
-                    </div>
 
-                    <div>
-                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                            {{ $texts['address'] }} <span class="text-rose-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            placeholder="{{ $texts['address_placeholder'] }}"
-                            wire:model="authAddress"
-                            class="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F6] border border-[#E3DBD5] rounded-xl focus:outline-none focus:border-[#1C1917] focus:bg-white transition"
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        class="w-full mt-2 py-3.5 px-4 bg-[#1C1917] hover:bg-[#2C2724] text-[#FAF7F5] rounded-xl text-xs font-bold tracking-wider uppercase transition shadow-lg hover:shadow-xl flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                        <span>{{ $texts['finish_reg'] }}</span>
-                        <i class="fa-solid fa-arrow-right text-xs"></i>
-                    </button>
-                </form>
-            @endif
-
-            <!-- ШАГ 4: ВХОД ЧЕРЕЗ TELEGRAM-БОТА -->
-            @if($step === 'telegram')
-                <div class="space-y-4">
-                    <div class="text-center">
-                        <div class="w-16 h-16 mx-auto mb-3 bg-[#EBF6FC] border border-[#BCE1F5] rounded-2xl flex items-center justify-center text-[#24A1DE] text-3xl shadow-inner">
-                            <i class="fa-brands fa-telegram"></i>
+                        <!-- Подтверждение пароля -->
+                        <div>
+                            <label for="mally-tg-reg-password-confirm" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
+                                {{ __('Confirm password *') }}
+                            </label>
+                            <div class="relative">
+                                <input
+                                    id="mally-tg-reg-password-confirm"
+                                    :type="showPasswordConfirm ? 'text' : 'password'"
+                                    type="password"
+                                    wire:model="authPasswordConfirmation"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
+                                />
+                                <button
+                                    type="button"
+                                    @click="showPasswordConfirm = !showPasswordConfirm"
+                                    :aria-label="showPasswordConfirm ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
+                                >
+                                    <i class="fa-regular text-xs" :class="showPasswordConfirm ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            @error('authPasswordConfirmation')
+                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
+                            @enderror
                         </div>
-                        <p class="text-xs text-[#57534E] leading-relaxed">
-                            {{ $texts['tg_desc'] }}
-                        </p>
-                    </div>
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md mt-2 cursor-pointer"
+                        >
+                            {{ __('Sign up') }}
+                        </button>
 
-                    <a
-                        href="https://t.me/mallyuz"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="w-full py-3.5 px-4 bg-[#24A1DE] hover:bg-[#1E8EC6] active:scale-[0.98] text-white rounded-2xl text-xs font-bold tracking-wide uppercase transition shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 cursor-pointer"
-                    >
-                        <i class="fa-solid fa-paper-plane text-sm"></i>
-                        <span>{{ $texts['open_tg_bot'] }}</span>
-                    </a>
-
-                    <div class="bg-[#FAF7F5] border border-[#EAE3DE] rounded-2xl p-4 text-xs space-y-2">
-                        <div class="flex items-start gap-2.5">
-                            <span class="w-5 h-5 rounded-full bg-[#1C1917] text-[#FAF7F5] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
-                            <span class="text-[#57534E]">{!! $texts['tg_step1'] !!}</span>
-                        </div>
-                        <div class="flex items-start gap-2.5">
-                            <span class="w-5 h-5 rounded-full bg-[#1C1917] text-[#FAF7F5] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
-                            <span class="text-[#57534E]">{!! $texts['tg_step2'] !!}</span>
-                        </div>
-                        <div class="flex items-start gap-2.5">
-                            <span class="w-5 h-5 rounded-full bg-[#1C1917] text-[#FAF7F5] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-                            <span class="text-[#57534E]">{!! $texts['tg_step3'] !!}</span>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center justify-center gap-2.5 py-2 text-xs text-[#78716C]">
-                        <span class="relative flex h-2.5 w-2.5">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
-                        </span>
-                        <span>{{ $texts['tg_waiting'] }}</span>
-                    </div>
-
-                    <div class="text-center pt-1">
                         <button
                             type="button"
-                            wire:click="setAuthStep('phone')"
-                            class="text-xs text-[#78716C] hover:text-[#1C1917] underline transition cursor-pointer"
+                            wire:click="backToLogin"
+                            class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                            {{ $texts['back_to_phone'] }}
+                            <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                            <span>{{ __('Back') }}</span>
                         </button>
-                    </div>
+                    </form>
                 </div>
             @endif
         </div>

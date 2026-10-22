@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductReceipt;
 use App\Models\Review;
 use App\Models\User;
+use App\Services\CustomerAccountService;
 use App\Services\ExchangeRateService;
 use App\Services\OrderService;
 use App\Services\StorefrontService;
@@ -95,7 +96,8 @@ class OrderPlacementTest extends TestCase
         session(['mally_customer_id' => $customer->id]);
         app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
         app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
-        app(StorefrontService::class)->applyPromoCode('MALLY10');
+        config(['services.store.promo_code' => 'TESTPROMO', 'services.store.promo_percent' => 10]);
+        app(StorefrontService::class)->applyPromoCode('TESTPROMO');
 
         Livewire::test(CheckoutPage::class)
             ->assertSet('city', 'Самарканд')
@@ -134,6 +136,39 @@ class OrderPlacementTest extends TestCase
             $this->assertSame(0, Brand::where('name', 'Mally Collection')->count());
             $this->assertSame(0, Order::count());
         }
+    }
+
+    public function test_api_order_is_never_attached_to_a_storefront_account_by_phone(): void
+    {
+        config(['services.store.orders_api_token' => 'secret-token']);
+        $product = $this->product(57.15);
+        // A shopper account that typed (but never verified) this phone.
+        $user = User::factory()->create(['phone' => '+998 93 555 44 33']);
+        $account = $this->customer(['user_id' => $user->id, 'phone_number' => '+998 93 555 44 33']);
+
+        $this->postJson('/api/orders', [
+            'customerName' => 'Ali Valiev',
+            'customerPhone' => '+998 93 555 44 33',
+            'address' => 'Real owner street 1',
+            'items' => [['id' => $product->id, 'quantity' => 1]],
+            'city' => 'Bukhara',
+        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
+
+        // One customer per phone, and it belongs to the account: the order
+        // gets no customer, but keeps the typed details for the delivery.
+        $order = Order::sole();
+        $this->assertNull($order->customer_id);
+        $this->assertSame('Ali Valiev', $order->customer_name);
+        $this->assertSame('+998 93 555 44 33', $order->customer_phone);
+        $this->assertSame('Bukhara', $order->city);
+        $this->assertSame('Real owner street 1', $order->address);
+        $this->assertSame(1, Customer::count());
+        $this->assertSame($user->id, $account->fresh()->user_id);
+
+        // It isn't in the account owner's profile; their own orders are.
+        $own = $this->place($account, [$product->id => 1]);
+        app(CustomerAccountService::class)->login($user);
+        $this->assertSame([$own->id], Livewire::test(ProfilePage::class)->viewData('orders')->pluck('id')->all());
     }
 
     public function test_client_prices_and_discounts_are_ignored(): void
@@ -565,7 +600,7 @@ class OrderPlacementTest extends TestCase
         $review = $this->review($this->deliveredOrder($this->customer(), $product), $product, ['rating' => 2, 'is_approved' => false]);
 
         config(['app.env' => 'local']);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         Livewire::test(EditReview::class, ['record' => $review->getRouteKey()])
             ->fillForm(['rating' => 5, 'comment' => 'Edited by admin', 'is_approved' => true])

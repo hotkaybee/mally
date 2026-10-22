@@ -21,20 +21,25 @@
     <body class="min-h-screen bg-[#FCECEC] text-[#1C1917] antialiased selection:bg-[#1C1917] selection:text-[#FCECEC]">
         {{ $slot }}
 
-        <!-- Глобальные всплывающие уведомления (только ошибки, поверх всех окон) -->
+        <!-- Глобальные всплывающие уведомления (поверх всех окон) -->
         <div
             x-data="{
                 toasts: [],
+                init() {
+                    @if(session()->has('mally_toast'))
+                        this.add(@js(session('mally_toast')));
+                    @endif
+                },
                 add(detail) {
                     const msg = typeof detail === 'string' ? detail : (detail?.message || (Array.isArray(detail) && detail[0]?.message) || '');
-                    const type = (typeof detail === 'object' && !Array.isArray(detail) ? detail?.type : (Array.isArray(detail) ? detail[0]?.type : 'info')) || 'info';
+                    const rawType = (typeof detail === 'object' && !Array.isArray(detail) ? detail?.type : (Array.isArray(detail) ? detail[0]?.type : 'info')) || 'info';
                     if (!msg) return;
-                    if (type !== 'error' && type !== 'warning') return;
+                    const type = ['error', 'warning', 'success', 'info'].includes(rawType) ? rawType : 'info';
                     const id = Date.now() + Math.random();
-                    this.toasts.push({ id, message: msg, type: 'error' });
+                    this.toasts.push({ id, message: msg, type });
                     setTimeout(() => {
                         this.toasts = this.toasts.filter(t => t.id !== id);
-                    }, 3500);
+                    }, 4500);
                 }
             }"
             @toast.window="add($event.detail)"
@@ -49,14 +54,39 @@
                     x-transition:leave="transition ease-in duration-150"
                     x-transition:leave-start="opacity-100"
                     x-transition:leave-end="opacity-0"
-                    class="pointer-events-auto px-4 py-3.5 rounded-2xl shadow-2xl border border-rose-500 bg-rose-600 text-white flex items-center gap-3 text-xs font-semibold"
+                    :class="{
+                        'border-rose-500 bg-rose-600 text-white': t.type === 'error',
+                        'border-amber-500 bg-amber-600 text-white': t.type === 'warning',
+                        'border-emerald-500 bg-emerald-600 text-white': t.type === 'success',
+                        'border-stone-700 bg-[#1C1917] text-white': t.type === 'info'
+                    }"
+                    class="pointer-events-auto px-4 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-semibold"
                 >
-                    <i class="fa-solid fa-circle-exclamation text-white text-sm flex-shrink-0"></i>
+                    <i
+                        :class="{
+                            'fa-solid fa-circle-exclamation': t.type === 'error' || t.type === 'warning',
+                            'fa-solid fa-circle-check': t.type === 'success',
+                            'fa-solid fa-circle-info': t.type === 'info'
+                        }"
+                        class="text-white text-sm flex-shrink-0"
+                    ></i>
                     <span x-text="t.message" class="flex-1 leading-snug"></span>
                 </div>
             </template>
         </div>
 
         @livewireScripts
+        <script>
+            document.addEventListener('livewire:init', () => {
+                Livewire.hook('request', ({ fail }) => {
+                    fail(({ status, preventDefault }) => {
+                        if (status === 419) {
+                            preventDefault();
+                            window.location.reload();
+                        }
+                    });
+                });
+            });
+        </script>
     </body>
 </html>

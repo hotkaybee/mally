@@ -237,5 +237,6 @@
     "Confirmed number": "Подтверждённый номер",
     "Use this code to continue in the Mally Store online shop:": "Используйте этот проверочный код для продолжения в интернет-магазине Mally Store:",
     "Never share this code with anyone.": "Никому не сообщайте этот код.",
-    "If you did not request this code, just ignore this email.": "Если вы не запрашивали этот код, просто проигнорируйте это письмо."
+    "If you did not request this code, just ignore this email.": "Если вы не запрашивали этот код, просто проигнорируйте это письмо.",
+    "A customer with this phone number already exists.": "Клиент с таким номером телефона уже существует."
 }

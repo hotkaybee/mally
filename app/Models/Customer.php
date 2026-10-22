@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,11 +32,39 @@ class Customer extends Model
     }
 
     /**
-     * Match an Uzbek phone number in any of the formats it may have been
-     * saved in (admin input, API, storefront).
+     * The one stored format, so the same number can't be saved twice in
+     * different spellings: Uzbek numbers become "+998 90 123 45 67", anything
+     * else is kept as typed (trimmed), and empty becomes null.
      */
+    public static function normalizePhone(?string $phone): ?string
+    {
+        $phone = trim((string) $phone);
+        if ($phone === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', $phone);
+        if (strlen($digits) === 9) {
+            $digits = '998'.$digits;
+        }
+
+        if (strlen($digits) !== 12 || ! str_starts_with($digits, '998')) {
+            return $phone;
+        }
+
+        $s = substr($digits, 3);
+
+        return sprintf('+998 %s %s %s %s', substr($s, 0, 2), substr($s, 2, 3), substr($s, 5, 2), substr($s, 7, 2));
+    }
+
+    protected function phoneNumber(): Attribute
+    {
+        return Attribute::set(fn (?string $value) => self::normalizePhone($value));
+    }
+
+    /** Find a customer by a phone number typed in any format. */
     public function scopeWherePhone(Builder $query, string $phone): Builder
     {
-        return $query->whereIn('phone_number', PhoneNumber::variants($phone));
+        return $query->where('phone_number', self::normalizePhone($phone));
     }
 }

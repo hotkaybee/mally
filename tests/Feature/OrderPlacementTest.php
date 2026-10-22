@@ -312,7 +312,9 @@ class OrderPlacementTest extends TestCase
 
         $this->assertSame('USD', $response->json('currency'));
         $this->assertEquals(57.15, $response->json('totalAmount'));
-        $this->assertSame('telegram', Customer::where('phone_number', '+998 93 555 44 33')->sole()->source);
+        $customer = Customer::where('phone_number', '+998 93 555 44 33')->sole();
+        $this->assertSame('telegram', $customer->source);
+        $this->assertNull($customer->email);
     }
 
     public function test_api_rejects_unknown_products_without_creating_them(): void
@@ -410,8 +412,9 @@ class OrderPlacementTest extends TestCase
             ->assertOk()->assertSeeLivewire(OrderReceiptPage::class);
         $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number]))->assertForbidden();
 
-        // Another account with the same phone number is not the owner.
-        $samePhone = $this->customer(['email' => 'other@example.com']);
+        // An account whose phone matches the order's delivery phone is not the owner.
+        $samePhone = $this->customer(['email' => 'other@example.com', 'phone_number' => '+998 91 444 44 44']);
+        $order->update(['customer_phone' => $samePhone->phone_number]);
         session(['mally_customer_id' => $samePhone->id]);
         $this->get(route('checkout.receipt', ['orderNumber' => $order->order_number]))->assertForbidden();
 
@@ -425,9 +428,11 @@ class OrderPlacementTest extends TestCase
     {
         $product = $this->product(10, [10]);
         $me = $this->customer();
-        $stranger = $this->customer(['email' => 'stranger@example.com']); // same phone
+        $stranger = $this->customer(['email' => 'stranger@example.com', 'phone_number' => '+998 91 444 44 44']);
         $mine = $this->place($me, [$product->id => 1]);
+        // Delivered to my phone, but placed by someone else: not mine.
         $theirs = $this->place($stranger, [$product->id => 1]);
+        $theirs->update(['customer_phone' => $me->phone_number]);
 
         session(['mally_customer_id' => $me->id]);
         $orders = Livewire::test(ProfilePage::class)->viewData('orders');

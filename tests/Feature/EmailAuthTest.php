@@ -284,6 +284,21 @@ class EmailAuthTest extends TestCase
         $this->assertSame(0, Customer::count());
     }
 
+    public function test_unknown_login_still_checks_a_password_hash(): void
+    {
+        // Same work as a wrong password, so timing doesn't reveal the account.
+        foreach (['nobody@example.com', '+998 99 999 99 99'] as $login) {
+            Cache::flush();
+
+            $res = app(EmailAuthService::class)->attemptLogin($login, 'AnyPassword123', '10.2.2.2');
+
+            $this->assertFalse($res['success']);
+            $this->assertSame(__('Wrong email, phone number or password.'), $res['message']);
+            // The password was checked against the stand-in hash.
+            $this->assertTrue(Hash::isHashed((string) Cache::get('auth_login_dummy_hash')));
+        }
+    }
+
     public function test_registration_with_a_taken_email_answers_the_same_and_mails_the_owner_instead_of_a_code(): void
     {
         Mail::fake();

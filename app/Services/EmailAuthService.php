@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
@@ -141,7 +142,7 @@ class EmailAuthService
             // An unknown phone and a wrong password get the same answer, so
             // the form can't be used to check who has an account.
             $user = User::shoppers()->wherePhone($normalizedPhone)->first();
-            if (! $user || ! Hash::check($password, (string) $user->password)) {
+            if (! $this->passwordMatches($user, $password)) {
                 $this->recordFailedLogin($loginKey, $ipAddress, $normalizedPhone);
 
                 return [
@@ -194,7 +195,7 @@ class EmailAuthService
 
         $user = $this->findUserByEmail($email);
 
-        if (! $user || ! Hash::check($password, (string) $user->password)) {
+        if (! $this->passwordMatches($user, $password)) {
             $this->recordFailedLogin($loginKey, $ipAddress, $email);
 
             return [
@@ -215,6 +216,17 @@ class EmailAuthService
             'user' => $user,
             'customer' => $customer,
         ];
+    }
+
+    /**
+     * Always runs one hash check, also when there is no such user, so the
+     * response time doesn't tell whether an account exists.
+     */
+    private function passwordMatches(?User $user, string $password): bool
+    {
+        $hash = $user?->password ?? Cache::rememberForever('auth_login_dummy_hash', fn () => Hash::make(Str::random(40)));
+
+        return Hash::check($password, (string) $hash) && $user !== null;
     }
 
     protected function accounts(): CustomerAccountService

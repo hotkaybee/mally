@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Mail\AccountExistsMail;
 use App\Mail\AuthCodeMail;
 use App\Models\AuthCode;
 use App\Models\Customer;
 use App\Models\User;
-use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -70,7 +70,13 @@ class EmailAuthService
             return false;
         }
 
-        return User::whereRaw('LOWER(email) = ?', [$email])->exists();
+        return User::shoppers()->whereRaw('LOWER(email) = ?', [$email])->exists();
+    }
+
+    /** Any account has this email, admins included (users.email is unique). */
+    public function emailTaken(string $rawEmail): bool
+    {
+        return User::whereRaw('LOWER(email) = ?', [$this->normalizeEmail($rawEmail)])->exists();
     }
 
     public function findUserByEmail(string $rawEmail): ?User
@@ -80,7 +86,7 @@ class EmailAuthService
             return null;
         }
 
-        return User::whereRaw('LOWER(email) = ?', [$email])->first();
+        return User::shoppers()->whereRaw('LOWER(email) = ?', [$email])->first();
     }
 
     /**
@@ -111,7 +117,7 @@ class EmailAuthService
         $isPhone = $this->isPhoneIdentifier($rawEmail);
 
         if ($isPhone) {
-            $normalizedPhone = PhoneNumber::normalize($rawEmail) ?? trim($rawEmail);
+            $normalizedPhone = (string) Customer::normalizePhone($rawEmail);
 
             if ($password === '') {
                 return [
@@ -132,19 +138,10 @@ class EmailAuthService
                 ];
             }
 
-            $user = User::wherePhone($normalizedPhone)->first();
-            if (! $user) {
-                $this->recordFailedLogin($loginKey, $ipAddress, $normalizedPhone);
-
-                return [
-                    'success' => false,
-                    'error' => 'user_not_found',
-                    'is_phone' => true,
-                    'message' => __('There is no account with this phone number.'),
-                ];
-            }
-
-            if (! Hash::check($password, (string) $user->password)) {
+            // An unknown phone and a wrong password get the same answer, so
+            // the form can't be used to check who has an account.
+            $user = User::shoppers()->wherePhone($normalizedPhone)->first();
+            if (! $user || ! Hash::check($password, (string) $user->password)) {
                 $this->recordFailedLogin($loginKey, $ipAddress, $normalizedPhone);
 
                 return [
@@ -197,17 +194,7 @@ class EmailAuthService
 
         $user = $this->findUserByEmail($email);
 
-        if (! $user) {
-            $this->recordFailedLogin($loginKey, $ipAddress, $email);
-
-            return [
-                'success' => false,
-                'error' => 'user_not_found',
-                'message' => __('There is no account with this email.'),
-            ];
-        }
-
-        if (! Hash::check($password, (string) $user->password)) {
+        if (! $user || ! Hash::check($password, (string) $user->password)) {
             $this->recordFailedLogin($loginKey, $ipAddress, $email);
 
             return [
@@ -310,6 +297,13 @@ class EmailAuthService
             $deliverMail = false;
         }
 
+        // Registration answers the same whether or not the email is taken.
+        // Only the mailbox owner learns that the account exists: they get a
+        // "you already have an account" email instead of a code.
+        if ($purpose === AuthCode::PURPOSE_REGISTER && $deliverMail && $this->emailTaken($email)) {
+            return $this->sendAccountExistsMail($email, $cooldownKey, $emailRateKey, $ipRateKey);
+        }
+
         if (! $deliverMail) {
             Cache::put($cooldownKey, time() + self::COOLDOWN_SECONDS, self::COOLDOWN_SECONDS);
             RateLimiter::hit($emailRateKey, 3600);
@@ -366,6 +360,43 @@ class EmailAuthService
             'success' => true,
             'cooldown' => self::COOLDOWN_SECONDS,
             'message' => $msg,
+        ];
+    }
+
+    /**
+     * Registration with a taken email: no code, a notice to the mailbox
+     * instead, and the same answer, cooldown and limits as a real code.
+     *
+     * @return array{success: bool, error?: string, message: string, cooldown?: int}
+     */
+    private function sendAccountExistsMail(string $email, string $cooldownKey, string $emailRateKey, string $ipRateKey): array
+    {
+        $this->invalidateActiveCodes($email, AuthCode::PURPOSE_REGISTER);
+
+        try {
+            if (app()->isProduction() && in_array(config('mail.default'), ['log', 'array'], true)) {
+                throw new RuntimeException('MAIL_MAILER is not set up for production; auth emails are not sent.');
+            }
+
+            Mail::to($email)->send(new AccountExistsMail);
+        } catch (Throwable $e) {
+            report($e);
+
+            return [
+                'success' => false,
+                'error' => 'mail_failed',
+                'message' => __('Could not send the email with the code. Please try again later.'),
+            ];
+        }
+
+        Cache::put($cooldownKey, time() + self::COOLDOWN_SECONDS, self::COOLDOWN_SECONDS);
+        RateLimiter::hit($emailRateKey, 3600);
+        RateLimiter::hit($ipRateKey, 3600);
+
+        return [
+            'success' => true,
+            'cooldown' => self::COOLDOWN_SECONDS,
+            'message' => __('A confirmation code has been sent to your email.'),
         ];
     }
 
@@ -476,12 +507,21 @@ class EmailAuthService
             }
 
             // The phone isn't verified here, so it must not point at someone
-            // else's account. Accounts are never merged.
+            // else's account (accounts are never merged), and it must not
+            // take over a customer entered in the admin: that needs Telegram.
             if ($this->accounts()->phoneTaken($normalizedPhone)) {
                 return [
                     'success' => false,
                     'error' => 'phone_taken',
                     'message' => __('This phone number already belongs to another account. Sign in to it or use another number.'),
+                ];
+            }
+
+            if ($this->accounts()->phoneHeldByCustomerWithoutAccount($normalizedPhone)) {
+                return [
+                    'success' => false,
+                    'error' => 'phone_needs_telegram',
+                    'message' => __('This phone number is already in our system. Continue with Telegram to confirm it’s yours.'),
                 ];
             }
 
@@ -514,12 +554,12 @@ class EmailAuthService
         $email = $this->normalizeEmail($verifiedEmail);
 
         return DB::transaction(function () use ($email, $newPlainPassword) {
-            $user = User::whereRaw('LOWER(email) = ?', [$email])->lockForUpdate()->first();
+            $user = User::shoppers()->whereRaw('LOWER(email) = ?', [$email])->lockForUpdate()->first();
             if (! $user) {
                 return [
                     'success' => false,
                     'error' => 'user_not_found',
-                    'message' => __('There is no account with this email.'),
+                    'message' => __('Please confirm the password reset code first.'),
                 ];
             }
 
@@ -605,7 +645,7 @@ class EmailAuthService
      */
     public function clearLoginFailures(User $user): void
     {
-        foreach (array_filter([$this->normalizeEmail((string) $user->email), PhoneNumber::normalize((string) $user->phone)]) as $identifier) {
+        foreach (array_filter([$this->normalizeEmail((string) $user->email), Customer::normalizePhone($user->phone)]) as $identifier) {
             RateLimiter::clear($this->loginAccountRateKey($identifier));
         }
     }

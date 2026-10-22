@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductReceipt;
 use App\Models\Review;
 use App\Models\User;
+use App\Services\CustomerAccountService;
 use App\Services\ExchangeRateService;
 use App\Services\OrderService;
 use App\Services\StorefrontService;
@@ -150,11 +151,24 @@ class OrderPlacementTest extends TestCase
             'customerPhone' => '+998 93 555 44 33',
             'address' => 'Real owner street 1',
             'items' => [['id' => $product->id, 'quantity' => 1]],
+            'city' => 'Bukhara',
         ], ['X-Api-Token' => 'secret-token'])->assertCreated();
 
+        // One customer per phone, and it belongs to the account: the order
+        // gets no customer, but keeps the typed details for the delivery.
         $order = Order::sole();
-        $this->assertNotSame($account->id, $order->customer_id);
-        $this->assertNull($order->customer->user_id);
+        $this->assertNull($order->customer_id);
+        $this->assertSame('Ali Valiev', $order->customer_name);
+        $this->assertSame('+998 93 555 44 33', $order->customer_phone);
+        $this->assertSame('Bukhara', $order->city);
+        $this->assertSame('Real owner street 1', $order->address);
+        $this->assertSame(1, Customer::count());
+        $this->assertSame($user->id, $account->fresh()->user_id);
+
+        // It isn't in the account owner's profile; their own orders are.
+        $own = $this->place($account, [$product->id => 1]);
+        app(CustomerAccountService::class)->login($user);
+        $this->assertSame([$own->id], Livewire::test(ProfilePage::class)->viewData('orders')->pluck('id')->all());
     }
 
     public function test_client_prices_and_discounts_are_ignored(): void

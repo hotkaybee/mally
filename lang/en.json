@@ -137,8 +137,6 @@
     "Photos": "Photos",
     "Published": "Published",
     "Mally customer": "Mally customer",
-    "There is no account with this email.": "There is no account with this email.",
-    "There is no account with this phone number.": "There is no account with this phone number.",
     "Enter the 6-digit code from the email.": "Enter the 6-digit code from the email.",
     "Please enter a valid email address.": "Please enter a valid email address.",
     "Enter your password.": "Enter your password.",
@@ -202,7 +200,6 @@
     "Forgot password?": "Forgot password?",
     "Sign in": "Sign in",
     "Sign up": "Sign up",
-    "Sign up with this email": "Sign up with this email",
     "Enter your email to receive a 6-digit confirmation code.": "Enter your email to receive a 6-digit confirmation code.",
     "Get code": "Get code",
     "Email confirmation": "Email confirmation",
@@ -238,5 +235,10 @@
     "Use this code to continue in the Mally Store online shop:": "Use this code to continue in the Mally Store online shop:",
     "Never share this code with anyone.": "Never share this code with anyone.",
     "If you did not request this code, just ignore this email.": "If you did not request this code, just ignore this email.",
-    "A customer with this phone number already exists.": "A customer with this phone number already exists."
+    "A customer with this phone number already exists.": "A customer with this phone number already exists.",
+    "This phone number is already in our system. Continue with Telegram to confirm it’s yours.": "This phone number is already in our system. Continue with Telegram to confirm it’s yours.",
+    "You already have a Mally account": "You already have a Mally account",
+    "Someone tried to sign up on the Mally Store website with this email, but it already has an account. Sign in, or reset your password if you forgot it.": "Someone tried to sign up on the Mally Store website with this email, but it already has an account. Sign in, or reset your password if you forgot it.",
+    "Go to Mally Store": "Go to Mally Store",
+    "If it wasn’t you, just ignore this email.": "If it wasn’t you, just ignore this email."
 }

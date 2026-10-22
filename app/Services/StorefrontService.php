@@ -7,7 +7,6 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\User;
-use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -66,9 +65,12 @@ class StorefrontService
         }
     }
 
+    /** "+998 90 123 45 67", or null when it isn't an Uzbek number. */
     public function normalizeAndValidateUzPhone(string $rawPhone): ?string
     {
-        return PhoneNumber::normalize($rawPhone);
+        $phone = Customer::normalizePhone($rawPhone);
+
+        return $phone !== null && str_starts_with($phone, '+998 ') ? $phone : null;
     }
 
     public function getCurrency(): string

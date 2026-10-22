@@ -11,11 +11,16 @@ return new class extends Migration
      * Storefront shoppers sign in as Users, so `users` now holds both admins
      * and shoppers; `is_admin` decides who may open /admin. Each shopper User
      * owns exactly one Customer (customers.user_id).
+     *
+     * Accounts registered through Telegram have no email, so users.email is
+     * optional (still unique). users.phone is stored in the same format as
+     * customers.phone_number and is unique: people sign in with it.
      */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('phone', 32)->nullable()->after('email')->index();
+            $table->string('email')->nullable()->change();
+            $table->string('phone', 32)->nullable()->after('email')->unique();
             $table->string('telegram_id', 32)->nullable()->unique()->after('phone');
             $table->timestamp('phone_verified_at')->nullable()->after('telegram_id');
             $table->boolean('is_admin')->default(false)->after('password');
@@ -40,8 +45,13 @@ return new class extends Migration
 
         Schema::table('users', function (Blueprint $table) {
             $table->dropUnique(['telegram_id']);
-            $table->dropIndex(['phone']);
+            $table->dropUnique(['phone']);
             $table->dropColumn(['phone', 'telegram_id', 'phone_verified_at', 'is_admin']);
+        });
+
+        // Users without an email (Telegram sign-ups) must be removed first.
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('email')->nullable(false)->change();
         });
     }
 };

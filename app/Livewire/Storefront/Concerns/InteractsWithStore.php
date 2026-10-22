@@ -10,7 +10,6 @@ use App\Services\CustomerAccountService;
 use App\Services\EmailAuthService;
 use App\Services\StorefrontService;
 use App\Services\TelegramAuthService;
-use App\Support\PhoneNumber;
 use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
@@ -49,7 +48,9 @@ trait InteractsWithStore
 
     public ?string $authRedirectTo = null;
 
-    public bool $authOfferRegistration = false;
+    /** The typed phone belongs to a customer without an account: offer Telegram. */
+    #[Locked]
+    public bool $authSuggestTelegram = false;
 
     #[Locked]
     public string $authTelegramBotUrl = '';
@@ -161,7 +162,6 @@ trait InteractsWithStore
         $this->authError = '';
         $this->authNotice = '';
         $this->authCooldownSeconds = 0;
-        $this->authOfferRegistration = false;
         $this->authRedirectTo = $redirectTo !== null
             ? $this->emailAuth()->sanitizeRedirectPath($redirectTo)
             : null;
@@ -182,7 +182,6 @@ trait InteractsWithStore
         $this->authCode = '';
         $this->authError = '';
         $this->authNotice = '';
-        $this->authOfferRegistration = false;
         $this->resetValidation();
     }
 
@@ -194,7 +193,6 @@ trait InteractsWithStore
         }
 
         $this->clearAuthFeedback();
-        $this->authOfferRegistration = false;
         $this->authStep = $step;
     }
 
@@ -209,7 +207,6 @@ trait InteractsWithStore
         $this->authCode = '';
         $this->authError = '';
         $this->authNotice = '';
-        $this->authOfferRegistration = false;
         $this->resetValidation();
         session()->forget([
             'mally_verified_register_email',
@@ -224,7 +221,6 @@ trait InteractsWithStore
     public function openRegister(): void
     {
         $this->clearAuthFeedback();
-        $this->authOfferRegistration = false;
         if (trim($this->authEmail) !== '') {
             $this->authEmail = $this->emailAuth()->normalizeEmail($this->authEmail);
         }
@@ -235,27 +231,17 @@ trait InteractsWithStore
     }
 
     /**
-     * Triggered by "Зарегистрироваться с этим email" when login reports that the email does not exist.
-     * Opens registration with the already entered email pre-filled.
-     */
-    public function startRegistrationWithEmail(): void
-    {
-        $this->openRegister();
-    }
-
-    /**
      * Screen 1 ("Вход в аккаунт"): Login with email OR phone number and password directly.
      */
     public function loginWithPassword(): void
     {
         $this->clearAuthFeedback();
-        $this->authOfferRegistration = false;
 
         $rawInput = trim($this->authEmail);
         $isPhone = $this->emailAuth()->isPhoneIdentifier($rawInput);
 
         if ($isPhone) {
-            $normalizedInput = PhoneNumber::normalize($rawInput) ?? $rawInput;
+            $normalizedInput = (string) Customer::normalizePhone($rawInput);
             $this->authEmail = $normalizedInput;
         } else {
             $normalizedInput = $this->emailAuth()->normalizeEmail($rawInput);
@@ -286,14 +272,6 @@ trait InteractsWithStore
 
         if (! $res['success']) {
             $this->authPassword = '';
-
-            if (($res['error'] ?? '') === 'user_not_found') {
-                $this->authOfferRegistration = ! ($res['is_phone'] ?? false);
-                $this->failAuth('authEmail', $res['message']);
-
-                return;
-            }
-
             $this->failAuth('authPassword', $res['message']);
 
             return;
@@ -304,28 +282,19 @@ trait InteractsWithStore
 
     /**
      * Registration Step 1: User enters email and clicks "Получить код".
-     * If email already exists in `users` -> message "Этот email уже зарегистрирован. Войдите с паролем."
-     * and return to the login screen with the email pre-filled.
-     * Otherwise -> send 6-digit registration code and go to Step 2 (`register-code`).
+     * The answer is the same whether or not the email has an account (the
+     * owner of a taken email gets a notice by email instead of a code), then
+     * Step 2 (`register-code`).
      */
     public function sendRegisterCode(): void
     {
         $this->clearAuthFeedback();
-        $this->authOfferRegistration = false;
 
         $normalizedEmail = $this->emailAuth()->normalizeEmail($this->authEmail);
         $this->authEmail = $normalizedEmail;
 
         if (! $this->emailAuth()->isValidEmail($normalizedEmail)) {
             $this->failAuth('authEmail', __('Please enter a valid email address.'));
-
-            return;
-        }
-
-        if ($this->emailAuth()->userExists($normalizedEmail)) {
-            $this->authPassword = '';
-            $this->authStep = 'login';
-            $this->failAuth('authEmail', __('This email is already registered. Sign in with your password.'));
 
             return;
         }
@@ -468,7 +437,8 @@ trait InteractsWithStore
         );
 
         if (! $res['success']) {
-            if (($res['error'] ?? '') === 'phone_taken') {
+            if (in_array($res['error'] ?? '', ['phone_taken', 'phone_needs_telegram'], true)) {
+                $this->authSuggestTelegram = $res['error'] === 'phone_needs_telegram';
                 $this->failAuth('authPhone', $res['message']);
 
                 return;
@@ -492,7 +462,6 @@ trait InteractsWithStore
     public function openForgotPassword(): void
     {
         $this->clearAuthFeedback();
-        $this->authOfferRegistration = false;
         if (trim($this->authEmail) !== '') {
             $this->authEmail = $this->emailAuth()->normalizeEmail($this->authEmail);
         }
@@ -698,7 +667,6 @@ trait InteractsWithStore
     protected function startTelegram(string $purpose): void
     {
         $this->clearAuthFeedback();
-        $this->authOfferRegistration = false;
         $this->authTelegramCode = '';
 
         if (! $this->telegramAuth()->isConfigured()) {
@@ -895,7 +863,6 @@ trait InteractsWithStore
 
         $this->authPassword = '';
         $this->authPasswordConfirmation = '';
-        $this->authOfferRegistration = false;
         $this->authStep = 'login';
         $this->isAuthModalOpen = false;
 
@@ -927,6 +894,7 @@ trait InteractsWithStore
     {
         $this->authError = '';
         $this->authNotice = '';
+        $this->authSuggestTelegram = false;
         $this->resetValidation();
     }
 

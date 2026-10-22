@@ -4,17 +4,15 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\User;
-use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /**
  * Storefront accounts: a User (login) owns exactly one Customer
  * (customers.user_id). Accounts are never merged and orders never move
- * between customers; an existing admin/API customer row with the same phone
- * or email is left alone.
+ * between customers. A new account takes over an existing customer without
+ * an account only when its phone was verified through Telegram.
  */
 class CustomerAccountService
 {
@@ -32,7 +30,7 @@ class CustomerAccountService
      */
     public function phoneTaken(string $phone, ?int $exceptUserId = null): bool
     {
-        if (PhoneNumber::normalize($phone) === null) {
+        if (Customer::normalizePhone($phone) === null) {
             return false;
         }
 
@@ -48,31 +46,63 @@ class CustomerAccountService
         return $byUser || $byCustomer;
     }
 
-    /** The user's own customer row, created on first use. */
+    /**
+     * A customer entered by hand (or by the bot) has this phone and no
+     * account yet. Only a phone verified through Telegram may take it over.
+     */
+    public function phoneHeldByCustomerWithoutAccount(string $phone): bool
+    {
+        return Customer::normalizePhone($phone) !== null
+            && Customer::wherePhone($phone)->whereNull('user_id')->exists();
+    }
+
+    /**
+     * The user's own customer row, created on first use. A phone verified
+     * through Telegram takes over the customer with that phone if it has no
+     * account yet, so the account sees that customer's orders. Accounts are
+     * never merged: a customer that belongs to another account is left alone.
+     */
     public function customerFor(User $user): Customer
     {
-        $existing = Customer::where('user_id', $user->id)->first();
-        if ($existing) {
-            return $existing;
-        }
+        return DB::transaction(function () use ($user) {
+            $existing = Customer::where('user_id', $user->id)->first();
+            if ($existing) {
+                return $existing;
+            }
 
-        [$first, $last] = $this->splitName((string) $user->name);
+            if ($user->phone && $user->phone_verified_at) {
+                $byPhone = Customer::wherePhone($user->phone)->whereNull('user_id')->lockForUpdate()->first();
+                if ($byPhone) {
+                    $byPhone->update(['user_id' => $user->id]); // keep the data entered in the admin
 
-        // customers.email is unique. If an admin/API customer already uses
-        // this address we don't take it over; the shopper gets a placeholder.
-        $email = mb_strtolower((string) $user->email);
-        if (Customer::whereRaw('LOWER(email) = ?', [$email])->exists()) {
-            $email = 'user'.$user->id.'-'.Str::lower(Str::random(6)).'@accounts.mally.local';
-        }
+                    return $byPhone;
+                }
+            }
 
-        return Customer::create([
-            'user_id' => $user->id,
-            'first_name' => $first,
-            'last_name' => $last,
-            'email' => $email,
-            'phone_number' => $user->phone,
-            'source' => $user->telegram_id ? 'telegram' : 'website',
-        ]);
+            [$first, $last] = $this->splitName((string) $user->name);
+
+            // customers.email and customers.phone_number are unique. If
+            // another customer already uses them, they stay empty here; the
+            // real ones are on the users row.
+            $email = filled($user->email) ? mb_strtolower((string) $user->email) : null;
+            if ($email !== null && Customer::whereRaw('LOWER(email) = ?', [$email])->exists()) {
+                $email = null;
+            }
+
+            $phone = $user->phone;
+            if ($phone !== null && Customer::wherePhone($phone)->exists()) {
+                $phone = null;
+            }
+
+            return Customer::create([
+                'user_id' => $user->id,
+                'first_name' => $first,
+                'last_name' => $last,
+                'email' => $email,
+                'phone_number' => $phone,
+                'source' => $user->telegram_id ? 'telegram' : 'website',
+            ]);
+        });
     }
 
     /** Sign the user in on the storefront (session id is regenerated). */
@@ -86,7 +116,7 @@ class CustomerAccountService
 
     public function findByTelegram(string $telegramUserId): ?User
     {
-        return $telegramUserId === '' ? null : User::where('telegram_id', $telegramUserId)->first();
+        return $telegramUserId === '' ? null : User::shoppers()->where('telegram_id', $telegramUserId)->first();
     }
 
     /**
@@ -110,8 +140,7 @@ class CustomerAccountService
 
             $user = User::create([
                 'name' => $name,
-                // users.email is required and unique; Telegram accounts have none.
-                'email' => 'tg_'.$identity['telegram_user_id'].'@telegram.mally.local',
+                'email' => null,
                 'phone' => $identity['phone'],
                 'telegram_id' => $identity['telegram_user_id'],
                 'phone_verified_at' => now(),

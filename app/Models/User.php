@@ -3,11 +3,11 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Support\PhoneNumber;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -72,14 +72,33 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasOne(Customer::class);
     }
 
-    public function scopeWherePhone(Builder $query, string $phone): Builder
+    /**
+     * Website lookups go through this: admins share the table, but their
+     * accounts don't exist for the storefront (login, reset, Telegram).
+     */
+    public function scopeShoppers(Builder $query): Builder
     {
-        return $query->whereIn('phone', PhoneNumber::variants($phone));
+        return $query->where('is_admin', false);
     }
 
-    /** Placeholder email for accounts registered through Telegram without an email. */
+    /** Stored in the same format as customers.phone_number. */
+    protected function phone(): Attribute
+    {
+        return Attribute::set(fn (?string $value) => Customer::normalizePhone($value));
+    }
+
+    /** Find a user by a phone number typed in any format. */
+    public function scopeWherePhone(Builder $query, string $phone): Builder
+    {
+        $normalized = Customer::normalizePhone($phone);
+
+        // where('phone', null) would match every user without a phone.
+        return $normalized === null ? $query->whereRaw('1 = 0') : $query->where('phone', $normalized);
+    }
+
+    /** Accounts registered through Telegram have no email. */
     public function hasRealEmail(): bool
     {
-        return ! str_ends_with(mb_strtolower((string) $this->email), '@telegram.mally.local');
+        return filled($this->email);
     }
 }

@@ -137,8 +137,6 @@
     "Photos": "Rasmlar",
     "Published": "E'lon qilingan",
     "Mally customer": "Mally xaridori",
-    "There is no account with this email.": "Bu email bilan akkaunt yo'q.",
-    "There is no account with this phone number.": "Bu telefon raqami bilan akkaunt yo'q.",
     "Enter the 6-digit code from the email.": "Xatdagi 6 xonali kodni kiriting.",
     "Please enter a valid email address.": "To'g'ri elektron pochta manzilini kiriting.",
     "Enter your password.": "Parolni kiriting.",
@@ -202,7 +200,6 @@
     "Forgot password?": "Parolni unutdingizmi?",
     "Sign in": "Kirish",
     "Sign up": "Ro'yxatdan o'tish",
-    "Sign up with this email": "Shu email bilan ro'yxatdan o'tish",
     "Enter your email to receive a 6-digit confirmation code.": "Tasdiqlash kodini olish uchun emailingizni kiriting.",
     "Get code": "Kod olish",
     "Email confirmation": "Emailni tasdiqlash",
@@ -238,5 +235,10 @@
     "Use this code to continue in the Mally Store online shop:": "Mally Store internet-do'konida davom etish uchun ushbu koddan foydalaning:",
     "Never share this code with anyone.": "Bu kodni hech kimga aytmang.",
     "If you did not request this code, just ignore this email.": "Agar bu kodni so'ramagan bo'lsangiz, xatni e'tiborsiz qoldiring.",
-    "A customer with this phone number already exists.": "Bu telefon raqamli mijoz allaqachon mavjud."
+    "A customer with this phone number already exists.": "Bu telefon raqamli mijoz allaqachon mavjud.",
+    "This phone number is already in our system. Continue with Telegram to confirm it’s yours.": "Bu telefon raqami tizimimizda allaqachon bor. U sizniki ekanini tasdiqlash uchun Telegram orqali davom eting.",
+    "You already have a Mally account": "Sizda allaqachon Mally akkaunti bor",
+    "Someone tried to sign up on the Mally Store website with this email, but it already has an account. Sign in, or reset your password if you forgot it.": "Kimdir Mally Store saytida ushbu email bilan ro'yxatdan o'tmoqchi bo'ldi, lekin bu email bilan akkaunt allaqachon mavjud. Kiring yoki parolni unutgan bo'lsangiz, uni tiklang.",
+    "Go to Mally Store": "Mally Store'ga o'tish",
+    "If it wasn’t you, just ignore this email.": "Agar bu siz bo'lmasangiz, ushbu xatga e'tibor bermang."
 }

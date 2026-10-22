@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Livewire\Storefront\HomePage;
+use App\Mail\AccountExistsMail;
 use App\Mail\AuthCodeMail;
 use App\Models\AuthCode;
 use App\Models\Customer;
 use App\Models\User;
+use App\Services\CustomerAccountService;
 use App\Services\EmailAuthService;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -239,7 +242,6 @@ class EmailAuthTest extends TestCase
             ->call('loginWithPassword')
             ->assertSet('isAuthModalOpen', true)
             ->assertSet('authStep', 'login')
-            ->assertSet('authOfferRegistration', false)
             ->assertHasErrors(['authPassword'])
             ->assertSee(__('Wrong email, phone number or password.'));
 
@@ -247,53 +249,206 @@ class EmailAuthTest extends TestCase
         $this->assertNull(session('mally_customer_id'));
     }
 
-    public function test_login_with_nonexistent_email_shows_not_found_message_and_offers_registration_with_same_email(): void
+    public function test_login_never_reveals_whether_an_account_exists(): void
     {
-        $component = Livewire::test(HomePage::class)
-            ->call('openAuthModal')
-            ->set('authEmail', 'Nobody@Example.com')
-            ->set('authPassword', 'AnyPassword123')
-            ->call('loginWithPassword')
-            ->assertSet('isAuthModalOpen', true)
-            ->assertSet('authStep', 'login')
-            ->assertSet('authOfferRegistration', true)
-            ->assertHasErrors(['authEmail'])
-            ->assertSee('Аккаунта с таким email нет.')
-            ->assertSee('Зарегистрироваться с этим email');
+        User::create([
+            'name' => 'Malika',
+            'email' => 'malika@example.com',
+            'phone' => '+998 90 123 45 67',
+            'password' => 'CorrectPass123',
+        ]);
+
+        $messageFor = function (string $login): array {
+            $component = Livewire::test(HomePage::class)
+                ->call('openAuthModal')
+                ->set('authEmail', $login)
+                ->set('authPassword', 'WrongPassword999')
+                ->call('loginWithPassword')
+                ->assertSet('authStep', 'login')
+                ->assertHasErrors(['authPassword'])
+                ->assertHasNoErrors(['authEmail'])
+                ->assertDontSee('Зарегистрироваться с этим email')
+                // The "Sign up" button is always there.
+                ->assertSeeHtml('wire:click="openRegister"');
+
+            return [$component->get('authError'), $component->errors()->get('authPassword')];
+        };
+
+        $wrongPassword = $messageFor('malika@example.com');
+        $this->assertSame(__('Wrong email, phone number or password.'), $wrongPassword[0]);
+        $this->assertSame($wrongPassword, $messageFor('nobody@example.com'));
+        $this->assertSame($wrongPassword, $messageFor('+998 90 123 45 67'));
+        $this->assertSame($wrongPassword, $messageFor('+998 99 999 99 99'));
 
         $this->assertNull(session('mally_user_id'));
-        $this->assertNull(session('mally_customer_id'));
-
-        // Clicking "Зарегистрироваться с этим email" opens registration with the already entered email pre-filled
-        $component
-            ->call('startRegistrationWithEmail')
-            ->assertSet('authStep', 'register-email')
-            ->assertSet('authEmail', 'nobody@example.com')
-            ->assertSet('authOfferRegistration', false)
-            ->assertHasNoErrors();
+        $this->assertSame(0, Customer::count());
     }
 
-    public function test_registration_with_existing_email_shows_message_and_returns_to_login_with_email(): void
+    public function test_registration_with_a_taken_email_answers_the_same_and_mails_the_owner_instead_of_a_code(): void
     {
         Mail::fake();
 
-        User::factory()->create([
-            'email' => 'existing@example.com',
-            'password' => Hash::make('ExistingPass123'),
-        ]);
+        User::factory()->create(['email' => 'existing@example.com']);
+        User::factory()->admin()->create(['email' => 'boss@mally.uz']);
 
+        $answerFor = function (string $email) {
+            $component = Livewire::test(HomePage::class)
+                ->call('openAuthModal')
+                ->call('openRegister')
+                ->set('authEmail', $email)
+                ->call('sendRegisterCode')
+                ->assertHasNoErrors()
+                ->assertSet('authStep', 'register-code');
+
+            return [$component->get('authError'), $component->get('authCooldownSeconds')];
+        };
+
+        $newEmail = $answerFor('new.buyer@example.com');
+        Cache::flush();
+        $this->assertSame($newEmail, $answerFor('EXISTING@example.com'));
+        Cache::flush();
+        $this->assertSame($newEmail, $answerFor('boss@mally.uz'));
+
+        // Only the new email got a code; the taken ones got a notice and no code.
+        $this->assertSame(['new.buyer@example.com'], AuthCode::pluck('email')->all());
+        Mail::assertSent(AuthCodeMail::class, 1);
+        Mail::assertSent(AuthCodeMail::class, fn (AuthCodeMail $mail) => $mail->hasTo('new.buyer@example.com'));
+        Mail::assertSent(AccountExistsMail::class, 2);
+        Mail::assertSent(AccountExistsMail::class, fn (AccountExistsMail $mail) => $mail->hasTo('existing@example.com'));
+        Mail::assertSent(AccountExistsMail::class, fn (AccountExistsMail $mail) => $mail->hasTo('boss@mally.uz'));
+    }
+
+    public function test_account_exists_notice_has_the_same_cooldown_and_limits_as_a_code(): void
+    {
+        Mail::fake();
+        User::factory()->create(['email' => 'existing@example.com']);
+        $service = app(EmailAuthService::class);
+
+        $this->assertTrue($service->sendCode('existing@example.com', AuthCode::PURPOSE_REGISTER, '10.0.0.1')['success']);
+        $this->assertSame('cooldown', $service->sendCode('existing@example.com', AuthCode::PURPOSE_REGISTER, '10.0.0.1')['error']);
+
+        for ($i = 2; $i <= EmailAuthService::HOURLY_LIMIT_PER_EMAIL; $i++) {
+            Cache::forget($service->cooldownCacheKey('existing@example.com'));
+            $this->assertTrue($service->sendCode('existing@example.com', AuthCode::PURPOSE_REGISTER, '10.0.0.'.$i)['success']);
+        }
+
+        Cache::forget($service->cooldownCacheKey('existing@example.com'));
+        $this->assertSame('rate_limit', $service->sendCode('existing@example.com', AuthCode::PURPOSE_REGISTER, '10.0.0.99')['error']);
+        Mail::assertSent(AccountExistsMail::class, EmailAuthService::HOURLY_LIMIT_PER_EMAIL);
+        $this->assertSame(0, AuthCode::count());
+    }
+
+    public function test_admin_accounts_do_not_exist_for_the_website(): void
+    {
+        Mail::fake();
+
+        $admin = User::factory()->admin()->create([
+            'email' => 'admin@mally.uz',
+            'phone' => '+998 90 000 00 01',
+            'password' => Hash::make('AdminPass123'),
+        ]);
+        $adminHash = $admin->password;
+
+        // Admin email or phone + the admin password: the generic error, and
+        // no customer is created for the admin.
+        foreach (['admin@mally.uz', '+998 90 000 00 01'] as $login) {
+            Livewire::test(HomePage::class)
+                ->call('openAuthModal')
+                ->set('authEmail', $login)
+                ->set('authPassword', 'AdminPass123')
+                ->call('loginWithPassword')
+                ->assertSet('isAuthModalOpen', true)
+                ->assertSee(__('Wrong email, phone number or password.'));
+        }
+        $this->assertNull(session('mally_user_id'));
+        $this->assertSame(0, Customer::count());
+
+        // Website reset for the admin email: the usual answer, no code sent,
+        // the admin password unchanged.
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
-            ->call('openRegister')
-            ->assertSet('authStep', 'register-email')
-            ->set('authEmail', 'EXISTING@example.com')
-            ->call('sendRegisterCode')
-            ->assertSet('authStep', 'login')
-            ->assertSet('authEmail', 'existing@example.com')
-            ->assertHasErrors(['authEmail'])
-            ->assertSee('Этот email уже зарегистрирован. Войдите с паролем.');
+            ->call('openForgotPassword')
+            ->set('authEmail', 'admin@mally.uz')
+            ->call('sendPasswordResetCode')
+            ->assertSet('authStep', 'reset-code')
+            ->assertHasNoErrors();
 
         Mail::assertNothingSent();
+        $this->assertSame(0, AuthCode::count());
+
+        $service = app(EmailAuthService::class);
+        $this->assertFalse($service->userExists('admin@mally.uz'));
+        $this->assertNull($service->findUserByEmail('admin@mally.uz'));
+        $this->assertFalse($service->resetPassword('admin@mally.uz', 'Hacked12345')['success']);
+        $this->assertSame($adminHash, $admin->fresh()->password);
+
+        // The admin panel login is not affected.
+        $this->actingAs($admin)->get('/admin')->assertOk();
+    }
+
+    public function test_email_signup_with_the_phone_of_a_hand_entered_customer_asks_for_telegram(): void
+    {
+        Customer::create([
+            'first_name' => 'Old', 'last_name' => 'Client',
+            'phone_number' => '+998 90 123 45 67', 'source' => 'word_of_mouth',
+        ]);
+        Mail::fake();
+
+        $component = Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->call('openRegister')
+            ->set('authEmail', 'new@gmail.com')
+            ->call('sendRegisterCode');
+
+        $code = null;
+        Mail::assertSent(AuthCodeMail::class, function (AuthCodeMail $mail) use (&$code) {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        $component->set('authCode', $code)
+            ->call('verifyRegisterCode')
+            ->assertSet('authStep', 'register-profile')
+            ->set('authName', 'Someone')
+            ->set('authPhone', '90 123 45 67')
+            ->set('authPassword', 'Password123')
+            ->set('authPasswordConfirmation', 'Password123')
+            ->call('completeEmailRegistration')
+            ->assertSet('authStep', 'register-profile')
+            ->assertHasErrors('authPhone')
+            ->assertSee('Этот номер телефона уже есть в нашей системе. Продолжите через Telegram, чтобы подтвердить, что он ваш.')
+            ->assertSet('authSuggestTelegram', true)
+            ->assertSeeHtml('wire:click="startTelegramAuth"');
+
+        $this->assertSame(0, User::count());
+        $this->assertSame(1, Customer::count());
+        $this->assertNull(Customer::sole()->user_id);
+    }
+
+    public function test_users_phone_is_stored_in_one_format_and_is_unique(): void
+    {
+        $user = User::factory()->create(['phone' => '998901234567']);
+        $this->assertSame('+998 90 123 45 67', $user->fresh()->phone);
+        $this->assertTrue(User::wherePhone('(90) 123-45-67')->sole()->is($user));
+
+        $this->expectException(QueryException::class);
+        User::factory()->create(['phone' => '+998 (90) 123-45-67']);
+    }
+
+    public function test_shopper_customer_email_stays_empty_when_another_customer_uses_it(): void
+    {
+        Customer::create([
+            'first_name' => 'Old', 'last_name' => 'Client', 'email' => 'shared@example.com',
+            'phone_number' => '+998 90 111 11 11', 'source' => 'word_of_mouth',
+        ]);
+        $user = User::factory()->create(['email' => 'Shared@Example.com', 'phone' => '+998 90 222 22 22']);
+
+        $customer = app(CustomerAccountService::class)->customerFor($user);
+
+        $this->assertSame($user->id, $customer->user_id);
+        $this->assertNull($customer->email);
+        $this->assertSame('+998 90 222 22 22', $customer->phone_number);
     }
 
     public function test_login_with_empty_email_or_empty_password_returns_validation_error(): void
@@ -918,7 +1073,7 @@ class EmailAuthTest extends TestCase
         $logPath = storage_path('logs/laravel.log');
         $initialSize = file_exists($logPath) ? filesize($logPath) : 0;
 
-        // 1. Open modal -> try nonexistent email -> get offer to register with same email
+        // 1. Open modal -> try nonexistent email -> generic error -> "Sign up" keeps the email
         $component = Livewire::test(HomePage::class)
             ->call('openAuthModal', 'Sign in to view your orders and profile')
             ->assertDontSeeHtml('<span>Sign in to view your orders and profile</span>')
@@ -926,9 +1081,8 @@ class EmailAuthTest extends TestCase
             ->set('authEmail', 'e2e.buyer@example.com')
             ->set('authPassword', 'AnyPass123')
             ->call('loginWithPassword')
-            ->assertSee('Аккаунта с таким email нет.')
-            ->assertSee('Зарегистрироваться с этим email')
-            ->call('startRegistrationWithEmail')
+            ->assertSee(__('Wrong email, phone number or password.'))
+            ->call('openRegister')
             ->assertSet('authStep', 'register-email')
             ->assertSet('authEmail', 'e2e.buyer@example.com')
             ->call('sendRegisterCode')

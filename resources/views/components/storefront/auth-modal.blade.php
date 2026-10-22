@@ -10,7 +10,6 @@
     $store = $store ?? app(\App\Services\StorefrontService::class);
     $isOpen = $isOpen ?? ($this->isAuthModalOpen ?? false);
     $step = $step ?? ($this->authStep ?? 'login');
-    $offerRegistration = (bool) ($this->authOfferRegistration ?? false);
     $verifiedRegisterEmail = (string) session('mally_verified_register_email', $this->authEmail ?? '');
     $verifiedResetEmail = (string) session('mally_verified_reset_email', $this->authEmail ?? '');
 @endphp
@@ -82,20 +81,6 @@
                             @error('authEmail')
                                 <p role="alert" class="mt-1.5 text-xs text-rose-600 font-medium">{{ $message }}</p>
                             @enderror
-
-                            @if($offerRegistration)
-                                <div class="mt-2.5">
-                                    <button
-                                        type="button"
-                                        wire:click="startRegistrationWithEmail"
-                                        wire:loading.attr="disabled"
-                                        class="w-full py-2.5 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[#1C1917] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
-                                    >
-                                        <span>{{ __('Sign up with this email') }}</span>
-                                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                                    </button>
-                                </div>
-                            @endif
                         </div>
 
                         <!-- Поле Пароль -->
@@ -387,6 +372,18 @@
                             @error('authPhone')
                                 <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
                             @enderror
+
+                            @if($this->authSuggestTelegram ?? false)
+                                <button
+                                    type="button"
+                                    wire:click="startTelegramAuth"
+                                    wire:loading.attr="disabled"
+                                    class="mt-2 w-full py-2.5 px-4 rounded-xl bg-[#0088CC]/10 hover:bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0077B5] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <i class="fa-brands fa-telegram text-base"></i>
+                                    <span>{{ __('Continue with Telegram') }}</span>
+                                </button>
+                            @endif
                         </div>
 
                         <!-- Пароль -->

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\TelegramLoginRequest;
-use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -294,7 +293,7 @@ class TelegramAuthService
             return;
         }
 
-        $phone = PhoneNumber::normalize((string) ($contact['phone_number'] ?? ''));
+        $phone = app(StorefrontService::class)->normalizeAndValidateUzPhone((string) ($contact['phone_number'] ?? ''));
         if ($phone === null) {
             $this->sendMessage($chatId, __('For now we only accept Uzbekistan phone numbers (+998).'), ['remove_keyboard' => true]);
 

@@ -47,20 +47,21 @@ class OrderController extends Controller
             $quantities[(int) $item['id']] = ($quantities[(int) $item['id']] ?? 0) + (int) $item['quantity'];
         }
 
-        // The bot's phone is typed, not verified: reuse only a CRM/bot customer
-        // row, never one owned by a storefront account (its orders would show
-        // up in that account's profile).
-        $customer = Customer::wherePhone($phone)->whereNull('user_id')->first();
-        if (! $customer) {
-            $parts = explode(' ', $name, 2);
-            // createOrFirst: if a parallel order just created this phone, use that customer.
-            $customer = Customer::createOrFirst(['phone_number' => $phone], [
-                'first_name' => $parts[0] ?: 'Покупатель',
-                'last_name' => $parts[1] ?? '',
-                'city' => $validated['city'] ?? null,
-                'address' => $validated['address'] ?? null,
-                'source' => 'telegram',
-            ]);
+        $parts = explode(' ', $name, 2);
+        // createOrFirst: if a parallel order just created this phone, use that customer.
+        $customer = Customer::wherePhone($phone)->first() ?? Customer::createOrFirst(['phone_number' => $phone], [
+            'first_name' => $parts[0] ?: 'Покупатель',
+            'last_name' => $parts[1] ?? '',
+            'city' => $validated['city'] ?? null,
+            'address' => $validated['address'] ?? null,
+            'source' => 'telegram',
+        ]);
+
+        // The bot's phone is typed, not verified: an order is never attached
+        // to a storefront account (it would show up in that account's
+        // profile). It keeps the typed name, phone and address for delivery.
+        if ($customer->user_id !== null) {
+            $customer = null;
         }
 
         try {

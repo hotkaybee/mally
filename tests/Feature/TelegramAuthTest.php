@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\TelegramLoginRequest;
 use App\Models\User;
+use App\Services\CustomerAccountService;
 use App\Services\EmailAuthService;
 use App\Services\TelegramAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -131,6 +132,9 @@ class TelegramAuthTest extends TestCase
         $this->assertSame(self::PHONE, $user->phone);
         $this->assertNotNull($user->phone_verified_at);
         $this->assertFalse($user->is_admin);
+        // No made-up address: Telegram accounts have no email.
+        $this->assertNull($user->email);
+        $this->assertFalse($user->hasRealEmail());
         // The chosen password works with the phone number as the login.
         $this->assertTrue(Hash::check('TgPass1234', $user->password));
         $this->assertTrue(app(EmailAuthService::class)->attemptLogin(self::PHONE, 'TgPass1234', '10.1.1.1')['success']);
@@ -139,6 +143,7 @@ class TelegramAuthTest extends TestCase
         $this->assertSame($user->id, $customer->user_id);
         $this->assertSame('@ali_tg', $customer->telegram);
         $this->assertSame('telegram', $customer->source);
+        $this->assertNull($customer->email);
         $this->assertSame($customer->id, session('mally_customer_id'));
         $this->assertNotSame($sessionBefore, session()->getId(), 'session id must be regenerated on login');
 
@@ -369,30 +374,66 @@ class TelegramAuthTest extends TestCase
         $this->assertNull(session('mally_customer_id'));
     }
 
-    public function test_crm_customer_with_the_same_phone_keeps_its_orders(): void
+    public function test_telegram_signup_takes_over_a_hand_entered_customer_with_that_phone(): void
     {
-        // A customer created by the admin/bot API: same phone, no login.
+        // A customer the admin entered by hand: same phone, no account yet.
         $crm = Customer::create([
             'first_name' => 'Old', 'last_name' => 'Client', 'email' => 'crm@example.com',
-            'phone_number' => self::PHONE, 'source' => 'telegram',
+            'phone_number' => '901234567', 'city' => 'Samarkand', 'source' => 'word_of_mouth',
         ]);
         $order = Order::create(['customer_id' => $crm->id, 'amount' => 10, 'status' => 'processing']);
 
         $this->throughBot()
             ->set('authTelegramCode', $this->codeSentByBot())
             ->call('verifyTelegramCode')
+            ->assertSet('authStep', 'telegram-register')
             ->set('authName', 'Ali')
             ->set('authPassword', 'TgPass1234')
             ->set('authPasswordConfirmation', 'TgPass1234')
-            ->call('completeTelegramRegistration');
+            ->call('completeTelegramRegistration')
+            ->assertSet('isAuthModalOpen', false);
 
-        $mine = Customer::where('user_id', User::sole()->id)->sole();
-        $this->assertNotSame($crm->id, $mine->id);
-        $this->assertSame($crm->id, $order->fresh()->customer_id);
-        $this->assertNull($crm->fresh()->user_id);
+        // No new customer: the hand-entered one now belongs to the account
+        // and keeps the data entered in the admin.
+        $user = User::sole();
+        $this->assertSame(1, Customer::count());
+        $crm->refresh();
+        $this->assertSame($user->id, $crm->user_id);
+        $this->assertSame('Old', $crm->first_name);
+        $this->assertSame('Samarkand', $crm->city);
+        $this->assertSame($crm->id, session('mally_customer_id'));
 
-        // The new account sees only its own orders.
-        $this->assertSame([], Livewire::test(ProfilePage::class)->viewData('orders')->pluck('id')->all());
+        // The account's profile shows that customer's old orders.
+        $this->assertSame([$order->id], Livewire::test(ProfilePage::class)->viewData('orders')->pluck('id')->all());
+    }
+
+    public function test_a_customer_that_belongs_to_another_account_is_never_taken_over(): void
+    {
+        $other = User::create(['name' => 'Other', 'email' => 'other@gmail.com', 'password' => 'OtherPass123']);
+        $theirs = Customer::create([
+            'user_id' => $other->id, 'first_name' => 'Other', 'last_name' => '',
+            'phone_number' => self::PHONE, 'source' => 'website',
+        ]);
+
+        // Telegram sign-up with that phone is refused (the phone has an account).
+        $this->throughBot()
+            ->set('authTelegramCode', $this->codeSentByBot())
+            ->call('verifyTelegramCode')
+            ->assertSet('authStep', 'login');
+
+        $this->assertSame(1, User::count());
+        $this->assertSame($other->id, $theirs->fresh()->user_id);
+        $this->assertNull(session('mally_customer_id'));
+
+        // Even a verified phone never takes it over: the account gets its own
+        // customer without the phone (the real one is on the users row).
+        $verified = User::create(['name' => 'Ali', 'phone' => self::PHONE, 'phone_verified_at' => now(), 'password' => 'TgPass1234']);
+        $mine = app(CustomerAccountService::class)->customerFor($verified);
+
+        $this->assertNotSame($theirs->id, $mine->id);
+        $this->assertSame($verified->id, $mine->user_id);
+        $this->assertNull($mine->phone_number);
+        $this->assertSame($other->id, $theirs->fresh()->user_id);
     }
 
     public function test_email_registration_rejects_a_phone_that_belongs_to_another_account(): void

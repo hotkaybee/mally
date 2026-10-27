@@ -9,7 +9,7 @@ Mally is a Laravel 12 + Filament 4 + Livewire 3 small-scale e-commerce app (cosm
 - **Admin / back-office** — Filament panel at `/admin`: Customers, Brands, Categories, Products, Product receipts (stock batches), Orders (with `OrderProduct` lines), Reviews (moderation of storefront reviews).
 - **Storefront** — public Livewire pages in `app/Livewire/Storefront` (catalog, product, cart, checkout, receipt, profile, contact), routed in `routes/web.php`.
 
-`routes/api.php` holds a small JSON API used by the Telegram bot (`OrderController`, `ProductController`, `CategoryController`).
+`routes/api.php` only has the Telegram login webhook (`POST /api/telegram/webhook` → `TelegramWebhookController`). There is no order or catalog API: orders come only from the website checkout (`OrderService`), and the storefront reads the catalog through `StorefrontService`.
 
 Requires **PHP ^8.2**. MySQL by default (`.env.example` → `DB_DATABASE=mally`), with sessions / cache / queues all backed by the database.
 

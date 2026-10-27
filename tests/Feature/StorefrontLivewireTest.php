@@ -151,10 +151,6 @@ class StorefrontLivewireTest extends TestCase
         $detail->assertDontSee('7 шт');
 
         $this->get(route('product.detail', ['slug' => 'ML-SOLD']))->assertOk()->assertSee('Распродано');
-
-        $api = $this->getJson('/api/products')->assertOk()->json('products');
-        $this->assertArrayNotHasKey('quantity', $api[0]);
-        $this->assertArrayHasKey('inStock', $api[0]);
     }
 
     public function test_plus_button_stops_at_available_stock(): void

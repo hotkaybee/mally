@@ -37,7 +37,7 @@ class OrderService
      *
      * @throws CheckoutException
      */
-    public function placeOrder(?Customer $customer, array $quantities, array $details): Order
+    public function placeOrder(Customer $customer, array $quantities, array $details): Order
     {
         $quantities = array_filter($quantities, fn ($qty) => (int) $qty > 0);
         if ($quantities === []) {
@@ -49,7 +49,7 @@ class OrderService
 
         return DB::transaction(function () use ($customer, $quantities, $details, $rate, $promoPercent) {
             $order = Order::create([
-                'customer_id' => $customer?->id,
+                'customer_id' => $customer->id,
                 'secure_hash' => bin2hex(random_bytes(16)),
                 'customer_name' => $details['customer_name'],
                 'customer_phone' => $details['customer_phone'],

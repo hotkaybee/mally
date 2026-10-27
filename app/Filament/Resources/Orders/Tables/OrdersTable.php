@@ -17,10 +17,7 @@ class OrdersTable
             ->columns([
                 TextColumn::make('customer.first_name')
                     ->label(__('Customer'))
-                    // Bot orders for a phone that belongs to a website account have no customer.
-                    ->state(fn ($record) => $record->customer
-                        ? trim($record->customer->first_name.' '.$record->customer->last_name)
-                        : $record->customer_name)
+                    ->formatStateUsing(fn ($record) => $record->customer->first_name.' '.$record->customer->last_name)
                     ->searchable(['customer.first_name', 'customer.last_name']),
                 TextColumn::make('amount')
                     ->label(__('amount'))

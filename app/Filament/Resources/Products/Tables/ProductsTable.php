@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\Category;
+use App\Models\Product;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -54,8 +55,12 @@ class ProductsTable
                     ->label(__('selling_price'))
                     ->money('USD')
                     ->sortable(),
-                ImageColumn::make('image')
-                    ->label(__('image')),
+                ImageColumn::make('images')
+                    ->label(__('Photos'))
+                    ->disk(Product::IMAGE_DISK)
+                    ->stacked()
+                    ->limit(3)
+                    ->limitedRemainingText(),
                 TextColumn::make('link')
                     ->label(__('link'))
                     ->searchable(),

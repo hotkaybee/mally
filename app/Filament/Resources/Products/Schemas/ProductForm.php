@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Products\Schemas;
 
 use App\Models\Category;
+use App\Models\Product;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -54,9 +55,28 @@ class ProductForm
                     ->disabled()
                     ->dehydrated(false)
                     ->helperText(__('From the latest receipt')),
-                FileUpload::make('image')
-                    ->label(__('image'))
-                    ->image(),
+                // Square photos shrunk in the browser to 1200px before upload;
+                // the first one is the main photo on the website.
+                FileUpload::make('images')
+                    ->label(__('Photos'))
+                    ->image()
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                    ->multiple()
+                    ->reorderable()
+                    ->appendFiles()
+                    ->maxFiles(10)
+                    ->maxSize(10240)
+                    ->disk(Product::IMAGE_DISK)
+                    ->directory(Product::IMAGE_DIRECTORY)
+                    ->visibility('public')
+                    ->imageAspectRatio('1:1')
+                    ->automaticallyCropImagesToAspectRatio()
+                    ->automaticallyResizeImagesMode('cover')
+                    ->automaticallyResizeImagesToWidth('1200')
+                    ->automaticallyResizeImagesToHeight('1200')
+                    ->imageEditor()
+                    ->panelLayout('grid')
+                    ->columnSpanFull(),
                 TextInput::make('link')
                     ->label(__('link')),
                 Select::make('status')

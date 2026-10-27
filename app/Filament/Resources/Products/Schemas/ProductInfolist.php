@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
+use App\Models\Product;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
@@ -32,8 +33,11 @@ class ProductInfolist
                     ->numeric(),
                 TextEntry::make('selling_price')
                     ->money('USD'),
-                ImageEntry::make('image')
-                    ->placeholder('-'),
+                ImageEntry::make('images')
+                    ->label(__('Photos'))
+                    ->disk(Product::IMAGE_DISK)
+                    ->placeholder('-')
+                    ->columnSpanFull(),
                 TextEntry::make('link')
                     ->placeholder('-'),
                 TextEntry::make('status')

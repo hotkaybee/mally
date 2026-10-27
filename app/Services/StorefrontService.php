@@ -740,7 +740,8 @@ class StorefrontService
         $category = $p->category;
         $catNameRu = $category?->name_ru ?: ($category?->name ?: 'Косметика');
         $price = round((float) $p->selling_price, 2);
-        $img = $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset($p->image)) : Product::placeholderUrl();
+        $images = $p->imageUrls();
+        $img = $images[0] ?? Product::placeholderUrl();
         $inStock = $this->isSellable($p);
 
         return [
@@ -761,7 +762,7 @@ class StorefrontService
             'status' => $inStock ? 'ACTIVE' : 'OUT_OF_STOCK',
             'isNew' => $p->created_at && $p->created_at->gt(now()->subDays(30)),
             'image' => $img,
-            'images' => [$img],
+            'images' => $images ?: [$img],
             'description' => $p->description ?: 'Премиальная оригинальная продукция из США.',
             'features' => ['100% Оригинал из США', 'Сертифицированная косметика'],
             'howToUse' => 'Наносите в соответствии с рекомендациями производителя.',

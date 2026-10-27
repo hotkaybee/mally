@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Products\Schemas;
 
 use App\Models\Category;
+use App\Models\Product;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -54,9 +55,16 @@ class ProductForm
                     ->disabled()
                     ->dehydrated(false)
                     ->helperText(__('From the latest receipt')),
-                FileUpload::make('image')
-                    ->label(__('image'))
-                    ->image(),
+                FileUpload::make('images')
+                    ->label(__('Photos'))
+                    ->helperText(__('The first photo is the main one. Drag to change the order.'))
+                    ->image()
+                    ->multiple()
+                    ->reorderable()
+                    ->disk(Product::IMAGE_DISK)
+                    ->directory('products')
+                    ->visibility('public')
+                    ->columnSpanFull(),
                 TextInput::make('link')
                     ->label(__('link')),
                 Select::make('status')

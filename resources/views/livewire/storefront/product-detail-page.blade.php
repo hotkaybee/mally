@@ -457,39 +457,30 @@
                     'en' => 'Verified reviews from Mally customers',
                     default => 'Реальные впечатления клиентов по доставленным заказам',
                 };
-                $noReviewsText = match ($locale) {
-                    'uz' => "Ushbu mahsulot bo'yicha hozircha sharhlar yo'q. Xarid qilganingizdan so'ng shaxsiy kabinet orqali birinchi bo'lib fikr qoldirishingiz mumkin!",
-                    'en' => 'No reviews for this product yet. You can leave the first review from your profile after your order is delivered!',
-                    default => 'Отзывов на этот товар пока нет. Вы сможете оставить первый отзыв в личном кабинете после получения заказа!',
-                };
                 $verifiedBadgeText = match ($locale) {
                     'uz' => 'Tasdiqlangan xarid',
                     'en' => 'Verified Purchase',
                     default => 'Проверенная покупка',
                 };
             @endphp
-            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
-                <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#EAE3DE] flex-wrap">
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                            <i class="fa-solid fa-star text-base"></i>
-                        </div>
-                        <div>
-                            <h2 class="font-serif text-xl sm:text-2xl font-bold text-[#1C1917]">
-                                {{ $reviewsTitle }} ({{ count($productReviews) }})
-                            </h2>
-                            <p class="text-xs text-[#8C827A]">
-                                {{ $reviewsSubtitle }}
-                            </p>
+            @if(count($productReviews) > 0)
+                <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
+                    <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#EAE3DE] flex-wrap">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                                <i class="fa-solid fa-star text-base"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-serif text-xl sm:text-2xl font-bold text-[#1C1917]">
+                                    {{ $reviewsTitle }} ({{ count($productReviews) }})
+                                </h2>
+                                <p class="text-xs text-[#8C827A]">
+                                    {{ $reviewsSubtitle }}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                @if(count($productReviews) === 0)
-                    <p class="text-xs sm:text-sm text-[#78716C] py-2">
-                        {{ $noReviewsText }}
-                    </p>
-                @else
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         @foreach($productReviews as $rev)
                             @php
@@ -540,8 +531,8 @@
                             </div>
                         @endforeach
                     </div>
-                @endif
-            </section>
+                </section>
+            @endif
         </div>
 
         <!-- БЛОК УМНЫХ РЕКОМЕНДАЦИЙ -->

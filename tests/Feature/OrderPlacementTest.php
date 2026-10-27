@@ -95,7 +95,8 @@ class OrderPlacementTest extends TestCase
         session(['mally_customer_id' => $customer->id]);
         app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
         app(StorefrontService::class)->addToCart('ML-HG-BRUSH');
-        app(StorefrontService::class)->applyPromoCode('MALLY10');
+        config(['services.store.promo_code' => 'TESTPROMO', 'services.store.promo_percent' => 10]);
+        app(StorefrontService::class)->applyPromoCode('TESTPROMO');
 
         Livewire::test(CheckoutPage::class)
             ->assertSet('city', 'Самарканд')
@@ -264,79 +265,14 @@ class OrderPlacementTest extends TestCase
 
     // --------------------------------------------------------------------- API
 
-    public function test_api_orders_require_the_bot_token(): void
+    public function test_the_order_and_catalog_api_is_removed(): void
     {
-        $product = $this->product();
-        $payload = ['customerName' => 'Ali', 'customerPhone' => '+998 93 555 44 33', 'items' => [['id' => $product->id, 'quantity' => 1]]];
-
-        config(['services.store.orders_api_token' => '']);
-        $this->postJson('/api/orders', $payload)->assertUnauthorized();
-
-        config(['services.store.orders_api_token' => 'secret-token']);
-        $this->postJson('/api/orders', $payload, ['X-Api-Token' => 'wrong'])->assertUnauthorized();
-        $this->assertSame(0, Order::count());
-    }
-
-    public function test_api_order_from_a_new_customer_is_created_in_usd(): void
-    {
-        config(['services.store.orders_api_token' => 'secret-token']);
-        $product = $this->product(57.15);
-
-        $response = $this->postJson('/api/orders', [
-            'customerName' => 'Ali Valiev',
-            'customerPhone' => '+998 93 555 44 33',
-            'city' => 'Ташкент',
-            'items' => [['id' => $product->id, 'quantity' => 1]],
-        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
-
-        $this->assertSame('USD', $response->json('currency'));
-        $this->assertEquals(57.15, $response->json('totalAmount'));
-        $customer = Customer::where('phone_number', '+998 93 555 44 33')->sole();
-        $this->assertSame('telegram', $customer->source);
-        $this->assertNull($customer->email);
-    }
-
-    public function test_api_rejects_unknown_products_without_creating_them(): void
-    {
-        config(['services.store.orders_api_token' => 'secret-token']);
-        $count = Product::count();
-
-        $this->postJson('/api/orders', [
-            'customerName' => 'Ali', 'customerPhone' => '+998 93 555 44 33',
-            'items' => [['id' => 4242, 'quantity' => 1]],
-        ], ['X-Api-Token' => 'secret-token'])->assertStatus(422);
-
-        $this->assertSame($count, Product::count());
-        $this->assertSame(0, Order::count());
-    }
-
-    public function test_order_tracking_needs_the_secret_hash(): void
-    {
-        $product = $this->product();
-        $order = $this->place($this->customer(), [$product->id => 1]);
-
-        $this->getJson('/api/orders/track?order='.$order->order_number)->assertNotFound();
-        $this->getJson('/api/orders/track?q='.$order->order_number)->assertNotFound();
-        $this->getJson('/api/orders/track?order='.$order->order_number.'&hash=wrong')->assertNotFound();
-        $this->getJson('/api/orders/track?order='.$order->order_number.'&hash='.$order->secure_hash)
-            ->assertOk()
-            ->assertJsonMissingPath('order.city')
-            ->assertJsonMissingPath('order.paymentStatus')
-            ->assertJsonPath('order.isPaid', false);
-    }
-
-    public function test_api_ignores_a_payment_method_from_the_bot(): void
-    {
-        config(['services.store.orders_api_token' => 'secret-token']);
-        $product = $this->product();
-
-        $this->postJson('/api/orders', [
-            'customerName' => 'Ali', 'customerPhone' => '+998 93 555 44 33',
-            'paymentMethod' => 'anything',
-            'items' => [['id' => $product->id, 'quantity' => 1]],
-        ], ['X-Api-Token' => 'secret-token'])->assertCreated();
-
-        $this->assertSame(1, Order::count());
+        $this->postJson('/api/orders', [])->assertNotFound();
+        $this->getJson('/api/orders/track')->assertNotFound();
+        $this->getJson('/api/products')->assertNotFound();
+        $this->getJson('/api/products/ML-P-1')->assertNotFound();
+        $this->getJson('/api/categories')->assertNotFound();
+        $this->getJson('/api/exchange-rate')->assertNotFound();
     }
 
     // ---------------------------------------------------- derived order fields
@@ -565,7 +501,7 @@ class OrderPlacementTest extends TestCase
         $review = $this->review($this->deliveredOrder($this->customer(), $product), $product, ['rating' => 2, 'is_approved' => false]);
 
         config(['app.env' => 'local']);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         Livewire::test(EditReview::class, ['record' => $review->getRouteKey()])
             ->fillForm(['rating' => 5, 'comment' => 'Edited by admin', 'is_approved' => true])

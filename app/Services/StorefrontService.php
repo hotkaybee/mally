@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Review;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -64,30 +65,12 @@ class StorefrontService
         }
     }
 
+    /** "+998 90 123 45 67", or null when it isn't an Uzbek number. */
     public function normalizeAndValidateUzPhone(string $rawPhone): ?string
     {
-        $digits = preg_replace('/\D/', '', $rawPhone);
-        if (! $digits) {
-            return null;
-        }
+        $phone = Customer::normalizePhone($rawPhone);
 
-        if (strlen($digits) === 9) {
-            $digits = '998'.$digits;
-        }
-
-        if (strlen($digits) !== 12 || ! str_starts_with($digits, '998')) {
-            return null;
-        }
-
-        $sub = substr($digits, 3); // 9 цифр после 998
-
-        return sprintf(
-            '+998 %s %s %s %s',
-            substr($sub, 0, 2),
-            substr($sub, 2, 3),
-            substr($sub, 5, 2),
-            substr($sub, 7, 2)
-        );
+        return $phone !== null && str_starts_with($phone, '+998 ') ? $phone : null;
     }
 
     public function getCurrency(): string
@@ -383,7 +366,9 @@ class StorefrontService
                 }
 
                 if ($qty > $available) {
-                    $qty = $available;
+                    // Keep the current amount instead of jumping to the stock level,
+                    // which would reveal the exact number of units left.
+                    $qty = min(max(1, (int) ($item['quantity'] ?? 1)), $available);
                     $warning = __('No more units of this product are available.');
                 }
 
@@ -600,7 +585,17 @@ class StorefrontService
             return $this->cachedCustomer;
         }
 
-        $this->cachedCustomer = Customer::find($customerId);
+        $customer = Customer::with('user')->find($customerId);
+
+        // A password change (reset) signs out the account's other sessions:
+        // the session remembers a fingerprint of the password it signed in with.
+        $known = (string) session('mally_auth_fingerprint', '');
+        if ($customer?->user && ($known === '' || ! hash_equals($known, $this->passwordFingerprint($customer->user)))) {
+            session()->forget(['mally_customer_id', 'mally_user_id', 'mally_auth_fingerprint']);
+            $customer = null;
+        }
+
+        $this->cachedCustomer = $customer;
         $this->customerResolved = true;
 
         return $this->cachedCustomer;
@@ -611,13 +606,35 @@ class StorefrontService
         return $this->getCurrentCustomer();
     }
 
+    /** The storefront login (User) of the current session, if any. */
+    public function getCurrentUser(): ?User
+    {
+        $customer = $this->getCurrentCustomer();
+
+        // The session must still point at the user that owns this customer.
+        if (! $customer || (int) session('mally_user_id', 0) !== (int) $customer->user_id) {
+            return null;
+        }
+
+        return $customer->user;
+    }
+
     public function loginCustomer(Customer $customer): void
     {
         // New session id on login, so a planted session id can't be reused.
         session()->regenerate();
-        session(['mally_customer_id' => $customer->id]);
+        session([
+            'mally_customer_id' => $customer->id,
+            'mally_user_id' => $customer->user_id,
+            'mally_auth_fingerprint' => $customer->user ? $this->passwordFingerprint($customer->user) : null,
+        ]);
         $this->cachedCustomer = $customer;
         $this->customerResolved = true;
+    }
+
+    private function passwordFingerprint(User $user): string
+    {
+        return hash_hmac('sha256', (string) $user->password, (string) config('app.key'));
     }
 
     public function logoutCustomer(): void

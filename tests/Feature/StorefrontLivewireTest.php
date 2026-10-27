@@ -97,17 +97,28 @@ class StorefrontLivewireTest extends TestCase
         $this->get(route('product.detail', ['slug' => 'non-existent-sku-999999']))->assertNotFound();
     }
 
-    public function test_promo_code_validation_rejects_welcome_and_accepts_mally10(): void
+    public function test_no_promo_code_is_valid_by_default(): void
     {
+        config(['services.store.promo_code' => '', 'services.store.promo_percent' => 0]);
+        $service = app(StorefrontService::class);
+
+        $this->assertFalse($service->applyPromoCode('', 100.0)['success']);
+        $this->assertFalse($service->applyPromoCode('WELCOME', 100.0)['success']);
+        $this->assertNull($service->getPromoCode());
+    }
+
+    public function test_promo_code_validation_rejects_unknown_and_accepts_configured_code(): void
+    {
+        config(['services.store.promo_code' => 'TESTPROMO', 'services.store.promo_percent' => 10]);
         $service = app(StorefrontService::class);
 
         $this->assertFalse($service->applyPromoCode('WELCOME', 100.0)['success']);
         $this->assertNull($service->getPromoCode());
 
-        $mallyRes = $service->applyPromoCode('mally10', 100.0);
-        $this->assertTrue($mallyRes['success']);
-        $this->assertSame('MALLY10', $service->getPromoCode());
-        $this->assertEquals(10.0, $mallyRes['discountUsd']);
+        $res = $service->applyPromoCode('testpromo', 100.0);
+        $this->assertTrue($res['success']);
+        $this->assertSame('TESTPROMO', $service->getPromoCode());
+        $this->assertEquals(10.0, $res['discountUsd']);
     }
 
     public function test_cart_revalidates_stale_price_and_stock_against_database(): void
@@ -140,10 +151,6 @@ class StorefrontLivewireTest extends TestCase
         $detail->assertDontSee('7 шт');
 
         $this->get(route('product.detail', ['slug' => 'ML-SOLD']))->assertOk()->assertSee('Распродано');
-
-        $api = $this->getJson('/api/products')->assertOk()->json('products');
-        $this->assertArrayNotHasKey('quantity', $api[0]);
-        $this->assertArrayHasKey('inStock', $api[0]);
     }
 
     public function test_plus_button_stops_at_available_stock(): void
@@ -163,6 +170,25 @@ class StorefrontLivewireTest extends TestCase
         // A direct Livewire call with a bigger number is capped as well.
         Livewire::test(CartPage::class)->call('updateCartQuantity', (string) $product->id, 50);
         $this->assertSame(2, $service->getItemQuantityInCart((string) $product->id));
+    }
+
+    public function test_asking_for_more_than_stock_keeps_the_current_quantity(): void
+    {
+        $product = $this->product(qty: 3);
+        $service = app(StorefrontService::class);
+        $service->addToCart('ML-HG-BRUSH');
+
+        $result = $service->updateCartQuantity((string) $product->id, 50);
+
+        // Not bumped to 3: that would reveal the exact stock level.
+        $this->assertFalse($result['success']);
+        $this->assertStringNotContainsString('3', $result['message']);
+        $this->assertSame(1, $service->getItemQuantityInCart((string) $product->id));
+        $this->assertTrue($service->canIncrease('ML-HG-BRUSH'));
+
+        $this->assertTrue($service->updateCartQuantity((string) $product->id, 3)['success']);
+        $this->assertSame(3, $service->getItemQuantityInCart((string) $product->id));
+        $this->assertFalse($service->canIncrease('ML-HG-BRUSH'));
     }
 
     public function test_sold_out_product_cannot_be_added_and_restock_makes_it_available(): void

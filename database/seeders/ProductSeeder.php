@@ -448,7 +448,7 @@ class ProductSeeder extends Seeder
                 'comment' => $this->mergeComments($rows),
                 'quantity' => 0,
                 'selling_price' => 0,
-                'image' => null,
+                'images' => null,
                 'link' => null,
                 'status' => 'in_stock',
             ]);

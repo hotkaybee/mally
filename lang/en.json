@@ -137,5 +137,6 @@
     "Photos": "Photos",
     "Published": "Published",
     "Mally customer": "Mally customer",
-    "A customer with this phone number already exists.": "A customer with this phone number already exists."
+    "A customer with this phone number already exists.": "A customer with this phone number already exists.",
+    "The first photo is the main one. Drag to change the order.": "The first photo is the main one. Drag to change the order."
 }

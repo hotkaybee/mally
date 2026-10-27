@@ -8,10 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
     use HasFactory;
+
+    /** Disk the product photos are uploaded to (see ProductForm). */
+    public const IMAGE_DISK = 'public';
 
     /**
      * `quantity` and `selling_price` are read-only caches maintained from the
@@ -27,7 +31,7 @@ class Product extends Model
         'comment',
         'quantity',
         'selling_price',
-        'image',
+        'images',
         'link',
         'status',
     ];
@@ -35,6 +39,7 @@ class Product extends Model
     protected $casts = [
         'quantity' => 'integer',
         'selling_price' => 'decimal:2',
+        'images' => 'array',
     ];
 
     protected static function booted(): void
@@ -63,6 +68,26 @@ class Product extends Model
         return $this->belongsToMany(Order::class)
             ->using(OrderProduct::class)
             ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
+    }
+
+    /**
+     * Public URLs of the photos in their admin order; the first is the main
+     * photo. Full http(s) URLs are used as they are.
+     *
+     * @return list<string>
+     */
+    public function imageUrls(): array
+    {
+        return collect($this->images ?? [])
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->map(fn (string $path) => str_starts_with($path, 'http') ? $path : Storage::disk(self::IMAGE_DISK)->url($path))
+            ->values()
+            ->all();
+    }
+
+    public function mainImageUrl(): string
+    {
+        return $this->imageUrls()[0] ?? self::placeholderUrl();
     }
 
     public static function placeholderUrl(): string

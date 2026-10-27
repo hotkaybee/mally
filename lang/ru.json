@@ -137,5 +137,6 @@
     "Photos": "Фото",
     "Published": "Опубликован",
     "Mally customer": "Покупатель Mally",
-    "A customer with this phone number already exists.": "Клиент с таким номером телефона уже существует."
+    "A customer with this phone number already exists.": "Клиент с таким номером телефона уже существует.",
+    "The first photo is the main one. Drag to change the order.": "Первое фото — главное. Перетащите, чтобы изменить порядок."
 }

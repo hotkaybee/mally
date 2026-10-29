@@ -146,6 +146,20 @@ class StorefrontLivewireTest extends TestCase
         $this->assertArrayHasKey('inStock', $api[0]);
     }
 
+    public function test_product_page_has_no_ingredients_section(): void
+    {
+        $this->product();
+
+        foreach (['ru' => 'Состав и компоненты', 'uz' => 'Tarkibi va faol moddalar', 'en' => 'Ingredients & Actives'] as $locale => $title) {
+            $this->withSession(['mally_locale' => $locale])
+                ->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+                ->assertOk()
+                ->assertDontSee($title)
+                ->assertDontSee('Cruelty-Free')
+                ->assertDontSee('Paraben-Free');
+        }
+    }
+
     public function test_plus_button_stops_at_available_stock(): void
     {
         $product = $this->product(qty: 2);

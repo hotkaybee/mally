@@ -342,47 +342,6 @@
                 @endif
             </section>
 
-            <!-- БЛОК 2: Состав и активные компоненты -->
-            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
-                <div class="flex items-center gap-3 pb-3 border-b border-[#EAE3DE]">
-                    <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-                        <i class="fa-solid fa-leaf text-base"></i>
-                    </div>
-                    <div>
-                        <h2 class="font-serif text-xl sm:text-2xl font-bold text-[#1C1917]">
-                            {{ $store->t('product.ingredients_title', 'Состав и компоненты') }}
-                        </h2>
-                        <p class="text-xs text-[#8C827A]">
-                            {{ $store->t('product.ingredients_subtitle', 'Стандарты чистоты Clean Beauty, безопасность и активные вещества') }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-center gap-3">
-                        <i class="fa-solid fa-check text-emerald-600 text-base"></i>
-                        <div>
-                            <div class="font-bold text-emerald-900">Cruelty-Free</div>
-                            <div class="text-[10px] text-emerald-700">{{ $locale === 'uz' ? 'Hayvonlarda sinovdan o‘tkazilmagan' : ($locale === 'en' ? 'Never tested on animals' : 'Не тестируется на животных') }}</div>
-                        </div>
-                    </div>
-                    <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-center gap-3">
-                        <i class="fa-solid fa-check text-emerald-600 text-base"></i>
-                        <div>
-                            <div class="font-bold text-emerald-900">Paraben-Free</div>
-                            <div class="text-[10px] text-emerald-700">{{ $locale === 'uz' ? 'Parabenlar va SLSsiz' : ($locale === 'en' ? 'Free of parabens & SLS' : 'Без парабенов и SLS') }}</div>
-                        </div>
-                    </div>
-                    <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-center gap-3">
-                        <i class="fa-solid fa-check text-emerald-600 text-base"></i>
-                        <div>
-                            <div class="font-bold text-emerald-900">Clean Formula</div>
-                            <div class="text-[10px] text-emerald-700">{{ $locale === 'uz' ? 'Gipoallergen tarkib' : ($locale === 'en' ? 'Hypoallergenic formula' : 'Гипоаллергенный состав') }}</div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <!-- БЛОК 3: Полные характеристики товара -->
             <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
                 <div class="flex items-center gap-3 pb-3 border-b border-[#EAE3DE]">

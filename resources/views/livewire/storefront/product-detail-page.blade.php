@@ -342,47 +342,6 @@
                 @endif
             </section>
 
-            <!-- БЛОК 2: Состав и активные компоненты -->
-            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
-                <div class="flex items-center gap-3 pb-3 border-b border-[#EAE3DE]">
-                    <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-                        <i class="fa-solid fa-leaf text-base"></i>
-                    </div>
-                    <div>
-                        <h2 class="font-serif text-xl sm:text-2xl font-bold text-[#1C1917]">
-                            {{ $store->t('product.ingredients_title', 'Состав и компоненты') }}
-                        </h2>
-                        <p class="text-xs text-[#8C827A]">
-                            {{ $store->t('product.ingredients_subtitle', 'Стандарты чистоты Clean Beauty, безопасность и активные вещества') }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-center gap-3">
-                        <i class="fa-solid fa-check text-emerald-600 text-base"></i>
-                        <div>
-                            <div class="font-bold text-emerald-900">Cruelty-Free</div>
-                            <div class="text-[10px] text-emerald-700">{{ $locale === 'uz' ? 'Hayvonlarda sinovdan o‘tkazilmagan' : ($locale === 'en' ? 'Never tested on animals' : 'Не тестируется на животных') }}</div>
-                        </div>
-                    </div>
-                    <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-center gap-3">
-                        <i class="fa-solid fa-check text-emerald-600 text-base"></i>
-                        <div>
-                            <div class="font-bold text-emerald-900">Paraben-Free</div>
-                            <div class="text-[10px] text-emerald-700">{{ $locale === 'uz' ? 'Parabenlar va SLSsiz' : ($locale === 'en' ? 'Free of parabens & SLS' : 'Без парабенов и SLS') }}</div>
-                        </div>
-                    </div>
-                    <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-center gap-3">
-                        <i class="fa-solid fa-check text-emerald-600 text-base"></i>
-                        <div>
-                            <div class="font-bold text-emerald-900">Clean Formula</div>
-                            <div class="text-[10px] text-emerald-700">{{ $locale === 'uz' ? 'Gipoallergen tarkib' : ($locale === 'en' ? 'Hypoallergenic formula' : 'Гипоаллергенный состав') }}</div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <!-- БЛОК 3: Полные характеристики товара -->
             <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
                 <div class="flex items-center gap-3 pb-3 border-b border-[#EAE3DE]">
@@ -457,39 +416,30 @@
                     'en' => 'Verified reviews from Mally customers',
                     default => 'Реальные впечатления клиентов по доставленным заказам',
                 };
-                $noReviewsText = match ($locale) {
-                    'uz' => "Ushbu mahsulot bo'yicha hozircha sharhlar yo'q. Xarid qilganingizdan so'ng shaxsiy kabinet orqali birinchi bo'lib fikr qoldirishingiz mumkin!",
-                    'en' => 'No reviews for this product yet. You can leave the first review from your profile after your order is delivered!',
-                    default => 'Отзывов на этот товар пока нет. Вы сможете оставить первый отзыв в личном кабинете после получения заказа!',
-                };
                 $verifiedBadgeText = match ($locale) {
                     'uz' => 'Tasdiqlangan xarid',
                     'en' => 'Verified Purchase',
                     default => 'Проверенная покупка',
                 };
             @endphp
-            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
-                <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#EAE3DE] flex-wrap">
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                            <i class="fa-solid fa-star text-base"></i>
-                        </div>
-                        <div>
-                            <h2 class="font-serif text-xl sm:text-2xl font-bold text-[#1C1917]">
-                                {{ $reviewsTitle }} ({{ count($productReviews) }})
-                            </h2>
-                            <p class="text-xs text-[#8C827A]">
-                                {{ $reviewsSubtitle }}
-                            </p>
+            @if(count($productReviews) > 0)
+                <section class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-xs space-y-5">
+                    <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#EAE3DE] flex-wrap">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                                <i class="fa-solid fa-star text-base"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-serif text-xl sm:text-2xl font-bold text-[#1C1917]">
+                                    {{ $reviewsTitle }} ({{ count($productReviews) }})
+                                </h2>
+                                <p class="text-xs text-[#8C827A]">
+                                    {{ $reviewsSubtitle }}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                @if(count($productReviews) === 0)
-                    <p class="text-xs sm:text-sm text-[#78716C] py-2">
-                        {{ $noReviewsText }}
-                    </p>
-                @else
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         @foreach($productReviews as $rev)
                             @php
@@ -540,8 +490,8 @@
                             </div>
                         @endforeach
                     </div>
-                @endif
-            </section>
+                </section>
+            @endif
         </div>
 
         <!-- БЛОК УМНЫХ РЕКОМЕНДАЦИЙ -->

@@ -14,6 +14,12 @@ class Product extends Model
 {
     use HasFactory;
 
+    /** Disk the product photos are uploaded to (see ProductForm). */
+    public const IMAGE_DISK = 'public';
+
+    /** Directory on IMAGE_DISK that holds the product photos. */
+    public const IMAGE_DIRECTORY = 'products';
+
     /**
      * `quantity` and `selling_price` are read-only caches maintained from the
      * product's receipts (see App\Services\InventoryService). Purchase price,
@@ -32,11 +38,6 @@ class Product extends Model
         'link',
         'status',
     ];
-
-    /** Product photos live on this disk under products/. */
-    public const IMAGE_DISK = 'public';
-
-    public const IMAGE_DIRECTORY = 'products';
 
     protected $casts = [
         'quantity' => 'integer',
@@ -57,24 +58,6 @@ class Product extends Model
             }
         });
         static::deleted(fn (Product $product) => self::deleteImageFiles($product->images ?? []));
-    }
-
-    /**
-     * Public URLs of the product's photos, main photo first.
-     *
-     * @return array<int, string>
-     */
-    public function imageUrls(): array
-    {
-        return array_values(array_map(
-            fn (string $path) => str_starts_with($path, 'http') ? $path : Storage::disk(self::IMAGE_DISK)->url($path),
-            array_filter($this->images ?? [], fn ($path) => is_string($path) && $path !== ''),
-        ));
-    }
-
-    public function mainImageUrl(): string
-    {
-        return $this->imageUrls()[0] ?? self::placeholderUrl();
     }
 
     /** @param  array<int, string>  $paths */
@@ -107,6 +90,26 @@ class Product extends Model
         return $this->belongsToMany(Order::class)
             ->using(OrderProduct::class)
             ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
+    }
+
+    /**
+     * Public URLs of the photos in their admin order; the first is the main
+     * photo. Full http(s) URLs are used as they are.
+     *
+     * @return list<string>
+     */
+    public function imageUrls(): array
+    {
+        return collect($this->images ?? [])
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->map(fn (string $path) => str_starts_with($path, 'http') ? $path : Storage::disk(self::IMAGE_DISK)->url($path))
+            ->values()
+            ->all();
+    }
+
+    public function mainImageUrl(): string
+    {
+        return $this->imageUrls()[0] ?? self::placeholderUrl();
     }
 
     public static function placeholderUrl(): string

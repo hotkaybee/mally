@@ -9,9 +9,11 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\ExchangeRateService;
+use App\Services\StorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -20,6 +22,8 @@ use Tests\TestCase;
 class ProductImagesTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const MIGRATION = 'database/migrations/2026_10_27_000000_replace_product_image_with_images.php';
 
     protected function setUp(): void
     {
@@ -43,40 +47,36 @@ class ProductImagesTest extends TestCase
             'brand_id' => Brand::firstOrCreate(['name' => 'Hourglass'])->id,
             'category_id' => Category::firstOrCreate(['name_ru' => 'Макияж'], ['name_en' => 'Makeup', 'name_uz' => 'Makiyaj'])->id,
             'name' => 'Ambient Lighting Brush',
-            'sku' => 'ML-IMG-1',
+            'sku' => 'ML-HG-BRUSH',
             'quantity' => 0,
             'selling_price' => 0,
             'status' => 'in_stock',
         ], $attrs));
     }
 
-    private function productPage(Product $product)
+    public function test_admin_uploads_several_photos_in_order_to_the_public_disk(): void
     {
-        return $this->get(route('product.detail', ['slug' => $product->sku]))->assertOk();
-    }
-
-    public function test_photos_uploaded_in_the_admin_are_stored_on_the_public_disk_and_shown_on_the_product_page(): void
-    {
-        $product = $this->product();
+        config(['app.env' => 'local']);
         $this->actingAs(User::factory()->create());
 
+        $product = $this->product();
+
         Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
-            ->fillForm(['images' => [
-                UploadedFile::fake()->image('front.jpg', 1200, 1200),
-                UploadedFile::fake()->image('back.png', 1200, 1200),
-            ]])
+            ->fillForm([
+                'images' => [UploadedFile::fake()->image('front.jpg', 1200, 1200), UploadedFile::fake()->image('back.png', 1200, 1200)],
+            ])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $paths = $product->fresh()->images;
-        $this->assertCount(2, $paths);
-        foreach ($paths as $path) {
+        $images = $product->fresh()->images;
+        $this->assertCount(2, $images);
+        foreach ($images as $path) {
             $this->assertStringStartsWith(Product::IMAGE_DIRECTORY.'/', $path);
             Storage::disk(Product::IMAGE_DISK)->assertExists($path);
         }
 
-        $page = $this->productPage($product);
-        foreach ($paths as $path) {
+        $page = $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))->assertOk();
+        foreach ($images as $path) {
             $page->assertSee(Storage::disk(Product::IMAGE_DISK)->url($path), false);
         }
 
@@ -85,8 +85,10 @@ class ProductImagesTest extends TestCase
 
     public function test_photos_must_be_square_jpeg_png_or_webp(): void
     {
-        $product = $this->product();
+        config(['app.env' => 'local']);
         $this->actingAs(User::factory()->create());
+
+        $product = $this->product();
 
         foreach ([UploadedFile::fake()->image('wide.jpg', 1200, 800), UploadedFile::fake()->create('logo.svg', 10, 'image/svg+xml')] as $file) {
             Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
@@ -98,13 +100,37 @@ class ProductImagesTest extends TestCase
         $this->assertNull($product->fresh()->images);
     }
 
-    public function test_main_photo_is_first_and_a_product_without_photos_gets_the_placeholder(): void
+    public function test_product_page_shows_all_photos_with_the_first_as_main(): void
     {
-        $product = $this->product(['images' => ['products/front.jpg', 'products/back.jpg']]);
+        $product = $this->product(['images' => ['products/front.webp', 'products/back.webp']]);
+        $front = Storage::disk(Product::IMAGE_DISK)->url('products/front.webp');
+        $back = Storage::disk(Product::IMAGE_DISK)->url('products/back.webp');
 
-        $this->assertSame(Storage::disk(Product::IMAGE_DISK)->url('products/front.jpg'), $product->mainImageUrl());
-        $this->assertCount(2, $product->imageUrls());
-        $this->assertSame(Product::placeholderUrl(), $this->product(['sku' => 'ML-IMG-2', 'images' => null])->mainImageUrl());
+        $data = app(StorefrontService::class)->formatProduct($product);
+        $this->assertSame($front, $data['image']);
+        $this->assertSame([$front, $back], $data['images']);
+        $this->assertSame($front, $product->mainImageUrl());
+
+        $this->get(route('product.detail', ['slug' => 'ML-HG-BRUSH']))
+            ->assertOk()
+            ->assertSee('products/front.webp')
+            ->assertSee('products/back.webp');
+    }
+
+    public function test_product_without_photos_uses_the_placeholder(): void
+    {
+        $product = $this->product();
+
+        $this->assertSame([], $product->imageUrls());
+        $this->assertSame(Product::placeholderUrl(), $product->mainImageUrl());
+        $this->assertSame([Product::placeholderUrl()], app(StorefrontService::class)->formatProduct($product)['images']);
+    }
+
+    public function test_full_urls_are_kept_as_they_are(): void
+    {
+        $product = $this->product(['images' => ['https://cdn.example.com/a.jpg']]);
+
+        $this->assertSame(['https://cdn.example.com/a.jpg'], $product->imageUrls());
     }
 
     public function test_removed_photos_and_photos_of_a_deleted_product_are_deleted_from_the_disk(): void
@@ -120,5 +146,22 @@ class ProductImagesTest extends TestCase
 
         $product->delete();
         $disk->assertMissing('products/back.jpg');
+    }
+
+    public function test_migration_moves_the_single_image_into_the_list(): void
+    {
+        $this->artisan('migrate:rollback', ['--path' => self::MIGRATION])->assertSuccessful();
+
+        $insert = fn (?string $image) => DB::table('products')->insertGetId([
+            'name' => 'P', 'quantity' => 0, 'selling_price' => 0, 'status' => 'in_stock', 'image' => $image,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $with = $insert('products/old.jpg');
+        $without = $insert(null);
+
+        $this->artisan('migrate', ['--path' => self::MIGRATION])->assertSuccessful();
+
+        $this->assertSame(['products/old.jpg'], Product::find($with)->images);
+        $this->assertNull(Product::find($without)->images);
     }
 }

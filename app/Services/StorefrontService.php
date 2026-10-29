@@ -740,7 +740,8 @@ class StorefrontService
         $category = $p->category;
         $catNameRu = $category?->name_ru ?: ($category?->name ?: 'Косметика');
         $price = round((float) $p->selling_price, 2);
-        $images = $p->imageUrls() ?: [Product::placeholderUrl()];
+        $images = $p->imageUrls();
+        $img = $images[0] ?? Product::placeholderUrl();
         $inStock = $this->isSellable($p);
 
         return [
@@ -760,8 +761,8 @@ class StorefrontService
             'inStock' => $inStock,
             'status' => $inStock ? 'ACTIVE' : 'OUT_OF_STOCK',
             'isNew' => $p->created_at && $p->created_at->gt(now()->subDays(30)),
-            'image' => $images[0],
-            'images' => $images,
+            'image' => $img,
+            'images' => $images ?: [$img],
             'description' => $p->description ?: 'Премиальная оригинальная продукция из США.',
             'features' => ['100% Оригинал из США', 'Сертифицированная косметика'],
             'howToUse' => 'Наносите в соответствии с рекомендациями производителя.',
@@ -850,8 +851,6 @@ class StorefrontService
             'product.desc_texture' => 'Описание и текстура',
             'product.desc_subtitle' => 'Особенности текстуры, формула и эффект от применения',
             'product.key_benefits' => 'Ключевые преимущества формулы:',
-            'product.ingredients_title' => 'Состав и компоненты',
-            'product.ingredients_subtitle' => 'Стандарты чистоты Clean Beauty, безопасность и активные вещества',
             'product.how_to_use_title' => 'Способ применения',
             'product.how_to_use_subtitle' => 'Пошаговая инструкция и профессиональные советы',
             'product.specs_title' => 'Характеристики товара',
@@ -975,8 +974,6 @@ class StorefrontService
             'product.desc_texture' => 'Tavsif va tuzilishi',
             'product.desc_subtitle' => 'Tuzilish xususiyatlari, formula va natija',
             'product.key_benefits' => 'Formulaning asosiy afzalliklari:',
-            'product.ingredients_title' => 'Tarkibi va faol moddalar',
-            'product.ingredients_subtitle' => "To'liq tarkib (INCI) va parvarishlovchi moddalar",
             'product.how_to_use_title' => "Qo'llash usuli va maslahatlar",
             'product.how_to_use_subtitle' => "Go'zallik mutaxassislaridan bosqichma-bosqich ko'rsatma",
             'product.specs_title' => 'Xususiyatlari va tafsilotlari',
@@ -1078,8 +1075,6 @@ class StorefrontService
             'product.desc_texture' => 'Description & Texture',
             'product.desc_subtitle' => 'Texture details, formula, and results',
             'product.key_benefits' => 'Key Formula Benefits:',
-            'product.ingredients_title' => 'Ingredients & Actives',
-            'product.ingredients_subtitle' => 'Full ingredient list (INCI) and active compounds',
             'product.how_to_use_title' => 'How to Apply & Tips',
             'product.how_to_use_subtitle' => 'Step-by-step beauty expert & makeup artist guide',
             'product.specs_title' => 'Specifications & Details',

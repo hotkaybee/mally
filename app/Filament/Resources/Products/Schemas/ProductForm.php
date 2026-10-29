@@ -55,10 +55,10 @@ class ProductForm
                     ->disabled()
                     ->dehydrated(false)
                     ->helperText(__('From the latest receipt')),
-                // Square photos shrunk in the browser to 1200px before upload;
-                // the first one is the main photo on the website.
+                // Square photos shrunk in the browser to 1200px before upload.
                 FileUpload::make('images')
                     ->label(__('Photos'))
+                    ->helperText(__('The first photo is the main one. Drag to change the order.'))
                     ->image()
                     ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                     ->multiple()

@@ -137,5 +137,6 @@
     "Photos": "Rasmlar",
     "Published": "E'lon qilingan",
     "Mally customer": "Mally xaridori",
-    "A customer with this phone number already exists.": "Bu telefon raqamli mijoz allaqachon mavjud."
+    "A customer with this phone number already exists.": "Bu telefon raqamli mijoz allaqachon mavjud.",
+    "The first photo is the main one. Drag to change the order.": "Birinchi rasm — asosiy. Tartibini o‘zgartirish uchun suring."
 }

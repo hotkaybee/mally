@@ -502,6 +502,23 @@ class OrderPlacementTest extends TestCase
         ], $attrs));
     }
 
+    public function test_product_page_shows_reviews_only_when_there_are_any(): void
+    {
+        $product = $this->product(10, [10]);
+        $page = fn () => $this->withSession(['mally_locale' => 'ru'])
+            ->get(route('product.detail', ['slug' => $product->sku]))
+            ->assertOk();
+
+        $page()->assertDontSee('Отзывы покупателей (')->assertDontSee('Отзывов на этот товар пока нет');
+
+        // A review waiting for moderation doesn't count.
+        $review = $this->review($this->deliveredOrder($this->customer(), $product), $product, ['is_approved' => false, 'comment' => 'Lovely brush']);
+        $page()->assertDontSee('Отзывы покупателей (')->assertDontSee('Lovely brush');
+
+        $review->update(['is_approved' => true]);
+        $page()->assertSee('Отзывы покупателей (1)')->assertSee('Lovely brush');
+    }
+
     public function test_reviews_store_only_their_links(): void
     {
         $this->assertEqualsCanonicalizing(

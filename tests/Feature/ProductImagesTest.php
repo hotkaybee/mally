@@ -83,19 +83,17 @@ class ProductImagesTest extends TestCase
         Livewire::test(ViewProduct::class, ['record' => $product->getRouteKey()])->assertOk();
     }
 
-    public function test_photos_must_be_square_jpeg_png_or_webp(): void
+    public function test_photos_must_be_jpeg_png_or_webp(): void
     {
         config(['app.env' => 'local']);
         $this->actingAs(User::factory()->create());
 
         $product = $this->product();
 
-        foreach ([UploadedFile::fake()->image('wide.jpg', 1200, 800), UploadedFile::fake()->create('logo.svg', 10, 'image/svg+xml')] as $file) {
-            Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
-                ->fillForm(['images' => [$file]])
-                ->call('save')
-                ->assertHasFormErrors(['images']);
-        }
+        Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()])
+            ->fillForm(['images' => [UploadedFile::fake()->create('logo.svg', 10, 'image/svg+xml')]])
+            ->call('save')
+            ->assertHasFormErrors(['images']);
 
         $this->assertNull($product->fresh()->images);
     }

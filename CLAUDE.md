@@ -104,3 +104,5 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 - `composer install` fails on PHP < 8.2.
 - After editing `config/*`, translation JSON or Filament resource registration, run `php artisan optimize:clear` — stale caches silently serve old values.
 - Sessions/cache/queue live in MySQL, so `migrate` must run before the app boots.
+- Product photos (`products.images`, a list of paths, first = main) live on the `public` disk under `products/`. Build links with `Product::imageUrls()` / `mainImageUrl()`, never `asset()`. Run `php artisan storage:link` once per machine (the Docker entrypoint does it on the server), and `APP_URL` must match the host you open, or the photos 404.
+- Bundled catalogue photos are in `database/seeders/images/products` (`sources.csv` lists where each came from); `ProductImageSeeder` attaches them only to products without photos, so it can run on a live database.

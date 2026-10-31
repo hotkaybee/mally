@@ -55,15 +55,26 @@ class ProductForm
                     ->disabled()
                     ->dehydrated(false)
                     ->helperText(__('From the latest receipt')),
+                // Square photos shrunk in the browser to 1200px before upload.
                 FileUpload::make('images')
                     ->label(__('Photos'))
                     ->helperText(__('The first photo is the main one. Drag to change the order.'))
                     ->image()
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                     ->multiple()
                     ->reorderable()
+                    ->appendFiles()
+                    ->maxFiles(10)
+                    ->maxSize(10240)
                     ->disk(Product::IMAGE_DISK)
-                    ->directory('products')
+                    ->directory(Product::IMAGE_DIRECTORY)
                     ->visibility('public')
+                    ->imageCropAspectRatio('1:1')
+                    ->imageResizeMode('cover')
+                    ->imageResizeTargetWidth('1200')
+                    ->imageResizeTargetHeight('1200')
+                    ->imageEditor()
+                    ->panelLayout('grid')
                     ->columnSpanFull(),
                 TextInput::make('link')
                     ->label(__('link')),

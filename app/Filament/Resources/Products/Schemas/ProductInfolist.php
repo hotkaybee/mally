@@ -37,7 +37,8 @@ class ProductInfolist
                     ->label(__('Photos'))
                     ->disk(Product::IMAGE_DISK)
                     ->stacked()
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                    ->columnSpanFull(),
                 TextEntry::make('link')
                     ->placeholder('-'),
                 TextEntry::make('status')

@@ -17,6 +17,9 @@ class Product extends Model
     /** Disk the product photos are uploaded to (see ProductForm). */
     public const IMAGE_DISK = 'public';
 
+    /** Directory on IMAGE_DISK that holds the product photos. */
+    public const IMAGE_DIRECTORY = 'products';
+
     /**
      * `quantity` and `selling_price` are read-only caches maintained from the
      * product's receipts (see App\Services\InventoryService). Purchase price,
@@ -46,6 +49,25 @@ class Product extends Model
     {
         static::saved(fn () => StorefrontService::forgetProductsCache());
         static::deleted(fn () => StorefrontService::forgetProductsCache());
+
+        // Photos removed in the admin, or of a deleted product, are deleted from the disk.
+        static::updated(function (Product $product) {
+            if ($product->wasChanged('images')) {
+                $old = json_decode((string) $product->getRawOriginal('images'), true) ?: [];
+                self::deleteImageFiles(array_diff($old, $product->images ?? []));
+            }
+        });
+        static::deleted(fn (Product $product) => self::deleteImageFiles($product->images ?? []));
+    }
+
+    /** @param  array<int, string>  $paths */
+    private static function deleteImageFiles(array $paths): void
+    {
+        $paths = array_filter($paths, fn ($path) => is_string($path) && $path !== '' && ! str_starts_with($path, 'http'));
+
+        if ($paths !== []) {
+            Storage::disk(self::IMAGE_DISK)->delete(array_values($paths));
+        }
     }
 
     public function brand(): BelongsTo

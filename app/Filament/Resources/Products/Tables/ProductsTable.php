@@ -56,10 +56,11 @@ class ProductsTable
                     ->money('USD')
                     ->sortable(),
                 ImageColumn::make('images')
-                    ->label(__('image'))
+                    ->label(__('Photos'))
                     ->disk(Product::IMAGE_DISK)
                     ->stacked()
-                    ->limit(3),
+                    ->limit(3)
+                    ->limitedRemainingText(),
                 TextColumn::make('link')
                     ->label(__('link'))
                     ->searchable(),

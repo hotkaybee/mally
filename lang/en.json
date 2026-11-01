@@ -262,11 +262,13 @@
     "Telegram and phone number added to your profile.": "Telegram and phone number added to your profile.",
     "Telegram added to your profile.": "Telegram added to your profile.",
     "Not confirmed": "Not confirmed",
-    "Add Telegram to confirm your phone number.": "Add Telegram to confirm your phone number.",
     "You signed in with Google before. Please continue the same way: we will take you to Google.": "You signed in with Google before. Please continue the same way: we will take you to Google.",
     "Google is linked to your account. Next time just continue with Google.": "Google is linked to your account. Next time just continue with Google.",
     "Google is connected, your email is confirmed.": "Google is connected, your email is confirmed.",
     "This email already belongs to another profile.": "This email already belongs to another profile.",
     "This Google account is already linked to a profile.": "This Google account is already linked to a profile.",
-    "Add your email with Google, it is confirmed at once.": "Add your email with Google, it is confirmed at once."
+    "Add your email with Google, it is confirmed at once.": "Add your email with Google, it is confirmed at once.",
+    "Google sign-in was added to your Mally account": "Google sign-in was added to your Mally account",
+    "Someone just signed in to your Mally account with a Google account that has this email, and Google sign-in is now linked to it. If it was you, nothing else is needed.": "Someone just signed in to your Mally account with a Google account that has this email, and Google sign-in is now linked to it. If it was you, nothing else is needed.",
+    "If it was not you, reset your password on the Mally website right away and write to us.": "If it was not you, reset your password on the Mally website right away and write to us."
 }

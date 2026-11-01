@@ -183,7 +183,7 @@ class CustomerAccountService
      * the Google identity to it. Admin accounts and accounts that already
      * have another Google are never touched.
      *
-     * @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string}  $profile
+     * @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string, hosted_domain?: string}  $profile
      * @return array{result: string, user?: User, created?: bool, linked?: bool}
      */
     public function resolveGoogle(array $profile): array
@@ -208,7 +208,12 @@ class CustomerAccountService
             // users.email is unique and shared with admins.
             $sameEmail = User::whereRaw('LOWER(email) = ?', [$email])->first();
             if ($sameEmail) {
-                if ($sameEmail->is_admin || filled($sameEmail->google_id)) {
+                // Only an address Google itself is the authority for may sign in to an
+                // existing account; for any other address the account owner signs in
+                // the way they registered.
+                if ($sameEmail->is_admin
+                    || filled($sameEmail->google_id)
+                    || ! self::isGoogleAuthoritative($email, (string) ($profile['hosted_domain'] ?? ''))) {
                     return ['result' => self::GOOGLE_EMAIL_TAKEN];
                 }
 
@@ -238,6 +243,22 @@ class CustomerAccountService
 
             return ['result' => self::OK, 'user' => $user, 'created' => true];
         }));
+    }
+
+    /**
+     * Google decides who owns the address: gmail.com / googlemail.com, or a
+     * Google Workspace account whose hosted domain (`hd`) is the address's own
+     * domain. Any other address (mail.ru, a school or company mailbox without
+     * Workspace) can change hands without Google knowing, so a confirmed
+     * Google email on it is not enough to enter an existing account.
+     */
+    public static function isGoogleAuthoritative(string $email, string $hostedDomain): bool
+    {
+        $domain = Str::after(mb_strtolower(trim($email)), '@');
+        $hosted = mb_strtolower(trim($hostedDomain));
+
+        return in_array($domain, ['gmail.com', 'googlemail.com'], true)
+            || ($hosted !== '' && $hosted === $domain);
     }
 
     /**

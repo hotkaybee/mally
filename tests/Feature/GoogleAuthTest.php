@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Storefront\HomePage;
 use App\Mail\AccountExistsMail;
 use App\Mail\AuthCodeMail;
+use App\Mail\GoogleLinkedMail;
 use App\Models\Customer;
 use App\Models\TelegramLoginRequest;
 use App\Models\User;
@@ -380,6 +381,7 @@ class GoogleAuthTest extends TestCase
 
     public function test_a_google_email_that_already_has_an_account_signs_in_to_it_without_a_password(): void
     {
+        Mail::fake();
         $owner = $this->emailUser();
         $customerId = $owner->customer()->firstOrCreate([], ['first_name' => 'Gmail', 'last_name' => 'Owner', 'source' => 'website'])->id;
 
@@ -393,6 +395,9 @@ class GoogleAuthTest extends TestCase
         $this->assertNull(session(GoogleAuthService::SESSION_OPEN), 'An existing account is not onboarded again.');
         $this->assertStringContainsString('привязан', (string) session('mally_toast.message'));
         $this->assertTrue(Hash::check('OwnerPass123', $owner->password), 'The old password keeps working.');
+
+        // The owner is told that Google was linked to the account.
+        Mail::assertSent(GoogleLinkedMail::class, fn ($mail) => $mail->hasTo('malika@gmail.com'));
     }
 
     public function test_after_linking_both_ways_of_signing_in_work_for_the_same_account(): void
@@ -956,5 +961,101 @@ class GoogleAuthTest extends TestCase
             ->assertSet('isAuthModalOpen', false)
             ->call('startTelegramLink')
             ->assertSet('authStep', 'login');
+    }
+
+    // ------------------------------------------ only Google-authoritative addresses
+
+    public function test_no_notification_is_sent_for_a_new_account_or_a_repeat_sign_in(): void
+    {
+        Mail::fake();
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        session()->invalidate();
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        Mail::assertNotSent(GoogleLinkedMail::class);
+    }
+
+    public function test_a_mail_problem_does_not_block_the_sign_in(): void
+    {
+        $this->emailUser();
+        Mail::shouldReceive('to')->andThrow(new Exception('smtp down'));
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertNotNull(session('mally_customer_id'));
+        $this->assertSame('google-sub-1', User::sole()->google_id);
+    }
+
+    public function test_a_workspace_address_on_its_own_hosted_domain_may_sign_in_to_the_existing_account(): void
+    {
+        Mail::fake();
+        $owner = $this->emailUser(['email' => 'malika@company.uz']);
+
+        $this->googleCallback($this->googleProfile(['email' => 'malika@company.uz', 'hd' => 'company.uz']))->assertRedirect('/');
+
+        $this->assertSame('google-sub-1', $owner->fresh()->google_id);
+        $this->assertNotNull(session('mally_customer_id'));
+    }
+
+    public function test_a_googlemail_address_counts_like_gmail(): void
+    {
+        $owner = $this->emailUser(['email' => 'malika@googlemail.com']);
+
+        $this->googleCallback($this->googleProfile(['email' => 'malika@googlemail.com']))->assertRedirect('/');
+
+        $this->assertSame('google-sub-1', $owner->fresh()->google_id);
+    }
+
+    public function test_an_address_google_does_not_own_cannot_sign_in_to_the_existing_account(): void
+    {
+        Mail::fake();
+        $owner = $this->emailUser(['email' => 'malika@mail.ru']);
+
+        $this->googleCallback($this->googleProfile(['email' => 'malika@mail.ru']))->assertRedirect('/');
+
+        $this->assertNull($owner->fresh()->google_id);
+        $this->assertNull(session('mally_customer_id'));
+        $this->assertSame(1, User::count());
+        $this->assertStringContainsString('уже существует', (string) session('mally_toast.message'));
+        Mail::assertNotSent(GoogleLinkedMail::class);
+    }
+
+    public function test_a_company_address_without_workspace_cannot_sign_in_to_the_existing_account(): void
+    {
+        $owner = $this->emailUser(['email' => 'malika@company.uz']);
+
+        // No hosted domain: a plain Google account that happens to use a company address.
+        $this->googleCallback($this->googleProfile(['email' => 'malika@company.uz']))->assertRedirect('/');
+
+        $this->assertNull($owner->fresh()->google_id);
+        $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_a_hosted_domain_that_is_not_the_address_domain_does_not_count(): void
+    {
+        $owner = $this->emailUser(['email' => 'malika@company.uz']);
+
+        $this->googleCallback($this->googleProfile(['email' => 'malika@company.uz', 'hd' => 'other.uz']))->assertRedirect('/');
+
+        $this->assertNull($owner->fresh()->google_id);
+        $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_a_new_account_can_still_be_created_for_any_confirmed_address(): void
+    {
+        $this->googleCallback($this->googleProfile(['email' => 'malika@mail.ru']))->assertRedirect('/');
+
+        $this->assertSame('malika@mail.ru', User::sole()->email);
+        $this->assertNotNull(session('mally_customer_id'));
+    }
+
+    public function test_the_authority_check_ignores_case_and_spaces(): void
+    {
+        $this->assertTrue(CustomerAccountService::isGoogleAuthoritative(' Ali@GMAIL.com ', ''));
+        $this->assertTrue(CustomerAccountService::isGoogleAuthoritative('a@Company.UZ', 'company.uz'));
+        $this->assertFalse(CustomerAccountService::isGoogleAuthoritative('a@gmail.com.evil.uz', ''));
+        $this->assertFalse(CustomerAccountService::isGoogleAuthoritative('a@evilgmail.com', ''));
+        $this->assertFalse(CustomerAccountService::isGoogleAuthoritative('a@company.uz', ''));
     }
 }

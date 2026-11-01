@@ -556,9 +556,6 @@
                                         <i class="fa-brands fa-telegram text-base"></i>
                                         <span>{{ __('Continue with Telegram') }}</span>
                                     </button>
-                                    <p class="mt-1.5 text-[11px] text-[#78716C] leading-relaxed">
-                                        {{ __('Add Telegram to confirm your phone number.') }}
-                                    </p>
                                 @endif
                             </div>
 

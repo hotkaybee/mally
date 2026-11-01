@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Mail\GoogleLinkedMail;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirect;
 use Throwable;
@@ -102,6 +104,8 @@ class GoogleAuthService
             'email_verified' => filter_var($raw['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'first_name' => (string) ($raw['given_name'] ?? ''),
             'last_name' => (string) ($raw['family_name'] ?? ''),
+            // Set by Google for Workspace accounts only.
+            'hosted_domain' => (string) ($raw['hd'] ?? ''),
         ];
         if ($profile['first_name'] === '' && $profile['last_name'] === '') {
             $profile['first_name'] = (string) $google->getName();
@@ -122,7 +126,7 @@ class GoogleAuthService
         return redirect()->route('home');
     }
 
-    /** @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string}  $profile */
+    /** @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string, hosted_domain?: string}  $profile */
     private function signIn(array $profile, string $redirect): array
     {
         $res = $this->accounts->resolveGoogle($profile);
@@ -130,6 +134,11 @@ class GoogleAuthService
         switch ($res['result']) {
             case CustomerAccountService::OK:
                 $this->accounts->login($res['user']);
+
+                // The owner of an account that just got a new way in is told about it.
+                if (! empty($res['linked'])) {
+                    $this->notifyGoogleLinked($res['user']);
+                }
 
                 // Only a brand-new account is offered the optional Telegram step.
                 if (! empty($res['created'])) {
@@ -151,7 +160,7 @@ class GoogleAuthService
         }
     }
 
-    /** @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string}  $profile */
+    /** @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string, hosted_domain?: string}  $profile */
     private function attach(User $user, array $profile, string $redirect): array
     {
         return match ($this->accounts->attachGoogle($user, $profile)) {
@@ -160,6 +169,16 @@ class GoogleAuthService
             CustomerAccountService::GOOGLE_EMAIL_TAKEN => $this->result($redirect, __('This email already belongs to another profile.'), 'error'),
             default => $this->result($redirect, __('This Google account is already linked to a profile.'), 'error'),
         };
+    }
+
+    private function notifyGoogleLinked(User $user): void
+    {
+        try {
+            Mail::to($user->email)->send(new GoogleLinkedMail);
+        } catch (Throwable $e) {
+            // A mail problem must not block the sign-in.
+            report($e);
+        }
     }
 
     /** The signed-in shopper, read fresh from the database. */

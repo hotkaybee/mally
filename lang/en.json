@@ -270,5 +270,10 @@
     "A different Telegram account is already linked to your profile.": "A different Telegram account is already linked to your profile.",
     "Telegram and phone number added to your profile.": "Telegram and phone number added to your profile.",
     "Telegram added to your profile.": "Telegram added to your profile.",
-    "Sign-in options": "Sign-in options"
+    "Sign-in options": "Sign-in options",
+    "Email confirmed": "Email confirmed",
+    "Email not confirmed": "Email not confirmed",
+    "Not confirmed": "Not confirmed",
+    "Phone number not added": "Phone number not added",
+    "Add Telegram to confirm your phone number.": "Add Telegram to confirm your phone number."
 }

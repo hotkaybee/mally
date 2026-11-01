@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
+use Laravel\Socialite\Contracts\Factory;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -80,7 +81,19 @@ class GoogleAuthTest extends TestCase
 
         $provider = Mockery::mock(GoogleProvider::class);
         $provider->shouldReceive('user')->andReturn($user);
-        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        // A plain fake (not a facade mock), so a second call in one test
+        // replaces the first answer instead of queueing behind it.
+        $this->app->instance(Factory::class, new class($provider) implements Factory
+        {
+            public function __construct(private $provider) {}
+
+            public function driver($driver = null)
+            {
+                return $this->provider;
+            }
+        });
+        Socialite::clearResolvedInstance(Factory::class);
     }
 
     private function googleCallback(array $raw): TestResponse
@@ -238,7 +251,7 @@ class GoogleAuthTest extends TestCase
     public function test_signing_in_again_does_not_create_a_duplicate_or_ask_for_onboarding_again(): void
     {
         $this->googleCallback($this->googleProfile())->assertRedirect();
-        session()->flush();
+        session()->invalidate();
         session(['mally_locale' => 'ru']);
 
         // The person changed their Google name and email: still the same account (sub).
@@ -383,7 +396,7 @@ class GoogleAuthTest extends TestCase
         $this->assertNull(session(GoogleAuthService::SESSION_LINK), 'The pending link is single-use.');
 
         // From now on Google signs in by sub, without the password.
-        session()->flush();
+        session()->invalidate();
         $this->googleCallback($this->googleProfile())->assertRedirect('/');
         $this->assertNotNull(session('mally_customer_id'));
         $this->assertSame(1, User::count());
@@ -514,7 +527,7 @@ class GoogleAuthTest extends TestCase
         $this->assertNull($user->telegram_id);
 
         // The account still works through Google alone.
-        session()->flush();
+        session()->invalidate();
         $this->googleCallback($this->googleProfile())->assertRedirect('/');
         $this->assertSame($user->id, User::sole()->id);
         $this->assertNotNull(session('mally_customer_id'));
@@ -748,5 +761,110 @@ class GoogleAuthTest extends TestCase
             ->assertSet('isAuthModalOpen', false)
             ->call('startTelegramLink')
             ->assertSet('authStep', 'login');
+    }
+
+    // ------------------------------------------------ other account scenarios
+
+    public function test_a_google_account_with_a_different_email_is_a_separate_account(): void
+    {
+        $owner = $this->emailUser(['email' => 'work@company.uz']);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertSame(2, User::count());
+        $this->assertNull($owner->fresh()->google_id, 'Nothing is merged by name or by guessing.');
+        $this->assertSame(User::where('google_id', 'google-sub-1')->value('id'), User::where('email', 'malika@gmail.com')->value('id'));
+        $this->assertNotSame($owner->customer()->value('id'), session('mally_customer_id'));
+    }
+
+    public function test_a_telegram_account_without_email_is_not_merged_with_a_google_account(): void
+    {
+        $telegram = User::create(['name' => 'Tg Only', 'phone' => self::PHONE, 'telegram_id' => self::TG_ID, 'phone_verified_at' => now(), 'password' => 'TgPass12345']);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertSame(2, User::count());
+        $this->assertNull($telegram->fresh()->google_id);
+        $this->assertNull(User::where('google_id', 'google-sub-1')->value('telegram_id'));
+    }
+
+    public function test_a_customer_without_an_account_is_not_taken_over_by_a_matching_google_email(): void
+    {
+        // Entered by hand in the admin: it has orders, but nobody proved it is theirs.
+        $manual = Customer::create(['first_name' => 'Manual', 'last_name' => 'Entry', 'email' => 'malika@gmail.com', 'source' => 'website']);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertNull($manual->fresh()->user_id);
+        $this->assertNotSame($manual->id, session('mally_customer_id'));
+        $this->assertSame(2, Customer::count());
+    }
+
+    public function test_the_email_sign_up_does_not_create_a_second_account_for_a_google_email(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->signedInGoogleUser();
+
+        $res = app(EmailAuthService::class)->sendCode('malika@gmail.com', 'register', '10.2.2.2');
+
+        $this->assertSame(1, User::count());
+        $this->assertTrue($res['success'], 'The answer is the same whether or not the email has an account.');
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\AccountExistsMail::class);
+        \Illuminate\Support\Facades\Mail::assertNotSent(\App\Mail\AuthCodeMail::class);
+    }
+
+    public function test_a_google_account_can_get_a_password_through_the_forgot_password_email_code(): void
+    {
+        $user = $this->signedInGoogleUser();
+        $this->assertFalse($user->hasPassword());
+
+        $res = app(EmailAuthService::class)->resetPassword('malika@gmail.com', 'ResetPass12345');
+
+        $this->assertTrue($res['success']);
+        $user->refresh();
+        $this->assertTrue(Hash::check('ResetPass12345', $user->password));
+        $this->assertSame('google-sub-1', $user->google_id, 'Google stays linked.');
+        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'ResetPass12345', '10.3.3.3')['success']);
+    }
+
+    public function test_after_linking_both_ways_of_signing_in_work_for_the_same_account(): void
+    {
+        $owner = $this->emailUser();
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        session([GoogleAuthService::SESSION_OPEN => 'link']);
+        Livewire::test(HomePage::class)->set('authPassword', 'OwnerPass123')->call('linkGoogleWithPassword');
+        $this->assertSame('google-sub-1', $owner->fresh()->google_id);
+
+        session()->invalidate();
+        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'OwnerPass123', '10.4.4.4')['success']);
+
+        session()->invalidate();
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        $this->assertSame($owner->customer()->value('id'), session('mally_customer_id'));
+        $this->assertSame(1, User::count());
+    }
+
+    public function test_a_second_google_account_cannot_be_linked_to_an_account_that_already_has_one(): void
+    {
+        $owner = $this->emailUser(['google_id' => 'first-google']);
+
+        $this->googleCallback($this->googleProfile(['sub' => 'second-google']))->assertRedirect('/');
+
+        $this->assertSame('first-google', $owner->fresh()->google_id);
+        $this->assertNull(session(GoogleAuthService::SESSION_LINK));
+        $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_the_same_google_email_cannot_be_used_by_two_google_ids(): void
+    {
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        session()->invalidate();
+
+        // Another Google identity that now claims the same address (e.g. an address that changed hands).
+        $this->googleCallback($this->googleProfile(['sub' => 'other-sub']))->assertRedirect('/');
+
+        $this->assertSame(1, User::count());
+        $this->assertSame('google-sub-1', User::sole()->google_id);
+        $this->assertNull(session('mally_customer_id'));
     }
 }

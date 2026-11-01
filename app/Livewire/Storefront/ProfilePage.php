@@ -236,6 +236,23 @@ class ProfilePage extends Component
             && filter_var($url, FILTER_VALIDATE_URL) !== false;
     }
 
+    /**
+     * missing | unverified | verified. Only a number the owner shared through
+     * Telegram (users.phone_verified_at) and that is still the customer's
+     * number counts as verified; a number typed at registration does not.
+     */
+    protected function phoneStatus(?Customer $customer): string
+    {
+        $phone = Customer::normalizePhone($customer?->phone_number);
+        if ($phone === null) {
+            return 'missing';
+        }
+
+        $user = $customer->user;
+
+        return $user && $user->hasVerifiedPhone() && $user->phone === $phone ? 'verified' : 'unverified';
+    }
+
     public function render()
     {
         $service = app(StorefrontService::class);
@@ -263,6 +280,9 @@ class ProfilePage extends Component
             'accountHasPassword' => (bool) $customer?->user?->hasPassword(),
             'accountTelegramLinked' => filled($customer?->user?->telegram_id),
             'accountSignedIn' => $customer?->user !== null,
+            'phoneStatus' => $this->phoneStatus($customer),
+            'accountEmail' => (string) $customer?->user?->email,
+            'accountEmailVerified' => $customer?->user?->email_verified_at !== null,
         ]));
     }
 }

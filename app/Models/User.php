@@ -97,6 +97,12 @@ class User extends Authenticatable implements FilamentUser
         return $normalized === null ? $query->whereRaw('1 = 0') : $query->where('phone', $normalized);
     }
 
+    /** The phone was confirmed by its owner through Telegram. */
+    public function hasVerifiedPhone(): bool
+    {
+        return filled($this->phone) && $this->phone_verified_at !== null;
+    }
+
     /** Google-only accounts have no local password until the owner sets one. */
     public function hasPassword(): bool
     {

@@ -222,12 +222,31 @@
                                 </h1>
                             </div>
                             <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                                <span class="text-xs text-[#78716C] font-mono">{{ $customer->phone_number }}</span>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                    <i class="fa-solid fa-shield-halved text-[9px]"></i>
-                                    <span>{{ $pt['device_bound'] }}</span>
-                                </span>
+                                @if($phoneStatus !== 'missing')
+                                    <span class="text-xs text-[#78716C] font-mono">{{ $customer->phone_number }}</span>
+                                @endif
+                                @if($phoneStatus === 'verified')
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                        <i class="fa-solid fa-shield-halved text-[9px]"></i>
+                                        <span>{{ $pt['device_bound'] }}</span>
+                                    </span>
+                                @endif
                             </div>
+                            @if($accountEmail !== '')
+                                <div class="flex items-center gap-2 mt-1.5 flex-wrap" data-email-status="{{ $accountEmailVerified ? 'verified' : 'unverified' }}">
+                                    <span class="text-xs text-[#78716C]">{{ $accountEmail }}</span>
+                                    @if($accountEmailVerified)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                            <i class="fa-solid fa-check text-[9px]"></i>
+                                            <span>{{ __('Email confirmed') }}</span>
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
+                                            <span>{{ __('Email not confirmed') }}</span>
+                                        </span>
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     </div>
 
@@ -517,22 +536,37 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div data-phone-status="{{ $phoneStatus }}">
                                 <div class="flex items-center justify-between mb-1">
                                     <label class="block text-xs font-semibold text-[#78716C]">
                                         {{ $pt['phone'] }}
                                     </label>
-                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
-                                        <i class="fa-solid fa-check text-[10px]"></i>
-                                        <span>{{ $pt['verified'] }}</span>
-                                    </span>
+                                    @if($phoneStatus === 'verified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-check text-[10px]"></i>
+                                            <span>{{ $pt['verified'] }}</span>
+                                        </span>
+                                    @elseif($phoneStatus === 'unverified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold">
+                                            <span>{{ __('Not confirmed') }}</span>
+                                        </span>
+                                    @endif
                                 </div>
                                 <input
                                     type="tel"
                                     disabled
                                     value="{{ $phone }}"
-                                    class="w-full px-4 py-2.5 bg-emerald-50/40 border border-emerald-200/70 rounded-xl text-xs font-mono font-bold text-emerald-950"
+                                    placeholder="{{ __('Phone number not added') }}"
+                                    class="w-full px-4 py-2.5 rounded-xl text-xs font-mono font-bold {{ $phoneStatus === 'verified' ? 'bg-emerald-50/40 border border-emerald-200/70 text-emerald-950' : 'bg-[#FAF8F6] border border-[#E3DBD5] text-[#78716C]' }}"
                                 />
+                                @if($phoneStatus !== 'verified')
+                                    <p class="mt-1.5 text-[11px] text-[#78716C] leading-relaxed">
+                                        {{ __('Add Telegram to confirm your phone number.') }}
+                                        @if(! $accountTelegramLinked && $accountSignedIn)
+                                            <button type="button" wire:click="openLinkTelegram" class="font-semibold text-[#0077B5] hover:underline cursor-pointer">{{ __('Add Telegram') }}</button>
+                                        @endif
+                                    </p>
+                                @endif
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

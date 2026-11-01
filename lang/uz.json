@@ -270,5 +270,10 @@
     "A different Telegram account is already linked to your profile.": "Profilingizga boshqa Telegram allaqachon ulangan.",
     "Telegram and phone number added to your profile.": "Telegram va telefon raqami profilga qo‘shildi.",
     "Telegram added to your profile.": "Telegram profilga qo‘shildi.",
-    "Sign-in options": "Kirish usullari"
+    "Sign-in options": "Kirish usullari",
+    "Email confirmed": "Email tasdiqlangan",
+    "Email not confirmed": "Email tasdiqlanmagan",
+    "Not confirmed": "Tasdiqlanmagan",
+    "Phone number not added": "Telefon raqami qo‘shilmagan",
+    "Add Telegram to confirm your phone number.": "Telefon raqamini tasdiqlash uchun Telegram qo‘shing."
 }

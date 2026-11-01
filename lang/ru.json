@@ -270,5 +270,10 @@
     "A different Telegram account is already linked to your profile.": "К вашему профилю уже привязан другой Telegram.",
     "Telegram and phone number added to your profile.": "Telegram и номер телефона добавлены в профиль.",
     "Telegram added to your profile.": "Telegram добавлен в профиль.",
-    "Sign-in options": "Способы входа"
+    "Sign-in options": "Способы входа",
+    "Email confirmed": "Email подтверждён",
+    "Email not confirmed": "Email не подтверждён",
+    "Not confirmed": "Не подтверждён",
+    "Phone number not added": "Номер телефона не добавлен",
+    "Add Telegram to confirm your phone number.": "Добавьте Telegram, чтобы подтвердить номер телефона."
 }

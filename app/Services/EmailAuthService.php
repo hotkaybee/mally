@@ -258,6 +258,8 @@ class EmailAuthService
             || str_starts_with($path, '//')
             || str_starts_with($path, '/\\')
             || preg_match('/^[a-zA-Z][a-zA-Z0-9+.-]*:/', $path) === 1
+            // Browsers drop tabs and line breaks inside a URL, so "/<TAB>/host" would become "//host".
+            || preg_match('/[\x00-\x20\x7f\\\\]/', $path) === 1
         ) {
             return '/';
         }

@@ -106,12 +106,13 @@ class ProfilePage extends Component
 
         $product = Product::find((int) $productId);
 
-        // Target data comes from the database, not from the browser.
+        // Target data comes from the database, not from the browser:
+        // the $title and $image arguments are ignored.
         $this->reviewTarget = [
             'type' => 'PRODUCT',
             'productId' => (string) $product->id,
             'title' => $product->name,
-            'image' => $image,
+            'image' => $product->mainImageUrl(),
             'orderNumber' => (int) $order->order_number,
         ];
         $this->reviewRating = 5;

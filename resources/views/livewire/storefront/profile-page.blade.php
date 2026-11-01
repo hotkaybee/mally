@@ -232,21 +232,6 @@
                                     </span>
                                 @endif
                             </div>
-                            @if($accountEmail !== '')
-                                <div class="flex items-center gap-2 mt-1.5 flex-wrap" data-email-status="{{ $accountEmailVerified ? 'verified' : 'unverified' }}">
-                                    <span class="text-xs text-[#78716C]">{{ $accountEmail }}</span>
-                                    @if($accountEmailVerified)
-                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                            <i class="fa-solid fa-check text-[9px]"></i>
-                                            <span>{{ __('Email confirmed') }}</span>
-                                        </span>
-                                    @else
-                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
-                                            <span>{{ __('Email not confirmed') }}</span>
-                                        </span>
-                                    @endif
-                                </div>
-                            @endif
                         </div>
                     </div>
 
@@ -534,6 +519,7 @@
                                 </div>
                             </div>
 
+                            <!-- Телефон: подтверждается только через Telegram -->
                             <div data-phone-status="{{ $phoneStatus }}">
                                 <div class="flex items-center justify-between mb-1">
                                     <label class="block text-xs font-semibold text-[#78716C]">
@@ -550,19 +536,68 @@
                                         </span>
                                     @endif
                                 </div>
-                                <input
-                                    type="tel"
-                                    disabled
-                                    value="{{ $phone }}"
-                                    placeholder="{{ __('Phone number not added') }}"
-                                    class="w-full px-4 py-2.5 rounded-xl text-xs font-mono font-bold {{ $phoneStatus === 'verified' ? 'bg-emerald-50/40 border border-emerald-200/70 text-emerald-950' : 'bg-[#FAF8F6] border border-[#E3DBD5] text-[#78716C]' }}"
-                                />
-                                @if($phoneStatus !== 'verified')
+
+                                @if($phoneStatus !== 'missing')
+                                    <input
+                                        type="tel"
+                                        data-phone-field
+                                        disabled
+                                        value="{{ $phone }}"
+                                        class="w-full px-4 py-2.5 rounded-xl text-xs font-mono font-bold {{ $phoneStatus === 'verified' ? 'bg-emerald-50/40 border border-emerald-200/70 text-emerald-950' : 'bg-[#FAF8F6] border border-[#E3DBD5] text-[#57534E]' }}"
+                                    />
+                                @endif
+
+                                @if($phoneStatus !== 'verified' && $accountSignedIn)
+                                    <button
+                                        type="button"
+                                        wire:click="openLinkTelegram"
+                                        class="{{ $phoneStatus === 'missing' ? '' : 'mt-2 ' }}w-full py-3 px-4 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <i class="fa-brands fa-telegram text-base"></i>
+                                        <span>{{ __('Continue with Telegram') }}</span>
+                                    </button>
                                     <p class="mt-1.5 text-[11px] text-[#78716C] leading-relaxed">
                                         {{ __('Add Telegram to confirm your phone number.') }}
-                                        @if(! $accountTelegramLinked && $accountSignedIn)
-                                            <button type="button" wire:click="openLinkTelegram" class="font-semibold text-[#0077B5] hover:underline cursor-pointer">{{ __('Add Telegram') }}</button>
-                                        @endif
+                                    </p>
+                                @endif
+                            </div>
+
+                            <!-- Email: подтверждается через Google -->
+                            <div data-email-status="{{ $emailStatus }}">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-xs font-semibold text-[#78716C]">
+                                        {{ __('Email') }}
+                                    </label>
+                                    @if($emailStatus === 'verified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-check text-[10px]"></i>
+                                            <span>{{ $pt['verified'] }}</span>
+                                        </span>
+                                    @elseif($emailStatus === 'unverified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold">
+                                            <span>{{ __('Not confirmed') }}</span>
+                                        </span>
+                                    @endif
+                                </div>
+
+                                @if($emailStatus !== 'missing')
+                                    <input
+                                        type="email"
+                                        data-email-field
+                                        disabled
+                                        value="{{ $accountEmail }}"
+                                        class="w-full px-4 py-2.5 rounded-xl text-xs font-bold {{ $emailStatus === 'verified' ? 'bg-emerald-50/40 border border-emerald-200/70 text-emerald-950' : 'bg-[#FAF8F6] border border-[#E3DBD5] text-[#57534E]' }}"
+                                    />
+                                @elseif($accountSignedIn)
+                                    <a
+                                        href="{{ route('auth.google', ['link' => 1, 'redirect' => '/profile']) }}"
+                                        class="w-full py-3 px-4 rounded-xl bg-white hover:bg-[#FAF7F5] border border-[#E3DBD5] text-[#1C1917] text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <i class="fa-brands fa-google text-base text-[#DB4437]"></i>
+                                        <span>{{ __('Continue with Google') }}</span>
+                                    </a>
+                                    <p class="mt-1.5 text-[11px] text-[#78716C] leading-relaxed">
+                                        {{ __('Add your email with Google, it is confirmed at once.') }}
                                     </p>
                                 @endif
                             </div>
@@ -600,37 +635,6 @@
                             </button>
                         </form>
                     </div>
-
-                    @if($accountSignedIn && (! $accountHasPassword || ! $accountTelegramLinked))
-                        <!-- Необязательные способы входа: пароль и Telegram -->
-                        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-sm max-w-2xl mt-4 space-y-3">
-                            <h3 class="font-serif text-lg font-bold text-[#1C1917]">
-                                {{ __('Sign-in options') }}
-                            </h3>
-
-                            @if(! $accountHasPassword)
-                                <button
-                                    type="button"
-                                    wire:click="openSetPassword"
-                                    class="w-full py-3 px-4 rounded-xl bg-[#FAF7F5] hover:bg-[#F2EAE4] border border-[#E3DBD5] text-[#1C1917] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                    <i class="fa-solid fa-key text-xs"></i>
-                                    <span>{{ __('Set a password for email sign-in') }}</span>
-                                </button>
-                            @endif
-
-                            @if(! $accountTelegramLinked)
-                                <button
-                                    type="button"
-                                    wire:click="openLinkTelegram"
-                                    class="w-full py-3 px-4 rounded-xl bg-[#0088CC]/10 hover:bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0077B5] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                    <i class="fa-brands fa-telegram text-base"></i>
-                                    <span>{{ __('Add Telegram') }}</span>
-                                </button>
-                            @endif
-                        </div>
-                    @endif
                 @endif
             </div>
         @endif

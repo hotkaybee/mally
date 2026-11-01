@@ -3,7 +3,8 @@
 namespace Tests\Feature;
 
 use App\Livewire\Storefront\HomePage;
-use App\Livewire\Storefront\ProfilePage;
+use App\Mail\AccountExistsMail;
+use App\Mail\AuthCodeMail;
 use App\Models\Customer;
 use App\Models\TelegramLoginRequest;
 use App\Models\User;
@@ -17,6 +18,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
 use Laravel\Socialite\Contracts\Factory;
@@ -103,12 +105,25 @@ class GoogleAuthTest extends TestCase
         return $this->get('/auth/google/callback?code=auth-code&state=state');
     }
 
+    /** An account registered the usual way: email + password. */
     private function emailUser(array $attrs = []): User
     {
         return User::create(array_merge([
             'name' => 'Gmail Owner',
             'email' => 'malika@gmail.com',
             'password' => 'OwnerPass123',
+        ], $attrs));
+    }
+
+    /** A Telegram account: phone confirmed in the bot, no email. */
+    private function telegramUser(array $attrs = []): User
+    {
+        return User::create(array_merge([
+            'name' => 'Tg Only',
+            'phone' => self::PHONE,
+            'telegram_id' => self::TG_ID,
+            'phone_verified_at' => now(),
+            'password' => 'TgPass12345',
         ], $attrs));
     }
 
@@ -125,6 +140,11 @@ class GoogleAuthTest extends TestCase
         app(CustomerAccountService::class)->login($res['user']);
 
         return $res['user'];
+    }
+
+    private function signIn(User $user): void
+    {
+        app(CustomerAccountService::class)->login($user->refresh());
     }
 
     private function tokenFrom($component): string
@@ -157,7 +177,7 @@ class GoogleAuthTest extends TestCase
     }
 
     /** Signed in, on the "add Telegram" offer, bot already started. */
-    private function telegramLinkStarted(User $user)
+    private function telegramLinkStarted()
     {
         $component = Livewire::test(HomePage::class)
             ->call('openLinkTelegram')
@@ -169,6 +189,24 @@ class GoogleAuthTest extends TestCase
         $this->bot(['text' => '/start login_'.$this->tokenFrom($component)]);
 
         return $component;
+    }
+
+    private function fakeRedirectProvider(array $expectedParams): void
+    {
+        $provider = Mockery::mock(GoogleProvider::class);
+        $provider->shouldReceive('scopes')->with(['openid', 'email', 'profile'])->once()->andReturnSelf();
+        $provider->shouldReceive('with')->with($expectedParams)->once()->andReturnSelf();
+        $provider->shouldReceive('redirect')->once()->andReturn(redirect('https://accounts.google.com/o/oauth2/auth'));
+        $this->app->instance(Factory::class, new class($provider) implements Factory
+        {
+            public function __construct(private $provider) {}
+
+            public function driver($driver = null)
+            {
+                return $this->provider;
+            }
+        });
+        Socialite::clearResolvedInstance(Factory::class);
     }
 
     // ----------------------------------------------------- redirect to Google
@@ -185,11 +223,7 @@ class GoogleAuthTest extends TestCase
 
     public function test_redirect_asks_google_for_openid_email_profile_and_keeps_a_safe_return_path(): void
     {
-        $provider = Mockery::mock(GoogleProvider::class);
-        $provider->shouldReceive('scopes')->with(['openid', 'email', 'profile'])->once()->andReturnSelf();
-        $provider->shouldReceive('with')->with(['prompt' => 'select_account'])->once()->andReturnSelf();
-        $provider->shouldReceive('redirect')->once()->andReturn(redirect('https://accounts.google.com/o/oauth2/auth'));
-        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+        $this->fakeRedirectProvider(['prompt' => 'select_account']);
 
         $this->get('/auth/google?redirect=/cart')
             ->assertRedirect('https://accounts.google.com/o/oauth2/auth');
@@ -199,15 +233,25 @@ class GoogleAuthTest extends TestCase
 
     public function test_an_external_return_path_is_dropped(): void
     {
-        $provider = Mockery::mock(GoogleProvider::class);
-        $provider->shouldReceive('scopes')->andReturnSelf();
-        $provider->shouldReceive('with')->andReturnSelf();
-        $provider->shouldReceive('redirect')->andReturn(redirect('https://accounts.google.com/o/oauth2/auth'));
-        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+        $this->fakeRedirectProvider(['prompt' => 'select_account']);
 
         $this->get('/auth/google?redirect=https://evil.example/steal')->assertRedirect();
 
         $this->assertSame('/', session(GoogleAuthService::SESSION_REDIRECT));
+    }
+
+    public function test_the_typed_email_is_passed_to_google_as_a_hint(): void
+    {
+        $this->fakeRedirectProvider(['prompt' => 'select_account', 'login_hint' => 'malika@gmail.com']);
+
+        $this->get('/auth/google?login_hint=Malika@Gmail.com')->assertRedirect();
+    }
+
+    public function test_a_junk_hint_is_not_passed_to_google(): void
+    {
+        $this->fakeRedirectProvider(['prompt' => 'select_account']);
+
+        $this->get('/auth/google?login_hint=not-an-email')->assertRedirect();
     }
 
     public function test_without_google_credentials_the_button_says_it_is_unavailable(): void
@@ -234,7 +278,7 @@ class GoogleAuthTest extends TestCase
         $this->assertSame('malika@gmail.com', $user->email);
         $this->assertSame('google-sub-1', $user->google_id);
         $this->assertNotNull($user->email_verified_at, 'Google confirmed the email: no code or letter needed.');
-        $this->assertNull($user->password, 'A Google account has no local password until the owner sets one.');
+        $this->assertNull($user->password, 'No password is asked: Google already proved who this is.');
         $this->assertFalse($user->is_admin);
         $this->assertSame('Malika Karimova', $user->name);
 
@@ -316,7 +360,6 @@ class GoogleAuthTest extends TestCase
 
         $this->assertNull($owner->fresh()->google_id);
         $this->assertNull(session('mally_customer_id'));
-        $this->assertNull(session(GoogleAuthService::SESSION_LINK));
     }
 
     public function test_email_verified_as_the_string_false_is_not_verified(): void
@@ -333,100 +376,39 @@ class GoogleAuthTest extends TestCase
         $this->assertNotNull(User::sole()->email_verified_at);
     }
 
-    public function test_an_account_is_found_by_sub_never_by_email(): void
-    {
-        $this->emailUser(['email' => 'someone.else@gmail.com']);
+    // ----------------------------- an email that already has an account: no password
 
-        // A different Google account that merely claims the email is not that user.
-        $this->googleCallback($this->googleProfile(['sub' => 'attacker-sub', 'email' => 'someone.else@gmail.com']))->assertRedirect('/');
-
-        $this->assertNull(session('mally_customer_id'));
-        $this->assertNull(User::where('email', 'someone.else@gmail.com')->value('google_id'));
-    }
-
-    // ------------------------------------------- email already has an account
-
-    public function test_a_matching_email_is_not_merged_automatically(): void
+    public function test_a_google_email_that_already_has_an_account_signs_in_to_it_without_a_password(): void
     {
         $owner = $this->emailUser();
+        $customerId = $owner->customer()->firstOrCreate([], ['first_name' => 'Gmail', 'last_name' => 'Owner', 'source' => 'website'])->id;
 
         $this->googleCallback($this->googleProfile())->assertRedirect('/');
-
-        $this->assertSame(1, User::count());
-        $this->assertNull($owner->fresh()->google_id, 'No silent merge.');
-        $this->assertNull(session('mally_customer_id'), 'Not signed in until the owner proves the account is theirs.');
-        $this->assertSame('link', session(GoogleAuthService::SESSION_OPEN));
-        $this->assertSame($owner->id, session(GoogleAuthService::SESSION_LINK)['user_id']);
-    }
-
-    public function test_the_owner_links_google_with_the_account_password(): void
-    {
-        $owner = $this->emailUser();
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-
-        Livewire::test(HomePage::class)
-            ->assertSet('isAuthModalOpen', true)
-            ->assertSet('authStep', 'google-link')
-            ->assertSet('authEmail', 'malika@gmail.com')
-            ->set('authPassword', 'WrongPass123')
-            ->call('linkGoogleWithPassword')
-            ->assertHasErrors('authPassword')
-            ->assertSet('authStep', 'google-link');
-
-        $this->assertNull($owner->fresh()->google_id, 'A wrong password links nothing.');
-        $this->assertNull(session('mally_customer_id'));
-
-        Livewire::test(HomePage::class)
-            ->call('openAuthModal')
-            ->assertSet('authStep', 'login');
-
-        // A fresh page load re-reads the pending link only once (flash), so open it directly.
-        session([GoogleAuthService::SESSION_OPEN => 'link']);
-        Livewire::test(HomePage::class)
-            ->assertSet('authStep', 'google-link')
-            ->set('authPassword', 'OwnerPass123')
-            ->call('linkGoogleWithPassword')
-            ->assertSet('isAuthModalOpen', false);
 
         $owner->refresh();
+        $this->assertSame(1, User::count(), 'No second account.');
         $this->assertSame('google-sub-1', $owner->google_id);
         $this->assertNotNull($owner->email_verified_at);
-        $this->assertSame(1, User::count());
-        $this->assertNotNull(session('mally_customer_id'));
-        $this->assertNull(session(GoogleAuthService::SESSION_LINK), 'The pending link is single-use.');
-
-        // From now on Google signs in by sub, without the password.
-        session()->invalidate();
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-        $this->assertNotNull(session('mally_customer_id'));
-        $this->assertSame(1, User::count());
+        $this->assertSame($customerId, session('mally_customer_id'), 'Signed in to the existing account, with its orders.');
+        $this->assertNull(session(GoogleAuthService::SESSION_OPEN), 'An existing account is not onboarded again.');
+        $this->assertStringContainsString('привязан', (string) session('mally_toast.message'));
+        $this->assertTrue(Hash::check('OwnerPass123', $owner->password), 'The old password keeps working.');
     }
 
-    public function test_linking_is_rate_limited_like_any_password_attempt(): void
-    {
-        $this->emailUser();
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-
-        $component = Livewire::test(HomePage::class)->assertSet('authStep', 'google-link');
-        for ($i = 0; $i < 12; $i++) {
-            $component->set('authPassword', 'Wrong'.$i.'Pass')->call('linkGoogleWithPassword');
-        }
-
-        // Even the right password is refused once the limit is hit.
-        $component->set('authPassword', 'OwnerPass123')->call('linkGoogleWithPassword')
-            ->assertHasErrors('authPassword');
-        $this->assertNull(User::sole()->google_id);
-    }
-
-    public function test_the_pending_link_expires(): void
+    public function test_after_linking_both_ways_of_signing_in_work_for_the_same_account(): void
     {
         $owner = $this->emailUser();
         $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        $customerId = session('mally_customer_id');
 
-        $this->travel(GoogleAuthService::LINK_TTL_MINUTES + 1)->minutes();
+        session()->invalidate();
+        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'OwnerPass123', '10.4.4.4')['success']);
 
-        Livewire::test(HomePage::class)->assertSet('authStep', 'login');
-        $this->assertNull($owner->fresh()->google_id);
+        session()->invalidate();
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        $this->assertSame($customerId, session('mally_customer_id'));
+        $this->assertSame(1, User::count());
+        $this->assertSame($owner->id, User::sole()->id);
     }
 
     public function test_an_admin_email_is_never_linked_or_signed_in(): void
@@ -437,103 +419,180 @@ class GoogleAuthTest extends TestCase
 
         $this->assertNull($admin->fresh()->google_id);
         $this->assertNull(session('mally_customer_id'));
-        $this->assertNull(session(GoogleAuthService::SESSION_LINK));
         $this->assertSame(1, User::count());
     }
 
-    public function test_an_account_already_linked_to_another_google_cannot_be_linked_again(): void
+    public function test_an_account_that_already_has_another_google_is_not_taken_over(): void
     {
         $this->emailUser(['google_id' => 'someone-elses-sub']);
 
         $this->googleCallback($this->googleProfile())->assertRedirect('/');
 
-        $this->assertNull(session(GoogleAuthService::SESSION_LINK));
         $this->assertNull(session('mally_customer_id'));
         $this->assertSame('someone-elses-sub', User::sole()->google_id);
     }
 
-    public function test_linking_refuses_a_different_email_than_the_account_has(): void
+    public function test_the_same_google_email_cannot_be_used_by_two_google_ids(): void
     {
-        $owner = $this->emailUser();
-
-        $result = app(CustomerAccountService::class)->linkGoogle($owner, 'google-sub-1', 'other@gmail.com');
-
-        $this->assertSame(CustomerAccountService::GOOGLE_EMAIL_TAKEN, $result);
-        $this->assertNull($owner->fresh()->google_id);
-    }
-
-    // ------------------------------------------ optional password after Google
-
-    public function test_a_new_google_user_is_offered_a_password_and_can_set_it(): void
-    {
-        $user = $this->signedInGoogleUser();
-        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
-
-        Livewire::test(HomePage::class)
-            ->assertSet('isAuthModalOpen', true)
-            ->assertSet('authStep', 'set-password')
-            ->assertSeeHtml('wire:model="authPassword"')
-            ->assertSeeHtml('wire:model="authPasswordConfirmation"')
-            ->assertSeeHtml('wire:click="skipSetPassword"')
-            ->set('authPassword', 'GoodPass1234')
-            ->set('authPasswordConfirmation', 'GoodPass1234')
-            ->call('setAccountPassword')
-            ->assertHasNoErrors()
-            ->assertSet('authStep', 'offer-telegram');
-
-        $user->refresh();
-        $this->assertTrue($user->hasPassword());
-        $this->assertNotSame('GoodPass1234', $user->password, 'Only a hash is stored.');
-        $this->assertTrue(Hash::check('GoodPass1234', $user->password));
-        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'GoodPass1234', '10.1.1.1')['success']);
-        $this->assertNotNull(session('mally_customer_id'), 'Setting the password keeps the customer signed in.');
-    }
-
-    public function test_the_password_must_match_and_be_long_enough(): void
-    {
-        $user = $this->signedInGoogleUser();
-        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
-
-        Livewire::test(HomePage::class)
-            ->set('authPassword', 'GoodPass1234')
-            ->set('authPasswordConfirmation', 'Different1234')
-            ->call('setAccountPassword')
-            ->assertHasErrors('authPasswordConfirmation')
-            ->assertSet('authStep', 'set-password')
-            ->set('authPassword', 'short')
-            ->set('authPasswordConfirmation', 'short')
-            ->call('setAccountPassword')
-            ->assertHasErrors('authPassword')
-            ->assertSet('authStep', 'set-password');
-
-        $this->assertFalse($user->fresh()->hasPassword());
-    }
-
-    public function test_skipping_the_password_and_telegram_leaves_a_working_google_account(): void
-    {
-        $user = $this->signedInGoogleUser();
-        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
-
-        Livewire::test(HomePage::class)
-            ->assertSet('authStep', 'set-password')
-            ->call('skipSetPassword')
-            ->assertSet('authStep', 'offer-telegram')
-            ->assertSet('isAuthModalOpen', true)
-            ->call('skipTelegramOffer')
-            ->assertSet('isAuthModalOpen', false);
-
-        $user->refresh();
-        $this->assertFalse($user->hasPassword());
-        $this->assertNull($user->telegram_id);
-
-        // The account still works through Google alone.
-        session()->invalidate();
         $this->googleCallback($this->googleProfile())->assertRedirect('/');
-        $this->assertSame($user->id, User::sole()->id);
+        session()->invalidate();
+
+        // Another Google identity that now claims the same address (e.g. an address that changed hands).
+        $this->googleCallback($this->googleProfile(['sub' => 'other-sub']))->assertRedirect('/');
+
+        $this->assertSame(1, User::count());
+        $this->assertSame('google-sub-1', User::sole()->google_id);
+        $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_a_google_account_with_a_different_email_is_a_separate_account(): void
+    {
+        $owner = $this->emailUser(['email' => 'work@company.uz']);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertSame(2, User::count());
+        $this->assertNull($owner->fresh()->google_id, 'Nothing is merged by name or by guessing.');
+        $this->assertSame('malika@gmail.com', User::where('google_id', 'google-sub-1')->value('email'));
+    }
+
+    public function test_a_telegram_account_without_email_is_not_merged_with_a_google_account(): void
+    {
+        $telegram = $this->telegramUser();
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertSame(2, User::count());
+        $this->assertNull($telegram->fresh()->google_id);
+        $this->assertNull(User::where('google_id', 'google-sub-1')->value('telegram_id'));
+    }
+
+    public function test_a_customer_without_an_account_is_not_taken_over_by_a_matching_google_email(): void
+    {
+        // Entered by hand in the admin: it has orders, but nobody proved it is theirs.
+        $manual = Customer::create(['first_name' => 'Manual', 'last_name' => 'Entry', 'email' => 'malika@gmail.com', 'source' => 'website']);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertNull($manual->fresh()->user_id);
+        $this->assertNotSame($manual->id, session('mally_customer_id'));
+        $this->assertSame(2, Customer::count());
+    }
+
+    public function test_the_email_sign_up_does_not_create_a_second_account_for_a_google_email(): void
+    {
+        Mail::fake();
+        $this->signedInGoogleUser();
+
+        $res = app(EmailAuthService::class)->sendCode('malika@gmail.com', 'register', '10.2.2.2');
+
+        $this->assertSame(1, User::count());
+        $this->assertTrue($res['success'], 'The answer is the same whether or not the email has an account.');
+        Mail::assertSent(AccountExistsMail::class);
+        Mail::assertNotSent(AuthCodeMail::class);
+    }
+
+    public function test_a_google_account_can_get_a_password_through_the_forgot_password_email_code(): void
+    {
+        $user = $this->signedInGoogleUser();
+        $this->assertFalse($user->hasPassword());
+
+        $res = app(EmailAuthService::class)->resetPassword('malika@gmail.com', 'ResetPass12345');
+
+        $this->assertTrue($res['success']);
+        $user->refresh();
+        $this->assertTrue(Hash::check('ResetPass12345', $user->password));
+        $this->assertSame('google-sub-1', $user->google_id, 'Google stays linked.');
+        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'ResetPass12345', '10.3.3.3')['success']);
+    }
+
+    // ------------------------------------- the sign-in form for a Google-only email
+
+    public function test_the_sign_in_form_sends_a_google_only_email_back_to_google(): void
+    {
+        $this->signedInGoogleUser();
+        session()->invalidate();
+        session(['mally_locale' => 'ru']);
+
+        Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->set('authEmail', 'Malika@Gmail.com')
+            ->set('authPassword', '')
+            ->call('loginWithPassword')
+            ->assertSet('authGoogleHint', true)
+            ->assertHasNoErrors()
+            ->assertSee('Вы входили через Google. Пожалуйста, продолжите тем же способом')
+            ->assertSeeHtml('login_hint=malika%40gmail.com');
+
+        $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_the_google_hint_does_not_depend_on_the_typed_password(): void
+    {
+        $this->signedInGoogleUser();
+        session()->invalidate();
+
+        Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->set('authEmail', 'malika@gmail.com')
+            ->set('authPassword', 'some-guess-12345')
+            ->call('loginWithPassword')
+            ->assertSet('authGoogleHint', true)
+            ->assertSet('authPassword', '');
+
+        $this->assertNull(session('mally_customer_id'));
+    }
+
+    public function test_an_account_with_a_password_signs_in_normally_even_if_google_is_linked(): void
+    {
+        $this->emailUser(['google_id' => 'google-sub-1']);
+
+        Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->set('authEmail', 'malika@gmail.com')
+            ->set('authPassword', 'WrongPass1234')
+            ->call('loginWithPassword')
+            ->assertSet('authGoogleHint', false)
+            ->assertHasErrors('authPassword');
+
+        Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->set('authEmail', 'malika@gmail.com')
+            ->set('authPassword', 'OwnerPass123')
+            ->call('loginWithPassword')
+            ->assertSet('isAuthModalOpen', false);
         $this->assertNotNull(session('mally_customer_id'));
     }
 
-    public function test_a_google_account_without_password_cannot_be_entered_with_an_empty_or_guessed_password(): void
+    public function test_an_unknown_email_gets_the_ordinary_wrong_password_answer(): void
+    {
+        Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->set('authEmail', 'nobody@gmail.com')
+            ->set('authPassword', 'WrongPass1234')
+            ->call('loginWithPassword')
+            ->assertSet('authGoogleHint', false)
+            ->assertHasErrors('authPassword');
+    }
+
+    public function test_the_google_hint_is_rate_limited(): void
+    {
+        $this->signedInGoogleUser();
+        session()->invalidate();
+        for ($i = 0; $i < 20; $i++) {
+            RateLimiter::hit('google-only-hint:127.0.0.1', 60);
+        }
+
+        Livewire::test(HomePage::class)
+            ->call('openAuthModal')
+            ->set('authEmail', 'malika@gmail.com')
+            ->set('authPassword', 'WrongPass1234')
+            ->call('loginWithPassword')
+            ->assertSet('authGoogleHint', false)
+            ->assertHasErrors('authPassword');
+    }
+
+    public function test_a_google_account_cannot_be_entered_with_an_empty_or_guessed_password(): void
     {
         $this->signedInGoogleUser();
         $auth = app(EmailAuthService::class);
@@ -542,40 +601,173 @@ class GoogleAuthTest extends TestCase
         $this->assertFalse($auth->attemptLogin('malika@gmail.com', 'anything12345', '10.1.1.2')['success']);
     }
 
-    public function test_setting_a_password_is_only_possible_for_an_account_that_has_none(): void
+    // ------------------------------------------ adding Google from the profile
+
+    public function test_the_profile_button_asks_google_in_link_mode_only_for_a_signed_in_account(): void
     {
-        $user = $this->signedInGoogleUser();
-        $user->update(['password' => 'ExistingPass123']);
-        app(CustomerAccountService::class)->login($user->refresh());
+        $this->fakeRedirectProvider(['prompt' => 'select_account']);
+        $this->signIn($this->telegramUser());
 
-        Livewire::test(HomePage::class)
-            ->set('authPassword', 'ReplacedPass123')
-            ->set('authPasswordConfirmation', 'ReplacedPass123')
-            ->call('setAccountPassword');
+        $this->get('/auth/google?link=1&redirect=/profile')->assertRedirect();
 
-        $this->assertTrue(Hash::check('ExistingPass123', $user->fresh()->password), 'No password change without proving the old one.');
+        $this->assertTrue(session(GoogleAuthService::SESSION_MODE_LINK));
     }
 
-    public function test_nobody_signed_out_can_set_a_password_or_see_the_onboarding(): void
+    public function test_link_mode_is_ignored_when_nobody_is_signed_in(): void
     {
-        $user = User::create(['name' => 'X', 'email' => 'x@gmail.com', 'google_id' => 'sub-x', 'password' => null]);
-        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
+        $this->fakeRedirectProvider(['prompt' => 'select_account']);
 
-        Livewire::test(HomePage::class)
-            ->assertSet('isAuthModalOpen', false)
-            ->set('authPassword', 'GoodPass1234')
-            ->set('authPasswordConfirmation', 'GoodPass1234')
-            ->call('setAccountPassword');
+        $this->get('/auth/google?link=1')->assertRedirect();
 
-        $this->assertFalse($user->fresh()->hasPassword());
+        $this->assertNull(session(GoogleAuthService::SESSION_MODE_LINK));
+    }
+
+    public function test_a_telegram_account_adds_its_email_through_google(): void
+    {
+        $user = $this->telegramUser();
+        $this->signIn($user);
+        session([GoogleAuthService::SESSION_MODE_LINK => true, GoogleAuthService::SESSION_REDIRECT => '/profile']);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/profile');
+
+        $user->refresh();
+        $this->assertSame(1, User::count(), 'The same account, no new one.');
+        $this->assertSame('malika@gmail.com', $user->email);
+        $this->assertSame('google-sub-1', $user->google_id);
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertSame(self::TG_ID, $user->telegram_id);
+        $this->assertSame('malika@gmail.com', $user->customer()->value('email'));
+        $this->assertSame($user->customer()->value('id'), session('mally_customer_id'));
+    }
+
+    public function test_adding_google_from_the_profile_refuses_an_email_of_another_account(): void
+    {
+        $other = $this->emailUser();
+        $user = $this->telegramUser();
+        $this->signIn($user);
+        session([GoogleAuthService::SESSION_MODE_LINK => true]);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertNull($user->fresh()->email);
+        $this->assertNull($user->fresh()->google_id);
+        $this->assertNull($other->fresh()->google_id);
+        $this->assertSame($user->customer()->value('id'), session('mally_customer_id'), 'Still the same signed-in account.');
+        $this->assertSame('Этот email уже принадлежит другому профилю.', session('mally_toast.message'));
+    }
+
+    public function test_adding_google_from_the_profile_refuses_a_google_that_belongs_to_another_account(): void
+    {
+        $this->emailUser(['email' => 'other@gmail.com', 'google_id' => 'google-sub-1']);
+        $user = $this->telegramUser();
+        $this->signIn($user);
+        session([GoogleAuthService::SESSION_MODE_LINK => true]);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertNull($user->fresh()->google_id);
+        $this->assertNull($user->fresh()->email);
+    }
+
+    public function test_adding_google_from_the_profile_refuses_an_unconfirmed_email(): void
+    {
+        $user = $this->telegramUser();
+        $this->signIn($user);
+        session([GoogleAuthService::SESSION_MODE_LINK => true]);
+
+        $this->googleCallback($this->googleProfile(['email_verified' => false]))->assertRedirect('/');
+
+        $this->assertNull($user->fresh()->email);
+        $this->assertNull($user->fresh()->google_id);
+    }
+
+    public function test_an_account_with_an_email_only_accepts_google_with_that_same_email(): void
+    {
+        $user = $this->emailUser(['email' => 'work@company.uz']);
+        $this->signIn($user);
+        session([GoogleAuthService::SESSION_MODE_LINK => true]);
+
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+
+        $this->assertNull($user->fresh()->google_id);
+        $this->assertSame('work@company.uz', $user->fresh()->email);
+    }
+
+    public function test_the_link_mode_flag_is_single_use(): void
+    {
+        $user = $this->telegramUser();
+        $this->signIn($user);
+        session([GoogleAuthService::SESSION_MODE_LINK => true]);
+        $this->googleCallback($this->googleProfile(['email_verified' => false]))->assertRedirect('/');
+
+        $this->assertNull(session(GoogleAuthService::SESSION_MODE_LINK));
+    }
+
+    public function test_an_admin_cannot_use_the_profile_link(): void
+    {
+        $res = app(CustomerAccountService::class)->attachGoogle(
+            User::factory()->admin()->create(['email' => 'admin@mally.uz']),
+            ['sub' => 's', 'email' => 'new@gmail.com', 'email_verified' => true, 'first_name' => 'A', 'last_name' => 'B']
+        );
+
+        $this->assertSame(CustomerAccountService::GOOGLE_ALREADY_LINKED, $res);
     }
 
     // --------------------------------------------- optional Telegram after Google
 
+    public function test_a_new_google_user_is_offered_telegram_and_never_a_password(): void
+    {
+        $this->signedInGoogleUser();
+        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
+
+        Livewire::test(HomePage::class)
+            ->assertSet('isAuthModalOpen', true)
+            ->assertSet('authStep', 'offer-telegram')
+            ->assertSee('Добавить Telegram в профиль?')
+            ->assertDontSeeHtml('wire:model="authPassword"')
+            ->assertSeeHtml('wire:click="skipTelegramOffer"');
+    }
+
+    public function test_skipping_telegram_leaves_a_working_google_account(): void
+    {
+        $user = $this->signedInGoogleUser();
+        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
+
+        Livewire::test(HomePage::class)
+            ->call('skipTelegramOffer')
+            ->assertSet('isAuthModalOpen', false);
+
+        $user->refresh();
+        $this->assertNull($user->telegram_id);
+        $this->assertNull($user->phone);
+
+        // The account still works through Google alone.
+        session()->invalidate();
+        $this->googleCallback($this->googleProfile())->assertRedirect('/');
+        $this->assertSame($user->id, User::sole()->id);
+        $this->assertNotNull(session('mally_customer_id'));
+    }
+
+    public function test_the_telegram_offer_is_not_shown_when_the_bot_is_not_set_up(): void
+    {
+        config(['services.telegram.auth_bot_token' => '', 'services.telegram.auth_bot_username' => '']);
+        $this->signedInGoogleUser();
+        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
+
+        Livewire::test(HomePage::class)->assertSet('isAuthModalOpen', false);
+    }
+
+    public function test_nobody_signed_out_sees_the_onboarding(): void
+    {
+        session([GoogleAuthService::SESSION_OPEN => 'onboarding']);
+
+        Livewire::test(HomePage::class)->assertSet('isAuthModalOpen', false);
+    }
+
     public function test_telegram_can_be_added_to_the_profile_through_the_bot(): void
     {
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
 
         // The code arrives at once: the phone is not needed to link.
         $component->call('checkTelegramAuthStatus')->assertSet('authStep', 'telegram-code');
@@ -595,7 +787,7 @@ class GoogleAuthTest extends TestCase
     public function test_a_phone_shared_in_the_bot_is_saved_and_confirmed(): void
     {
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
 
         $this->bot(['contact' => ['phone_number' => self::PHONE, 'user_id' => (int) self::TG_ID, 'first_name' => 'Malika']]);
 
@@ -611,10 +803,38 @@ class GoogleAuthTest extends TestCase
         $this->assertSame(self::PHONE, Customer::sole()->phone_number);
     }
 
+    public function test_telegram_without_a_confirmed_phone_can_be_started_again_to_add_the_phone(): void
+    {
+        $user = $this->signedInGoogleUser();
+        $user->forceFill(['telegram_id' => self::TG_ID])->save();
+        $this->signIn($user);
+
+        $component = $this->telegramLinkStarted();
+        $this->bot(['contact' => ['phone_number' => self::PHONE, 'user_id' => (int) self::TG_ID, 'first_name' => 'Malika']]);
+        $component->call('checkTelegramAuthStatus')
+            ->set('authTelegramCode', $this->codeSentByBot())
+            ->call('verifyTelegramCode');
+
+        $user->refresh();
+        $this->assertSame(self::PHONE, $user->phone);
+        $this->assertNotNull($user->phone_verified_at);
+    }
+
+    public function test_an_account_with_a_confirmed_phone_has_nothing_to_add(): void
+    {
+        $this->signIn($this->telegramUser());
+
+        Livewire::test(HomePage::class)
+            ->call('openLinkTelegram')
+            ->assertSet('isAuthModalOpen', false)
+            ->call('startTelegramLink')
+            ->assertSet('isAuthModalOpen', false);
+    }
+
     public function test_somebody_elses_contact_does_not_add_a_phone(): void
     {
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
 
         $this->bot(['contact' => ['phone_number' => self::PHONE, 'user_id' => 999, 'first_name' => 'Other']]);
 
@@ -631,7 +851,7 @@ class GoogleAuthTest extends TestCase
     {
         User::create(['name' => 'Phone Owner', 'email' => 'po@gmail.com', 'phone' => self::PHONE, 'password' => 'OwnerPass123']);
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
 
         $this->bot(['contact' => ['phone_number' => self::PHONE, 'user_id' => (int) self::TG_ID, 'first_name' => 'Malika']]);
 
@@ -649,7 +869,7 @@ class GoogleAuthTest extends TestCase
     {
         User::create(['name' => 'Other', 'email' => 'o@gmail.com', 'telegram_id' => self::TG_ID, 'password' => 'OwnerPass123']);
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
 
         $component->call('checkTelegramAuthStatus')
             ->set('authTelegramCode', $this->codeSentByBot())
@@ -665,7 +885,7 @@ class GoogleAuthTest extends TestCase
     public function test_an_expired_telegram_link_is_not_accepted(): void
     {
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
         $component->call('checkTelegramAuthStatus')->assertSet('authStep', 'telegram-code');
         $code = $this->codeSentByBot();
 
@@ -682,7 +902,7 @@ class GoogleAuthTest extends TestCase
     public function test_a_wrong_telegram_code_links_nothing(): void
     {
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
         $component->call('checkTelegramAuthStatus');
 
         $component->set('authTelegramCode', '000000')
@@ -695,7 +915,7 @@ class GoogleAuthTest extends TestCase
     public function test_the_link_code_is_single_use(): void
     {
         $user = $this->signedInGoogleUser();
-        $component = $this->telegramLinkStarted($user);
+        $component = $this->telegramLinkStarted();
         $component->call('checkTelegramAuthStatus');
         $code = $this->codeSentByBot();
 
@@ -729,142 +949,12 @@ class GoogleAuthTest extends TestCase
         $this->assertSame($owner->id, User::sole()->id);
     }
 
-    // --------------------------------------------------------------- profile
-
-    public function test_the_profile_offers_the_skipped_steps_later(): void
-    {
-        $user = $this->signedInGoogleUser();
-
-        Livewire::test(ProfilePage::class)
-            ->set('activeTab', 'details')
-            ->assertSeeHtml('wire:click="openSetPassword"')
-            ->assertSeeHtml('wire:click="openLinkTelegram"')
-            ->call('openSetPassword')
-            ->assertSet('isAuthModalOpen', true)
-            ->assertSet('authStep', 'set-password');
-
-        $user->update(['password' => 'GoodPass1234', 'telegram_id' => self::TG_ID]);
-        app(CustomerAccountService::class)->login($user->refresh());
-
-        Livewire::test(ProfilePage::class)
-            ->set('activeTab', 'details')
-            ->assertDontSeeHtml('wire:click="openSetPassword"')
-            ->assertDontSeeHtml('wire:click="openLinkTelegram"');
-    }
-
     public function test_signed_out_visitors_cannot_open_the_account_steps(): void
     {
         Livewire::test(HomePage::class)
-            ->call('openSetPassword')
-            ->assertSet('isAuthModalOpen', false)
             ->call('openLinkTelegram')
             ->assertSet('isAuthModalOpen', false)
             ->call('startTelegramLink')
             ->assertSet('authStep', 'login');
-    }
-
-    // ------------------------------------------------ other account scenarios
-
-    public function test_a_google_account_with_a_different_email_is_a_separate_account(): void
-    {
-        $owner = $this->emailUser(['email' => 'work@company.uz']);
-
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-
-        $this->assertSame(2, User::count());
-        $this->assertNull($owner->fresh()->google_id, 'Nothing is merged by name or by guessing.');
-        $this->assertSame(User::where('google_id', 'google-sub-1')->value('id'), User::where('email', 'malika@gmail.com')->value('id'));
-        $this->assertNotSame($owner->customer()->value('id'), session('mally_customer_id'));
-    }
-
-    public function test_a_telegram_account_without_email_is_not_merged_with_a_google_account(): void
-    {
-        $telegram = User::create(['name' => 'Tg Only', 'phone' => self::PHONE, 'telegram_id' => self::TG_ID, 'phone_verified_at' => now(), 'password' => 'TgPass12345']);
-
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-
-        $this->assertSame(2, User::count());
-        $this->assertNull($telegram->fresh()->google_id);
-        $this->assertNull(User::where('google_id', 'google-sub-1')->value('telegram_id'));
-    }
-
-    public function test_a_customer_without_an_account_is_not_taken_over_by_a_matching_google_email(): void
-    {
-        // Entered by hand in the admin: it has orders, but nobody proved it is theirs.
-        $manual = Customer::create(['first_name' => 'Manual', 'last_name' => 'Entry', 'email' => 'malika@gmail.com', 'source' => 'website']);
-
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-
-        $this->assertNull($manual->fresh()->user_id);
-        $this->assertNotSame($manual->id, session('mally_customer_id'));
-        $this->assertSame(2, Customer::count());
-    }
-
-    public function test_the_email_sign_up_does_not_create_a_second_account_for_a_google_email(): void
-    {
-        \Illuminate\Support\Facades\Mail::fake();
-        $this->signedInGoogleUser();
-
-        $res = app(EmailAuthService::class)->sendCode('malika@gmail.com', 'register', '10.2.2.2');
-
-        $this->assertSame(1, User::count());
-        $this->assertTrue($res['success'], 'The answer is the same whether or not the email has an account.');
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\AccountExistsMail::class);
-        \Illuminate\Support\Facades\Mail::assertNotSent(\App\Mail\AuthCodeMail::class);
-    }
-
-    public function test_a_google_account_can_get_a_password_through_the_forgot_password_email_code(): void
-    {
-        $user = $this->signedInGoogleUser();
-        $this->assertFalse($user->hasPassword());
-
-        $res = app(EmailAuthService::class)->resetPassword('malika@gmail.com', 'ResetPass12345');
-
-        $this->assertTrue($res['success']);
-        $user->refresh();
-        $this->assertTrue(Hash::check('ResetPass12345', $user->password));
-        $this->assertSame('google-sub-1', $user->google_id, 'Google stays linked.');
-        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'ResetPass12345', '10.3.3.3')['success']);
-    }
-
-    public function test_after_linking_both_ways_of_signing_in_work_for_the_same_account(): void
-    {
-        $owner = $this->emailUser();
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-        session([GoogleAuthService::SESSION_OPEN => 'link']);
-        Livewire::test(HomePage::class)->set('authPassword', 'OwnerPass123')->call('linkGoogleWithPassword');
-        $this->assertSame('google-sub-1', $owner->fresh()->google_id);
-
-        session()->invalidate();
-        $this->assertTrue(app(EmailAuthService::class)->attemptLogin('malika@gmail.com', 'OwnerPass123', '10.4.4.4')['success']);
-
-        session()->invalidate();
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-        $this->assertSame($owner->customer()->value('id'), session('mally_customer_id'));
-        $this->assertSame(1, User::count());
-    }
-
-    public function test_a_second_google_account_cannot_be_linked_to_an_account_that_already_has_one(): void
-    {
-        $owner = $this->emailUser(['google_id' => 'first-google']);
-
-        $this->googleCallback($this->googleProfile(['sub' => 'second-google']))->assertRedirect('/');
-
-        $this->assertSame('first-google', $owner->fresh()->google_id);
-        $this->assertNull(session(GoogleAuthService::SESSION_LINK));
-        $this->assertNull(session('mally_customer_id'));
-    }
-
-    public function test_the_same_google_email_cannot_be_used_by_two_google_ids(): void
-    {
-        $this->googleCallback($this->googleProfile())->assertRedirect('/');
-        session()->invalidate();
-
-        // Another Google identity that now claims the same address (e.g. an address that changed hands).
-        $this->googleCallback($this->googleProfile(['sub' => 'other-sub']))->assertRedirect('/');
-
-        $this->assertSame(1, User::count());
-        $this->assertSame('google-sub-1', User::sole()->google_id);
-        $this->assertNull(session('mally_customer_id'));
     }
 }

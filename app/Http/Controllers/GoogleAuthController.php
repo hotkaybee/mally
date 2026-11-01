@@ -7,7 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirect;
 
-/** "Continue with Google" on the sign-in and registration windows. */
+/** "Continue with Google" on the sign-in and registration windows and in the profile. */
 class GoogleAuthController extends Controller
 {
     public function redirect(Request $request, GoogleAuthService $google): SymfonyRedirect
@@ -16,7 +16,11 @@ class GoogleAuthController extends Controller
             return $google->failRedirect(__('Google sign-in is temporarily unavailable.'));
         }
 
-        return $google->redirectToGoogle($request->query('redirect'));
+        return $google->redirectToGoogle(
+            $request->query('redirect'),
+            $request->boolean('link'),
+            is_string($request->query('login_hint')) ? $request->query('login_hint') : null,
+        );
     }
 
     public function callback(Request $request, GoogleAuthService $google): RedirectResponse

@@ -55,6 +55,29 @@
                     @if($this->authNotice)
                         <p class="mb-4 p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-800 font-medium text-center">{{ $this->authNotice }}</p>
                     @endif
+                    @if($this->authGoogleHint)
+                        @php($googleUrl = route('auth.google', array_filter(['login_hint' => $this->authEmail, 'redirect' => $this->authRedirectTo ?? null])))
+                        <div
+                            x-data
+                            x-init="setTimeout(() => window.location.href = @js($googleUrl), 3000)"
+                            class="mb-5 p-4 rounded-2xl bg-[#FAF7F5] border border-[#EAE3DE] text-center space-y-3"
+                        >
+                            <div class="w-11 h-11 mx-auto rounded-full bg-white border border-[#E3DBD5] flex items-center justify-center shadow-sm">
+                                <i class="fa-brands fa-google text-lg text-[#DB4437]"></i>
+                            </div>
+                            <p class="text-xs text-[#44403C] font-medium leading-relaxed">
+                                {{ __('You signed in with Google before. Please continue the same way: we will take you to Google.') }}
+                            </p>
+                            <a
+                                href="{{ $googleUrl }}"
+                                class="w-full py-3 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                                <i class="fa-brands fa-google text-sm"></i>
+                                <span>{{ __('Continue with Google') }}</span>
+                            </a>
+                        </div>
+                    @endif
+
                     @error('authTelegram')
                         <p role="alert" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
                     @enderror
@@ -824,181 +847,45 @@
                     </button>
                 </div>
 
-            @elseif($step === 'google-link')
-                <!-- GOOGLE: такой email уже есть в аккаунте — привязка только после пароля владельца -->
-                <div x-data="{ showPassword: false }">
-                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
-                        {{ __('Link Google to your account') }}
-                    </h2>
-                    <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
-                        {{ __('An account with :email already exists. Enter its password to link your Google account.', ['email' => $this->authEmail]) }}
-                    </p>
+            @elseif($step === 'offer-telegram')
+                <!-- ПОСЛЕ GOOGLE: необязательная привязка Telegram и телефона через бота -->
+                <div class="space-y-5 text-center">
+                    <div class="w-14 h-14 mx-auto rounded-2xl bg-[#0088CC]/10 flex items-center justify-center">
+                        <i class="fa-brands fa-telegram text-3xl text-[#0088CC]"></i>
+                    </div>
 
-                    <form wire:submit="linkGoogleWithPassword" class="space-y-3.5" novalidate>
-                        <div>
-                            <label for="mally-google-link-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ __('Password') }}
-                            </label>
-                            <div class="relative">
-                                <input
-                                    id="mally-google-link-password"
-                                    :type="showPassword ? 'text' : 'password'"
-                                    type="password"
-                                    wire:model="authPassword"
-                                    autocomplete="current-password"
-                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showPassword = !showPassword"
-                                    :aria-label="showPassword ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
-                                >
-                                    <i class="fa-regular text-xs" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                            @error('authPassword')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                            @error('authEmail')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                        </div>
+                    <div class="space-y-2">
+                        <h2 class="font-serif text-2xl font-bold text-[#1C1917]">
+                            {{ __('Add Telegram to your profile?') }}
+                        </h2>
+                        <p class="text-xs text-[#78716C] leading-relaxed max-w-xs mx-auto">
+                            {{ __('Optional: confirm your Telegram through our bot. You can also share your phone number there, only if you want to. You can do this later in your profile.') }}
+                        </p>
+                    </div>
 
+                    @error('authTelegram')
+                        <p role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">{{ $message }}</p>
+                    @enderror
+
+                    <div class="space-y-2.5">
                         <button
-                            type="submit"
+                            type="button"
+                            wire:click="startTelegramLink"
                             wire:loading.attr="disabled"
-                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md cursor-pointer"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
                         >
-                            {{ __('Link and sign in') }}
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Add Telegram') }}</span>
                         </button>
 
                         <button
                             type="button"
-                            wire:click="closeAuthModal"
-                            class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition cursor-pointer"
-                        >
-                            {{ __('Cancel') }}
-                        </button>
-                    </form>
-                </div>
-
-            @elseif($step === 'set-password')
-                <!-- GOOGLE: необязательный пароль для входа по email -->
-                <div x-data="{ showPassword: false, showPasswordConfirm: false }">
-                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center mb-1.5">
-                        {{ __('Set a password for email sign-in') }}
-                    </h2>
-                    <p class="text-xs text-[#78716C] text-center mb-4 leading-relaxed">
-                        {{ __('Optional: with a password you can also sign in with your email. Google sign-in keeps working without it.') }}
-                    </p>
-
-                    <form wire:submit="setAccountPassword" class="space-y-3.5" novalidate>
-                        <div>
-                            <label for="mally-set-password" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ __('Password') }}
-                            </label>
-                            <div class="relative">
-                                <input
-                                    id="mally-set-password"
-                                    :type="showPassword ? 'text' : 'password'"
-                                    type="password"
-                                    wire:model="authPassword"
-                                    minlength="8"
-                                    autocomplete="new-password"
-                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showPassword = !showPassword"
-                                    :aria-label="showPassword ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
-                                >
-                                    <i class="fa-regular text-xs" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                            @error('authPassword')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <div>
-                            <label for="mally-set-password-confirm" class="block text-[11px] font-semibold uppercase tracking-wider text-[#78716C] mb-1">
-                                {{ __('Repeat password') }}
-                            </label>
-                            <div class="relative">
-                                <input
-                                    id="mally-set-password-confirm"
-                                    :type="showPasswordConfirm ? 'text' : 'password'"
-                                    type="password"
-                                    wire:model="authPasswordConfirmation"
-                                    minlength="8"
-                                    autocomplete="new-password"
-                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#FAF8F6] border border-[#E3DBD5] text-sm text-[#1C1917] focus:outline-none focus:border-[#1C1917]"
-                                />
-                                <button
-                                    type="button"
-                                    @click="showPasswordConfirm = !showPasswordConfirm"
-                                    :aria-label="showPasswordConfirm ? '{{ __('Hide password') }}' : '{{ __('Show password') }}'"
-                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#1C1917] cursor-pointer"
-                                >
-                                    <i class="fa-regular text-xs" :class="showPasswordConfirm ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                            @error('authPasswordConfirmation')
-                                <p role="alert" class="mt-1 text-xs text-rose-600 font-medium">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <button
-                            type="submit"
-                            wire:loading.attr="disabled"
-                            class="w-full py-3.5 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] disabled:opacity-60 text-[#FAF7F5] text-xs font-bold uppercase tracking-wider transition shadow-md mt-2 cursor-pointer"
-                        >
-                            {{ __('Save password') }}
-                        </button>
-
-                        <button
-                            type="button"
-                            wire:click="skipSetPassword"
-                            class="w-full py-2.5 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition cursor-pointer"
+                            wire:click="skipTelegramOffer"
+                            class="w-full py-3 px-5 rounded-xl bg-[#FAF7F5] hover:bg-[#F2EAE4] border border-[#EAE3DE] text-[#57534E] text-xs font-bold uppercase tracking-wider transition cursor-pointer"
                         >
                             {{ __('Skip') }}
                         </button>
-                    </form>
-                </div>
-
-            @elseif($step === 'offer-telegram')
-                <!-- GOOGLE: необязательная привязка Telegram (и телефона через бота) -->
-                <div class="space-y-4">
-                    <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
-                        {{ __('Add Telegram to your profile?') }}
-                    </h2>
-                    <p class="text-xs text-[#78716C] text-center leading-relaxed">
-                        {{ __('Optional: confirm your Telegram through our bot. You can also share your phone number there, only if you want to. You can do this later in your profile.') }}
-                    </p>
-
-                    @error('authTelegram')
-                        <p role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
-                    @enderror
-
-                    <button
-                        type="button"
-                        wire:click="startTelegramLink"
-                        wire:loading.attr="disabled"
-                        class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                        <i class="fa-brands fa-telegram text-base"></i>
-                        <span>{{ __('Add Telegram') }}</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        wire:click="skipTelegramOffer"
-                        class="w-full py-2.5 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition cursor-pointer"
-                    >
-                        {{ __('Skip') }}
-                    </button>
+                    </div>
                 </div>
 
             @elseif($step === 'telegram-register')

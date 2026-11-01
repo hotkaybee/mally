@@ -11,6 +11,7 @@ use App\Services\EmailAuthService;
 use App\Services\GoogleAuthService;
 use App\Services\StorefrontService;
 use App\Services\TelegramAuthService;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
@@ -68,24 +69,21 @@ trait InteractsWithStore
 
     public string $authTelegramCode = '';
 
+    /** This email only has Google to sign in with: the form says so and goes to Google. */
+    #[Locked]
+    public bool $authGoogleHint = false;
+
     /**
-     * After the Google callback the next full page load opens the auth modal
-     * where it left off: link an existing account (password) or the optional
-     * onboarding (password, Telegram) for a brand-new Google account.
+     * After a brand-new Google sign-up the next full page load opens the
+     * optional "add Telegram" offer. (Not a mount hook: Livewire unpacks the
+     * route parameters into those, which breaks pages with an optional
+     * parameter such as the order receipt.)
      */
     public function bootedInteractsWithStore(): void
     {
-        // Not a mount hook: Livewire unpacks the route parameters into those,
-        // which breaks pages with an optional parameter (order receipt).
-        $open = session()->pull(GoogleAuthService::SESSION_OPEN);
-
-        if ($open === 'link' && $this->sessionIdentity(GoogleAuthService::SESSION_LINK)) {
+        if (session()->pull(GoogleAuthService::SESSION_OPEN) === 'onboarding' && $this->currentUser()) {
             $this->openAuthModal();
-            $this->authEmail = (string) $this->sessionIdentity(GoogleAuthService::SESSION_LINK)['email'];
-            $this->authStep = 'google-link';
-        } elseif ($open === 'onboarding' && $this->currentUser()) {
-            $this->openAuthModal();
-            $this->nextAccountOffer(fromPassword: false);
+            $this->offerTelegram();
         }
     }
 
@@ -192,6 +190,7 @@ trait InteractsWithStore
         $this->authPhone = '+998 ';
         $this->authError = '';
         $this->authNotice = '';
+        $this->authGoogleHint = false;
         $this->authCooldownSeconds = 0;
         $this->authRedirectTo = $redirectTo !== null
             ? $this->emailAuth()->sanitizeRedirectPath($redirectTo)
@@ -286,6 +285,14 @@ trait InteractsWithStore
             $hasValidationError = true;
         }
 
+        // The person signed up with Google and has no password: send them back to Google.
+        if (! $hasValidationError && ! $isPhone && $this->googleOnlyEmail($normalizedInput)) {
+            $this->authPassword = '';
+            $this->authGoogleHint = true;
+
+            return;
+        }
+
         if ($this->authPassword === '') {
             $this->failAuth('authPassword', __('Enter your password.'));
             $hasValidationError = true;
@@ -309,6 +316,22 @@ trait InteractsWithStore
         }
 
         $this->finishLogin($res['user']);
+    }
+
+    /**
+     * True when this email belongs to an account that only has Google to sign
+     * in with. Answering it tells whether the email has an account, so it is
+     * rate-limited per IP like the sign-in attempts themselves.
+     */
+    protected function googleOnlyEmail(string $email): bool
+    {
+        $key = 'google-only-hint:'.request()->ip();
+        if (RateLimiter::tooManyAttempts($key, 20)) {
+            return false;
+        }
+        RateLimiter::hit($key, 60);
+
+        return $this->emailAuth()->isGoogleOnlyAccount($email);
     }
 
     /**
@@ -869,108 +892,19 @@ trait InteractsWithStore
     }
 
     // =========================================================================
-    // GOOGLE ACCOUNTS: linking, optional password, optional Telegram
+    // GOOGLE ACCOUNTS: optional Telegram and phone
     // =========================================================================
 
-    /**
-     * A verified Google email matched an existing account. Only the owner of
-     * that account (its password, with the normal sign-in rate limits) may
-     * attach this Google identity to it.
-     */
-    public function linkGoogleWithPassword(): void
-    {
-        $this->clearAuthFeedback();
-
-        $pending = $this->sessionIdentity(GoogleAuthService::SESSION_LINK);
-        if (! $pending) {
-            $this->authStep = 'login';
-            $this->failAuth('authEmail', __('The Google sign-in has expired. Please start again.'));
-
-            return;
-        }
-
-        if ($this->authPassword === '') {
-            $this->failAuth('authPassword', __('Enter your password.'));
-
-            return;
-        }
-
-        $res = $this->emailAuth()->attemptLogin($pending['email'], $this->authPassword, (string) request()->ip());
-        $this->authPassword = '';
-
-        if (! $res['success'] || $res['user']->id !== (int) $pending['user_id']) {
-            $this->failAuth('authPassword', $res['message'] ?? __(EmailAuthService::GENERIC_LOGIN_ERROR));
-
-            return;
-        }
-
-        $linked = $this->accounts()->linkGoogle($res['user'], $pending['sub'], $pending['email']);
-        session()->forget(GoogleAuthService::SESSION_LINK);
-
-        if ($linked !== CustomerAccountService::OK) {
-            $this->authStep = 'login';
-            $this->failAuth('authEmail', __('Could not sign in with Google. Please try again.'));
-
-            return;
-        }
-
-        $this->finishLogin($res['user'], __('Google account linked.'));
-    }
-
-    /** Profile: set a password for an account that has none. */
-    public function openSetPassword(): void
-    {
-        $user = $this->currentUser();
-        if (! $user || $user->hasPassword()) {
-            return;
-        }
-
-        $this->openAuthModal();
-        $this->authStep = 'set-password';
-    }
-
-    /** Profile: add Telegram to an account that has none. */
+    /** Profile: "Continue with Telegram" adds Telegram and a confirmed phone to the account. */
     public function openLinkTelegram(): void
     {
         $user = $this->currentUser();
-        if (! $user || filled($user->telegram_id)) {
+        if (! $user || ! $this->canLinkTelegram($user)) {
             return;
         }
 
         $this->openAuthModal();
         $this->authStep = 'offer-telegram';
-    }
-
-    /** Optional step: the password is typed twice and stored only as a hash. */
-    public function setAccountPassword(): void
-    {
-        $this->clearAuthFeedback();
-
-        $user = $this->currentUser();
-        if (! $user || $user->hasPassword()) {
-            $this->closeAuthModal();
-
-            return;
-        }
-
-        if (! $this->passwordIsAcceptable()) {
-            return;
-        }
-
-        $this->accounts()->setInitialPassword($user, $this->authPassword);
-        $this->authPassword = '';
-        $this->authPasswordConfirmation = '';
-        $this->dispatch('toast', message: __('Password saved. You can now sign in with your email and password.'), type: 'success');
-
-        $this->nextAccountOffer(fromPassword: true);
-    }
-
-    public function skipSetPassword(): void
-    {
-        $this->authPassword = '';
-        $this->authPasswordConfirmation = '';
-        $this->clearAuthFeedback();
-        $this->nextAccountOffer(fromPassword: true);
     }
 
     public function skipTelegramOffer(): void
@@ -981,7 +915,7 @@ trait InteractsWithStore
     public function startTelegramLink(): void
     {
         $user = $this->currentUser();
-        if (! $user || filled($user->telegram_id)) {
+        if (! $user || ! $this->canLinkTelegram($user)) {
             $this->closeAuthModal();
 
             return;
@@ -990,18 +924,18 @@ trait InteractsWithStore
         $this->startTelegram(TelegramLoginRequest::PURPOSE_LINK);
     }
 
-    /** Steps offered after a Google sign-up: password first, then Telegram. */
-    protected function nextAccountOffer(bool $fromPassword): void
+    /** Telegram is missing, or it is there but the phone was never confirmed through it. */
+    protected function canLinkTelegram(User $user): bool
+    {
+        return blank($user->telegram_id) || ! $user->hasVerifiedPhone();
+    }
+
+    /** The optional step after a Google sign-up; nothing is shown when Telegram login isn't set up. */
+    protected function offerTelegram(): void
     {
         $user = $this->currentUser();
 
-        if (! $fromPassword && $user && ! $user->hasPassword()) {
-            $this->authStep = 'set-password';
-
-            return;
-        }
-
-        if ($user && blank($user->telegram_id) && $this->telegramAuth()->isConfigured()) {
+        if ($user && $this->canLinkTelegram($user) && $this->telegramAuth()->isConfigured()) {
             $this->authStep = 'offer-telegram';
 
             return;
@@ -1102,6 +1036,7 @@ trait InteractsWithStore
         $this->authError = '';
         $this->authNotice = '';
         $this->authSuggestTelegram = false;
+        $this->authGoogleHint = false;
         $this->resetValidation();
     }
 

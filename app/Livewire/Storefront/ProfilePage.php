@@ -253,6 +253,17 @@ class ProfilePage extends Component
         return $user && $user->hasVerifiedPhone() && $user->phone === $phone ? 'verified' : 'unverified';
     }
 
+    /** missing | unverified | verified: a confirmed email comes from Google or an email code. */
+    protected function emailStatus(?Customer $customer): string
+    {
+        $user = $customer?->user;
+        if (! $user || blank($user->email)) {
+            return 'missing';
+        }
+
+        return $user->email_verified_at !== null ? 'verified' : 'unverified';
+    }
+
     public function render()
     {
         $service = app(StorefrontService::class);
@@ -277,12 +288,10 @@ class ProfilePage extends Component
             'customer' => $customer,
             'orders' => $orders,
             'reviewedKeys' => $reviewedKeys,
-            'accountHasPassword' => (bool) $customer?->user?->hasPassword(),
-            'accountTelegramLinked' => filled($customer?->user?->telegram_id),
             'accountSignedIn' => $customer?->user !== null,
             'phoneStatus' => $this->phoneStatus($customer),
             'accountEmail' => (string) $customer?->user?->email,
-            'accountEmailVerified' => $customer?->user?->email_verified_at !== null,
+            'emailStatus' => $this->emailStatus($customer),
         ]));
     }
 }

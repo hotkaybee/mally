@@ -13,6 +13,9 @@ use Tests\TestCase;
  * The profile must tell the truth about what is confirmed. It used to show
  * "Confirmed" next to the phone and "Device linked" for everybody, also for
  * accounts that have no phone at all (Google sign-ups).
+ *
+ * Phone: confirmed only through Telegram ("Continue with Telegram" until then).
+ * Email: confirmed by Google or an email code ("Continue with Google" while empty).
  */
 class ProfileAccountStatusTest extends TestCase
 {
@@ -34,7 +37,7 @@ class ProfileAccountStatusTest extends TestCase
             'name' => 'Muhammadali Botirov',
             'email' => 'ali@gmail.com',
         ], $attrs));
-        $user->forceFill(['email_verified_at' => $attrs['email_verified_at'] ?? now()])->save();
+        $user->forceFill(['email_verified_at' => array_key_exists('email_verified_at', $attrs) ? $attrs['email_verified_at'] : now()])->save();
 
         app(CustomerAccountService::class)->login($user);
 
@@ -46,6 +49,8 @@ class ProfileAccountStatusTest extends TestCase
         return Livewire::test(ProfilePage::class)->set('activeTab', 'details');
     }
 
+    // ----------------------------------------------------------------- phone
+
     public function test_an_account_without_a_phone_is_not_shown_as_confirmed(): void
     {
         $this->signIn();
@@ -56,32 +61,37 @@ class ProfileAccountStatusTest extends TestCase
             ->assertDontSee('Устройство привязано');
     }
 
-    public function test_an_account_without_a_phone_is_offered_telegram_to_add_and_confirm_one(): void
+    public function test_an_account_without_a_phone_gets_one_big_telegram_button_instead_of_a_field(): void
     {
         $this->signIn();
 
         $this->profile()
-            ->assertSee('Добавьте Telegram, чтобы подтвердить номер телефона.')
-            ->assertSeeHtml('wire:click="openLinkTelegram"');
+            ->assertSeeHtml('wire:click="openLinkTelegram"')
+            ->assertSee('Продолжить с Telegram')
+            ->assertDontSeeHtml('data-phone-field');
     }
 
-    public function test_a_phone_confirmed_through_telegram_is_shown_as_confirmed(): void
+    public function test_a_phone_confirmed_through_telegram_is_shown_with_a_check_and_no_button(): void
     {
         $this->signIn(['phone' => self::PHONE, 'telegram_id' => '555', 'phone_verified_at' => now()]);
 
         $this->profile()
             ->assertSeeHtml('data-phone-status="verified"')
+            ->assertSeeHtml('data-phone-field')
             ->assertSee(self::PHONE)
-            ->assertSee('Устройство привязано');
+            ->assertSee('Устройство привязано')
+            ->assertDontSeeHtml('wire:click="openLinkTelegram"');
     }
 
-    public function test_a_phone_typed_at_registration_is_not_shown_as_confirmed(): void
+    public function test_a_phone_typed_at_registration_is_not_confirmed_and_offers_telegram(): void
     {
         $this->signIn(['phone' => self::PHONE]);
 
         $this->profile()
             ->assertSeeHtml('data-phone-status="unverified"')
             ->assertDontSeeHtml('data-phone-status="verified"')
+            ->assertSee(self::PHONE)
+            ->assertSeeHtml('wire:click="openLinkTelegram"')
             ->assertDontSee('Устройство привязано');
     }
 
@@ -92,28 +102,72 @@ class ProfileAccountStatusTest extends TestCase
         $user->customer()->update(['phone_number' => '+998 91 000 00 00']);
         app(CustomerAccountService::class)->login($user->refresh());
 
-        $this->profile()
-            ->assertDontSeeHtml('data-phone-status="verified"');
+        $this->profile()->assertDontSeeHtml('data-phone-status="verified"');
     }
 
-    public function test_the_email_status_follows_email_verified_at(): void
+    public function test_telegram_without_a_confirmed_phone_still_offers_to_add_the_phone(): void
+    {
+        $this->signIn(['telegram_id' => '555']);
+
+        $this->profile()
+            ->assertSeeHtml('data-phone-status="missing"')
+            ->assertSeeHtml('wire:click="openLinkTelegram"');
+    }
+
+    // ----------------------------------------------------------------- email
+
+    public function test_a_confirmed_email_is_shown_with_a_check_and_no_google_button(): void
     {
         $this->signIn();
-        $this->profile()->assertSeeHtml('data-email-status="verified"')->assertSee('ali@gmail.com');
 
-        $user = User::sole();
-        $user->forceFill(['email_verified_at' => null])->save();
-        app(CustomerAccountService::class)->login($user->refresh());
-
-        $this->profile()->assertSeeHtml('data-email-status="unverified"');
+        $this->profile()
+            ->assertSeeHtml('data-email-status="verified"')
+            ->assertSeeHtml('data-email-field')
+            ->assertSee('ali@gmail.com')
+            ->assertDontSee('Продолжить с Google');
     }
 
-    public function test_an_account_without_an_email_shows_no_email_line(): void
+    public function test_an_unconfirmed_email_is_marked_as_such(): void
+    {
+        $this->signIn(['email_verified_at' => null]);
+
+        $this->profile()
+            ->assertSeeHtml('data-email-status="unverified"')
+            ->assertSee('ali@gmail.com')
+            ->assertSee('Не подтверждён');
+    }
+
+    public function test_an_account_without_an_email_gets_one_big_google_button_instead_of_a_field(): void
     {
         $this->signIn(['email' => null, 'phone' => self::PHONE, 'telegram_id' => '555', 'phone_verified_at' => now()]);
 
         $this->profile()
-            ->assertDontSeeHtml('data-email-status')
+            ->assertSeeHtml('data-email-status="missing"')
+            ->assertSee('Продолжить с Google')
+            ->assertSeeHtml('href="'.e(route('auth.google', ['link' => 1, 'redirect' => '/profile'])).'"')
+            ->assertDontSeeHtml('data-email-field')
             ->assertSeeHtml('data-phone-status="verified"');
+    }
+
+    // --------------------------------------------------------------- the rest
+
+    public function test_the_personal_data_form_has_name_surname_phone_and_email(): void
+    {
+        $this->signIn();
+
+        $this->profile()
+            ->assertSeeHtml('wire:model="firstName"')
+            ->assertSeeHtml('wire:model="lastName"')
+            ->assertSeeHtml('data-phone-status=')
+            ->assertSeeHtml('data-email-status=');
+    }
+
+    public function test_no_password_is_ever_asked_in_the_profile(): void
+    {
+        $this->signIn();
+
+        $this->profile()
+            ->assertDontSeeHtml('wire:click="openSetPassword"')
+            ->assertDontSeeHtml('wire:model="authPassword"');
     }
 }

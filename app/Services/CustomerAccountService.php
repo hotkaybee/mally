@@ -32,6 +32,8 @@ class CustomerAccountService
 
     public const GOOGLE_EMAIL_TAKEN = 'google_email_taken';
 
+    public const GOOGLE_ALREADY_LINKED = 'google_already_linked';
+
     public function __construct(private readonly StorefrontService $storefront) {}
 
     /**
@@ -174,13 +176,15 @@ class CustomerAccountService
     }
 
     /**
-     * The account for a Google identity (Google's stable `sub`, never the
-     * email). A Google account whose email already belongs to another account
-     * is never merged here: the caller must first get proof of ownership of
-     * that account (see linkGoogle()).
+     * The account for a Google identity (Google's stable `sub`). Signing in
+     * with Google already proves the person owns that Google account, and
+     * Google confirms the email, so no password is asked: a confirmed email
+     * that belongs to an existing shopper account signs in to it and links
+     * the Google identity to it. Admin accounts and accounts that already
+     * have another Google are never touched.
      *
      * @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string}  $profile
-     * @return array{result: string, user?: User}
+     * @return array{result: string, user?: User, created?: bool, linked?: bool}
      */
     public function resolveGoogle(array $profile): array
     {
@@ -201,11 +205,19 @@ class CustomerAccountService
                 return ['result' => self::GOOGLE_UNVERIFIED];
             }
 
-            // users.email is unique and shared with admins: no account is
-            // taken over, and an admin email is never linked.
+            // users.email is unique and shared with admins.
             $sameEmail = User::whereRaw('LOWER(email) = ?', [$email])->first();
             if ($sameEmail) {
-                return ['result' => self::GOOGLE_EMAIL_TAKEN, 'user' => $sameEmail];
+                if ($sameEmail->is_admin || filled($sameEmail->google_id)) {
+                    return ['result' => self::GOOGLE_EMAIL_TAKEN];
+                }
+
+                $sameEmail->forceFill([
+                    'google_id' => $sub,
+                    'email_verified_at' => $sameEmail->email_verified_at ?? now(),
+                ])->save();
+
+                return ['result' => self::OK, 'user' => $sameEmail, 'linked' => true];
             }
 
             $first = mb_substr(trim($profile['first_name']), 0, 100);
@@ -229,20 +241,46 @@ class CustomerAccountService
     }
 
     /**
-     * Attach a Google identity to an existing account. Only called after the
-     * owner proved the account is theirs (its password), and only when the
-     * Google email is the one the account already has.
+     * "Continue with Google" in the profile: add a confirmed email (and the
+     * Google identity) to the signed-in account. An account that already has
+     * an email only accepts Google with that same email; an email that
+     * belongs to another account is refused (accounts are never merged).
+     *
+     * @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string}  $profile
      */
-    public function linkGoogle(User $user, string $sub, string $googleEmail): string
+    public function attachGoogle(User $user, array $profile): string
     {
-        if ($user->is_admin
-            || mb_strtolower((string) $user->email) !== mb_strtolower(trim($googleEmail))
-            || filled($user->google_id)) {
+        $sub = trim($profile['sub']);
+        $email = mb_strtolower(trim($profile['email']));
+
+        if ($user->is_admin || $sub === '' || filled($user->google_id)) {
+            return self::GOOGLE_ALREADY_LINKED;
+        }
+        if (! $profile['email_verified'] || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return self::GOOGLE_UNVERIFIED;
+        }
+        if (User::where('google_id', $sub)->exists()) {
+            return self::GOOGLE_ALREADY_LINKED;
+        }
+        if (filled($user->email)
+            ? mb_strtolower((string) $user->email) !== $email
+            : User::whereRaw('LOWER(email) = ?', [$email])->exists()) {
             return self::GOOGLE_EMAIL_TAKEN;
         }
 
         try {
-            $user->forceFill(['google_id' => $sub, 'email_verified_at' => $user->email_verified_at ?? now()])->save();
+            DB::transaction(function () use ($user, $sub, $email) {
+                $user->forceFill([
+                    'email' => $email,
+                    'google_id' => $sub,
+                    'email_verified_at' => $user->email_verified_at ?? now(),
+                ])->save();
+
+                $customer = $this->customerFor($user);
+                if (blank($customer->email) && ! Customer::whereRaw('LOWER(email) = ?', [$email])->exists()) {
+                    $customer->update(['email' => $email]);
+                }
+            });
         } catch (UniqueConstraintViolationException) {
             return self::GOOGLE_EMAIL_TAKEN;
         }
@@ -295,17 +333,6 @@ class CustomerAccountService
         }
 
         return ['result' => self::OK, 'phone_saved' => $savePhone];
-    }
-
-    /**
-     * First password for an account that has none (signed up with Google).
-     * Setting it changes the password fingerprint, so the current session is
-     * signed in again.
-     */
-    public function setInitialPassword(User $user, string $password): void
-    {
-        $this->changePassword($user, $password);
-        $this->login($user->refresh());
     }
 
     private function rememberTelegramHandle(Customer $customer, string $username): void

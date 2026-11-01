@@ -8,10 +8,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
     use HasFactory;
+
+    /** Disk the product photos are uploaded to (see ProductForm). */
+    public const IMAGE_DISK = 'public';
+
+    /** Directory on IMAGE_DISK that holds the product photos. */
+    public const IMAGE_DIRECTORY = 'products';
 
     /**
      * `quantity` and `selling_price` are read-only caches maintained from the
@@ -27,7 +34,7 @@ class Product extends Model
         'comment',
         'quantity',
         'selling_price',
-        'image',
+        'images',
         'link',
         'status',
     ];
@@ -35,12 +42,32 @@ class Product extends Model
     protected $casts = [
         'quantity' => 'integer',
         'selling_price' => 'decimal:2',
+        'images' => 'array',
     ];
 
     protected static function booted(): void
     {
         static::saved(fn () => StorefrontService::forgetProductsCache());
         static::deleted(fn () => StorefrontService::forgetProductsCache());
+
+        // Photos removed in the admin, or of a deleted product, are deleted from the disk.
+        static::updated(function (Product $product) {
+            if ($product->wasChanged('images')) {
+                $old = json_decode((string) $product->getRawOriginal('images'), true) ?: [];
+                self::deleteImageFiles(array_diff($old, $product->images ?? []));
+            }
+        });
+        static::deleted(fn (Product $product) => self::deleteImageFiles($product->images ?? []));
+    }
+
+    /** @param  array<int, string>  $paths */
+    private static function deleteImageFiles(array $paths): void
+    {
+        $paths = array_filter($paths, fn ($path) => is_string($path) && $path !== '' && ! str_starts_with($path, 'http'));
+
+        if ($paths !== []) {
+            Storage::disk(self::IMAGE_DISK)->delete(array_values($paths));
+        }
     }
 
     public function brand(): BelongsTo
@@ -63,6 +90,26 @@ class Product extends Model
         return $this->belongsToMany(Order::class)
             ->using(OrderProduct::class)
             ->withPivot(['quantity', 'price', 'total_price', 'product_receipt_id', 'unit_cost']);
+    }
+
+    /**
+     * Public URLs of the photos in their admin order; the first is the main
+     * photo. Full http(s) URLs are used as they are.
+     *
+     * @return list<string>
+     */
+    public function imageUrls(): array
+    {
+        return collect($this->images ?? [])
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->map(fn (string $path) => str_starts_with($path, 'http') ? $path : Storage::disk(self::IMAGE_DISK)->url($path))
+            ->values()
+            ->all();
+    }
+
+    public function mainImageUrl(): string
+    {
+        return $this->imageUrls()[0] ?? self::placeholderUrl();
     }
 
     public static function placeholderUrl(): string

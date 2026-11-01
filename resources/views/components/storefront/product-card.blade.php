@@ -29,13 +29,9 @@
             />
         </a>
 
-        <!-- Бейджи статуса -->
-        <div class="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10 pointer-events-none">
-            @if($isOutOfStock)
-                <span class="px-2.5 py-1 bg-stone-900/85 backdrop-blur-sm text-stone-200 text-[10px] uppercase tracking-wider font-bold rounded-full shadow-sm">
-                    {{ $store->t('product.out_of_stock', 'Распродано') }}
-                </span>
-            @else
+        <!-- Бейджи сверху: NEW и скидка -->
+        <div data-card-flags class="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10 pointer-events-none">
+            @unless($isOutOfStock)
                 @if(!empty($product['isNew']))
                     <span class="px-2.5 py-1 bg-[#1C1917] text-white text-[10px] uppercase tracking-wider font-bold rounded-full shadow-sm">
                         NEW
@@ -46,6 +42,21 @@
                         -{{ $discountPercent }}%
                     </span>
                 @endif
+            @endunless
+        </div>
+
+        <!-- Наличие на фото (в углу): только «В наличии» / «Распродано», без точного остатка -->
+        <div class="absolute bottom-2.5 left-2.5 z-10 pointer-events-none">
+            @if($isOutOfStock)
+                <span data-stock-status="sold_out" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-stone-900/85 backdrop-blur-sm text-stone-100 text-[10px] font-semibold rounded-full shadow-sm">
+                    <span class="w-1.5 h-1.5 rounded-full bg-stone-400"></span>
+                    <span>{{ $store->t('product.out_of_stock', 'Распродано') }}</span>
+                </span>
+            @else
+                <span data-stock-status="in_stock" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/90 backdrop-blur-sm text-emerald-700 text-[10px] font-semibold rounded-full shadow-sm border border-emerald-200/70">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>{{ $store->t('product.in_stock', 'В наличии') }}</span>
+                </span>
             @endif
         </div>
 
@@ -61,7 +72,7 @@
     </div>
 
     <!-- 2. Информация о товаре -->
-    <div class="flex flex-col flex-1 mt-3">
+    <div data-card-info class="flex flex-col flex-1 mt-3">
         <div class="flex items-center justify-between gap-1 text-[11px] text-[#8C827A]">
             <span class="font-semibold uppercase tracking-wider truncate">
                 {{ $brandName }}
@@ -79,16 +90,6 @@
             </h3>
         </a>
 
-        <!-- Наличие: только «В наличии» / «Распродано», без точного остатка -->
-        <div class="mt-1.5 flex items-center justify-end gap-1">
-            @if(!$isOutOfStock)
-                <span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>{{ $store->t('product.in_stock', 'В наличии') }}</span>
-                </span>
-            @endif
-        </div>
-
         <!-- Цены в выбранной валюте (USD $ / UZS сум) -->
         <div class="mt-2 flex items-baseline gap-2">
             <span class="text-sm sm:text-base font-bold {{ $discountPercent ? 'text-[#E11D48]' : 'text-[#1C1917]' }}">
@@ -102,13 +103,13 @@
         </div>
 
         <!-- 3. Кнопка или счетчик на карточке -->
-        <div class="mt-3 pt-1">
+        <div data-card-action class="mt-3 h-10">
             @if($isOutOfStock)
                 <a
                     href="https://t.me/mallyuz?text={{ rawurlencode('Здравствуйте! Хочу оформить заказ из США на товар: '.$displayTitle.' (Артикул: '.$productSku.'). Сориентируйте по срокам доставки и деталям.') }}"
                     target="_blank"
                     rel="noreferrer"
-                    class="group/oos relative w-full h-10 rounded-2xl bg-stone-100 hover:bg-amber-50 text-stone-600 hover:text-amber-900 border border-stone-200 hover:border-amber-300 text-xs font-semibold transition-all duration-300 flex items-center justify-center overflow-hidden cursor-pointer"
+                    class="group/oos relative w-full h-full rounded-2xl bg-stone-100 hover:bg-amber-50 text-stone-600 hover:text-amber-900 border border-stone-200 hover:border-amber-300 text-xs font-semibold transition-all duration-300 flex items-center justify-center overflow-hidden cursor-pointer"
                     title="Товар распродан. Наведите для заказа из США через Telegram"
                 >
                     <div class="absolute inset-0 flex items-center justify-center gap-1.5 transition-transform duration-300 ease-out group-hover/oos:-translate-y-full">
@@ -121,8 +122,8 @@
                     </div>
                 </a>
             @elseif($qtyInCart > 0)
-                <div class="flex items-center gap-1.5 w-full animate-fade-in">
-                    <div class="flex-1 py-1 px-1.5 rounded-2xl bg-[#1C1917] text-white flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-1.5 w-full h-full animate-fade-in">
+                    <div class="flex-1 h-full px-1.5 rounded-2xl bg-[#1C1917] text-white flex items-center justify-between shadow-sm">
                         <button
                             type="button"
                             wire:click="updateCartQuantity('{{ addslashes($prodKey) }}', {{ $qtyInCart - 1 }})"
@@ -149,7 +150,7 @@
                     <a
                         href="/cart"
                         wire:navigate
-                        class="py-2 px-3 rounded-2xl bg-[#FAF7F5] hover:bg-[#EAE3DE] text-[#1C1917] border border-[#EAE3DE] hover:border-[#1C1917] text-xs font-bold transition flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer"
+                        class="h-full px-3 rounded-2xl bg-[#FAF7F5] hover:bg-[#EAE3DE] text-[#1C1917] border border-[#EAE3DE] hover:border-[#1C1917] text-xs font-bold transition flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer"
                         title="Перейти в корзину"
                     >
                         <i class="fa-solid fa-bag-shopping text-xs"></i>
@@ -160,7 +161,7 @@
                 <button
                     type="button"
                     wire:click="addToCart('{{ addslashes($prodKey) }}')"
-                    class="w-full py-2.5 px-4 rounded-2xl bg-[#1C1917] hover:bg-black text-white text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
+                    class="w-full h-full px-4 rounded-2xl bg-[#1C1917] hover:bg-black text-white text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
                 >
                     <i class="fa-solid fa-plus text-xs"></i>
                     <span>{{ $store->t('product.add_to_cart', 'В корзину') }}</span>

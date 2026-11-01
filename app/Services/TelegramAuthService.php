@@ -260,6 +260,18 @@ class TelegramAuthService
             'last_name' => mb_substr(trim((string) ($from['last_name'] ?? '')), 0, 100) ?: null,
         ]);
 
+        // Adding Telegram to a profile doesn't need the phone: the code comes
+        // at once and sharing the number is an optional extra step.
+        if ($request->purpose === TelegramLoginRequest::PURPOSE_LINK) {
+            $this->issueCode($request, $chatId, [
+                'keyboard' => [[['text' => __('📱 Share contact'), 'request_contact' => true]]],
+                'resize_keyboard' => true,
+                'one_time_keyboard' => true,
+            ]);
+
+            return;
+        }
+
         $this->sendMessage(
             $chatId,
             __('To continue on the Mally website, share your phone number with the “📱 Share contact” button below. If it wasn’t you, just ignore this message.'),
@@ -282,7 +294,12 @@ class TelegramAuthService
 
         $request = TelegramLoginRequest::where('telegram_user_id', $fromId)
             ->where('chat_id', $chatId)
-            ->where('status', TelegramLoginRequest::STATUS_CONTACT_REQUESTED)
+            ->where(fn ($q) => $q
+                ->where('status', TelegramLoginRequest::STATUS_CONTACT_REQUESTED)
+                // A profile link already has its code; the contact is optional.
+                ->orWhere(fn ($q) => $q
+                    ->where('purpose', TelegramLoginRequest::PURPOSE_LINK)
+                    ->where('status', TelegramLoginRequest::STATUS_CODE_SENT)))
             ->where('expires_at', '>', now())
             ->latest('id')
             ->first();
@@ -300,6 +317,19 @@ class TelegramAuthService
             return;
         }
 
+        if ($request->purpose === TelegramLoginRequest::PURPOSE_LINK) {
+            $request->update(['phone' => $phone]);
+            $this->sendMessage($chatId, __('Thanks! The number will be added to your profile once you enter the code on the website.'), ['remove_keyboard' => true]);
+
+            return;
+        }
+
+        $this->issueCode($request, $chatId, ['remove_keyboard' => true], $phone);
+    }
+
+    /** Generate the one-time code and send it to the Telegram chat. */
+    private function issueCode(TelegramLoginRequest $request, string $chatId, array $replyMarkup, ?string $phone = null): void
+    {
         $code = (string) random_int(100000, 999999);
 
         // Reset the counter before the new code becomes checkable.
@@ -312,14 +342,16 @@ class TelegramAuthService
             'expires_at' => now()->addSeconds(self::CODE_TTL_SECONDS),
         ]);
 
-        $text = $request->purpose === TelegramLoginRequest::PURPOSE_RESET
-            ? __('Mally password reset code: :code', ['code' => $code])
-            : __('Mally sign-in code: :code', ['code' => $code]);
+        $text = match ($request->purpose) {
+            TelegramLoginRequest::PURPOSE_RESET => __('Mally password reset code: :code', ['code' => $code]),
+            TelegramLoginRequest::PURPOSE_LINK => __('Mally Telegram link code: :code', ['code' => $code]),
+            default => __('Mally sign-in code: :code', ['code' => $code]),
+        };
 
         $this->sendMessage(
             $chatId,
             $text."\n\n".__('Enter it in the open window on the website. The code is valid for 5 minutes. Never share it with anyone — Mally staff will never ask for it.'),
-            ['remove_keyboard' => true]
+            $replyMarkup
         );
     }
 

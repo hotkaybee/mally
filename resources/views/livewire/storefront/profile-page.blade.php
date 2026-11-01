@@ -568,6 +568,37 @@
                             </button>
                         </form>
                     </div>
+
+                    @if($accountSignedIn && (! $accountHasPassword || ! $accountTelegramLinked))
+                        <!-- Необязательные способы входа: пароль и Telegram -->
+                        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3DE] shadow-sm max-w-2xl mt-4 space-y-3">
+                            <h3 class="font-serif text-lg font-bold text-[#1C1917]">
+                                {{ __('Sign-in options') }}
+                            </h3>
+
+                            @if(! $accountHasPassword)
+                                <button
+                                    type="button"
+                                    wire:click="openSetPassword"
+                                    class="w-full py-3 px-4 rounded-xl bg-[#FAF7F5] hover:bg-[#F2EAE4] border border-[#E3DBD5] text-[#1C1917] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <i class="fa-solid fa-key text-xs"></i>
+                                    <span>{{ __('Set a password for email sign-in') }}</span>
+                                </button>
+                            @endif
+
+                            @if(! $accountTelegramLinked)
+                                <button
+                                    type="button"
+                                    wire:click="openLinkTelegram"
+                                    class="w-full py-3 px-4 rounded-xl bg-[#0088CC]/10 hover:bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0077B5] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <i class="fa-brands fa-telegram text-base"></i>
+                                    <span>{{ __('Add Telegram') }}</span>
+                                </button>
+                            @endif
+                        </div>
+                    @endif
                 @endif
             </div>
         @endif

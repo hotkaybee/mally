@@ -29,6 +29,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'phone',
         'telegram_id',
+        'google_id',
         'phone_verified_at',
         'password',
     ];
@@ -94,6 +95,12 @@ class User extends Authenticatable implements FilamentUser
 
         // where('phone', null) would match every user without a phone.
         return $normalized === null ? $query->whereRaw('1 = 0') : $query->where('phone', $normalized);
+    }
+
+    /** Google-only accounts have no local password until the owner sets one. */
+    public function hasPassword(): bool
+    {
+        return filled($this->password);
     }
 
     /** Accounts registered through Telegram have no email. */

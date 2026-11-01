@@ -14,6 +14,9 @@ class TelegramLoginRequest extends Model
 
     public const PURPOSE_RESET = 'reset';
 
+    /** A signed-in customer adds Telegram to the profile; never signs anyone in. */
+    public const PURPOSE_LINK = 'link';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_CONTACT_REQUESTED = 'contact_requested';

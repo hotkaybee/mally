@@ -260,6 +260,9 @@ class ProfilePage extends Component
             'customer' => $customer,
             'orders' => $orders,
             'reviewedKeys' => $reviewedKeys,
+            'accountHasPassword' => (bool) $customer?->user?->hasPassword(),
+            'accountTelegramLinked' => filled($customer?->user?->telegram_id),
+            'accountSignedIn' => $customer?->user !== null,
         ]));
     }
 }

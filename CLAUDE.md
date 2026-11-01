@@ -9,7 +9,7 @@ Mally is a Laravel 12 + Filament 4 + Livewire 3 small-scale e-commerce app (cosm
 - **Admin / back-office** — Filament panel at `/admin`: Customers, Brands, Categories, Products, Product receipts (stock batches), Orders (with `OrderProduct` lines), Reviews (moderation of storefront reviews).
 - **Storefront** — public Livewire pages in `app/Livewire/Storefront` (catalog, product, cart, checkout, receipt, profile, contact), routed in `routes/web.php`.
 
-`routes/api.php` holds a small JSON API used by the Telegram bot (`OrderController`, `ProductController`, `CategoryController`).
+`routes/api.php` only has the Telegram login webhook (`POST /api/telegram/webhook` → `TelegramWebhookController`). There is no order or catalog API: orders come only from the website checkout (`OrderService`), and the storefront reads the catalog through `StorefrontService`.
 
 Requires **PHP ^8.2**. MySQL by default (`.env.example` → `DB_DATABASE=mally`), with sessions / cache / queues all backed by the database.
 
@@ -29,6 +29,7 @@ php artisan test tests/Feature/ExampleTest.php::test_method  # single method
 
 # Create an admin user for the Filament panel (required to log in)
 php artisan make:filament-user
+php artisan admin:grant you@example.com   # shoppers share `users`; only is_admin users open /admin
 
 # After changing locale, translation files, or Filament config:
 php artisan optimize:clear
@@ -78,7 +79,7 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 **Security**
 - Every `public` Livewire property and method is client-controllable. Mark server-owned state `#[Locked]` and re-verify on the server before acting.
 - No hardcoded / universal / "dev" login codes. OTP codes: random, hashed server-side, expiring, rate-limited, single-use, never rendered or logged outside `local`.
-- Registration with an existing phone or email is rejected. Never merge accounts or auto-link Telegram/email to an existing account.
+- Registration with an existing phone or email is rejected. Never merge accounts. A new account is linked to an existing customer without an account only when the phone was verified through Telegram.
 - Never use `withoutVerifying()` / `verify => false`. Tests use `Http::fake()`.
 - Never show `$e->getMessage()` to customers — show a generic message and `report($e)`.
 - No custom `server.php` in the project root (it can serve `.env`).

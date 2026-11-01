@@ -34,6 +34,14 @@ class UserFactory extends Factory
     }
 
     /**
+     * A Filament admin.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn () => [])->afterMaking(fn ($user) => $user->forceFill(['is_admin' => true]));
+    }
+
+    /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static

@@ -240,5 +240,6 @@
     "You already have a Mally account": "Sizda allaqachon Mally akkaunti bor",
     "Someone tried to sign up on the Mally Store website with this email, but it already has an account. Sign in, or reset your password if you forgot it.": "Kimdir Mally Store saytida ushbu email bilan ro'yxatdan o'tmoqchi bo'ldi, lekin bu email bilan akkaunt allaqachon mavjud. Kiring yoki parolni unutgan bo'lsangiz, uni tiklang.",
     "Go to Mally Store": "Mally Store'ga o'tish",
-    "If it wasn’t you, just ignore this email.": "Agar bu siz bo'lmasangiz, ushbu xatga e'tibor bermang."
+    "If it wasn’t you, just ignore this email.": "Agar bu siz bo'lmasangiz, ushbu xatga e'tibor bermang.",
+    "The first photo is the main one. Drag to change the order.": "Birinchi rasm — asosiy. Tartibini o‘zgartirish uchun suring."
 }

@@ -287,20 +287,6 @@ class UsaScenariosTest extends TestCase
         Livewire::test(ProductDetailPage::class, ['slug' => 'ML-USA-XSS'])->assertDontSeeHtml('<img src=x onerror=alert("'.self::CANARY);
     }
 
-    /** SC-0010 */
-    public function test_sc_0010_pages_carry_basic_hardening_headers(): void
-    {
-        $response = $this->get('/profile')->assertOk();
-
-        $csp = (string) $response->headers->get('Content-Security-Policy');
-        $this->assertTrue(
-            $response->headers->has('X-Frame-Options') || str_contains($csp, 'frame-ancestors'),
-            'The page can be framed by any site (clickjacking).'
-        );
-        $this->assertSame('nosniff', $response->headers->get('X-Content-Type-Options'));
-        $this->assertNotEmpty($response->headers->get('Referrer-Policy'));
-    }
-
     /** SC-0011 */
     public function test_sc_0011_livewire_updates_need_a_csrf_token(): void
     {

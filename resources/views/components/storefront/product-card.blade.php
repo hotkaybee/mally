@@ -85,7 +85,7 @@
         </div>
 
         <a href="{{ $productUrl }}" wire:navigate class="block mt-1">
-            <h3 class="text-xs sm:text-sm font-medium text-[#1C1917] group-hover:text-[#685F58] transition-colors line-clamp-2 min-h-[36px] leading-snug">
+            <h3 class="text-xs sm:text-sm font-medium text-[#1C1917] group-hover:text-[#685F58] transition-colors line-clamp-2 min-h-[2.75em] leading-snug">
                 {{ $displayTitle }}
             </h3>
         </a>

@@ -91,6 +91,17 @@ class EmailAuthService
     }
 
     /**
+     * The account with this email signed up with Google and has no password,
+     * so the only way in is Google.
+     */
+    public function isGoogleOnlyAccount(string $rawEmail): bool
+    {
+        $user = $this->findUserByEmail($rawEmail);
+
+        return $user !== null && filled($user->google_id) && ! $user->hasPassword();
+    }
+
+    /**
      * Authenticate a storefront user by email and password with rate limiting.
      *
      * @return array{success: bool, error?: string, message: string, user?: User, customer?: Customer}
@@ -247,6 +258,8 @@ class EmailAuthService
             || str_starts_with($path, '//')
             || str_starts_with($path, '/\\')
             || preg_match('/^[a-zA-Z][a-zA-Z0-9+.-]*:/', $path) === 1
+            // Browsers drop tabs and line breaks inside a URL, so "/<TAB>/host" would become "//host".
+            || preg_match('/[\x00-\x20\x7f\\\\]/', $path) === 1
         ) {
             return '/';
         }

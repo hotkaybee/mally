@@ -8,8 +8,10 @@ use App\Models\TelegramLoginRequest;
 use App\Models\User;
 use App\Services\CustomerAccountService;
 use App\Services\EmailAuthService;
+use App\Services\GoogleAuthService;
 use App\Services\StorefrontService;
 use App\Services\TelegramAuthService;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
@@ -67,9 +69,36 @@ trait InteractsWithStore
 
     public string $authTelegramCode = '';
 
+    /** This email only has Google to sign in with: the form says so and goes to Google. */
+    #[Locked]
+    public bool $authGoogleHint = false;
+
+    /**
+     * After a brand-new Google sign-up the next full page load opens the
+     * optional "add Telegram" offer. (Not a mount hook: Livewire unpacks the
+     * route parameters into those, which breaks pages with an optional
+     * parameter such as the order receipt.)
+     */
+    public function bootedInteractsWithStore(): void
+    {
+        if (session()->pull(GoogleAuthService::SESSION_OPEN) === 'onboarding' && $this->currentUser()) {
+            $this->openAuthModal();
+            $this->offerTelegram();
+        }
+    }
+
     protected function store(): StorefrontService
     {
         return app(StorefrontService::class);
+    }
+
+    /** The signed-in storefront user (not the customer row). */
+    protected function currentUser(): ?User
+    {
+        $userId = $this->store()->getCurrentCustomer()?->user_id;
+
+        // Read fresh: the relation on the cached customer may be stale.
+        return $userId ? User::shoppers()->find($userId) : null;
     }
 
     protected function emailAuth(): EmailAuthService
@@ -161,6 +190,7 @@ trait InteractsWithStore
         $this->authPhone = '+998 ';
         $this->authError = '';
         $this->authNotice = '';
+        $this->authGoogleHint = false;
         $this->authCooldownSeconds = 0;
         $this->authRedirectTo = $redirectTo !== null
             ? $this->emailAuth()->sanitizeRedirectPath($redirectTo)
@@ -255,6 +285,14 @@ trait InteractsWithStore
             $hasValidationError = true;
         }
 
+        // The person signed up with Google and has no password: send them back to Google.
+        if (! $hasValidationError && ! $isPhone && $this->googleOnlyEmail($normalizedInput)) {
+            $this->authPassword = '';
+            $this->authGoogleHint = true;
+
+            return;
+        }
+
         if ($this->authPassword === '') {
             $this->failAuth('authPassword', __('Enter your password.'));
             $hasValidationError = true;
@@ -278,6 +316,22 @@ trait InteractsWithStore
         }
 
         $this->finishLogin($res['user']);
+    }
+
+    /**
+     * True when this email belongs to an account that only has Google to sign
+     * in with. Answering it tells whether the email has an account, so it is
+     * rate-limited per IP like the sign-in attempts themselves.
+     */
+    protected function googleOnlyEmail(string $email): bool
+    {
+        $key = 'google-only-hint:'.request()->ip();
+        if (RateLimiter::tooManyAttempts($key, 20)) {
+            return false;
+        }
+        RateLimiter::hit($key, 60);
+
+        return $this->emailAuth()->isGoogleOnlyAccount($email);
     }
 
     /**
@@ -762,6 +816,13 @@ trait InteractsWithStore
             return;
         }
 
+        // Adding Telegram to the signed-in profile: never signs anyone in.
+        if ($identity['purpose'] === TelegramLoginRequest::PURPOSE_LINK) {
+            $this->completeTelegramLink($identity);
+
+            return;
+        }
+
         // 1. This Telegram account is already linked -> sign in.
         if ($user) {
             $this->finishLogin($user);
@@ -830,6 +891,86 @@ trait InteractsWithStore
         $this->finishLogin($res['user'], __('Registration via Telegram completed.'));
     }
 
+    // =========================================================================
+    // GOOGLE ACCOUNTS: optional Telegram and phone
+    // =========================================================================
+
+    /** Profile: "Continue with Telegram" adds Telegram and a confirmed phone to the account. */
+    public function openLinkTelegram(): void
+    {
+        $user = $this->currentUser();
+        if (! $user || ! $this->canLinkTelegram($user)) {
+            return;
+        }
+
+        $this->openAuthModal();
+        $this->authStep = 'offer-telegram';
+    }
+
+    public function skipTelegramOffer(): void
+    {
+        $this->closeAuthModal();
+    }
+
+    public function startTelegramLink(): void
+    {
+        $user = $this->currentUser();
+        if (! $user || ! $this->canLinkTelegram($user)) {
+            $this->closeAuthModal();
+
+            return;
+        }
+
+        $this->startTelegram(TelegramLoginRequest::PURPOSE_LINK);
+    }
+
+    /** Telegram is missing, or it is there but the phone was never confirmed through it. */
+    protected function canLinkTelegram(User $user): bool
+    {
+        return blank($user->telegram_id) || ! $user->hasVerifiedPhone();
+    }
+
+    /** The optional step after a Google sign-up; nothing is shown when Telegram login isn't set up. */
+    protected function offerTelegram(): void
+    {
+        $user = $this->currentUser();
+
+        if ($user && $this->canLinkTelegram($user) && $this->telegramAuth()->isConfigured()) {
+            $this->authStep = 'offer-telegram';
+
+            return;
+        }
+
+        $this->closeAuthModal();
+    }
+
+    protected function completeTelegramLink(array $identity): void
+    {
+        $user = $this->currentUser();
+        if (! $user) {
+            $this->authStep = 'login';
+            $this->failAuth('authTelegram', __('Sign in to add Telegram to your profile.'));
+
+            return;
+        }
+
+        $res = $this->accounts()->linkTelegram($user, $identity);
+
+        if ($res['result'] !== CustomerAccountService::OK) {
+            $this->closeAuthModal();
+            $this->dispatch('toast', message: $res['result'] === CustomerAccountService::TELEGRAM_TAKEN
+                ? __('This Telegram account is already linked to another profile.')
+                : __('A different Telegram account is already linked to your profile.'), type: 'error');
+
+            return;
+        }
+
+        $this->closeAuthModal();
+        $this->dispatch('toast', message: $res['phone_saved']
+            ? __('Telegram and phone number added to your profile.')
+            : __('Telegram added to your profile.'), type: 'success');
+    }
+
     protected function sessionIdentity(string $key): ?array
     {
         $identity = session($key);
@@ -895,6 +1036,7 @@ trait InteractsWithStore
         $this->authError = '';
         $this->authNotice = '';
         $this->authSuggestTelegram = false;
+        $this->authGoogleHint = false;
         $this->resetValidation();
     }
 

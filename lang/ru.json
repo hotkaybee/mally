@@ -269,5 +269,11 @@
     "Add your email with Google, it is confirmed at once.": "Добавьте email через Google, он подтвердится сразу.",
     "Google sign-in was added to your Mally account": "К вашему аккаунту Mally добавлен вход через Google",
     "Someone just signed in to your Mally account with a Google account that has this email, and Google sign-in is now linked to it. If it was you, nothing else is needed.": "В ваш аккаунт Mally только что вошли через аккаунт Google с этим email, и вход через Google теперь привязан к нему. Если это были вы, больше ничего делать не нужно.",
-    "If it was not you, reset your password on the Mally website right away and write to us.": "Если это были не вы, сразу сбросьте пароль на сайте Mally и напишите нам."
+    "If it was not you, reset your password on the Mally website right away and write to us.": "Если это были не вы, сразу сбросьте пароль на сайте Mally и напишите нам.",
+    "Order": "Заказ",
+    "New order": "Новый заказ",
+    "Order №:number": "Заказ №:number",
+    "Edit order №:number": "Редактирование заказа №:number",
+    "Products in the order": "Товары в заказе",
+    "Calculated from the products when you save.": "Считается по товарам при сохранении."
 }

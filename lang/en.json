@@ -269,5 +269,11 @@
     "Add your email with Google, it is confirmed at once.": "Add your email with Google, it is confirmed at once.",
     "Google sign-in was added to your Mally account": "Google sign-in was added to your Mally account",
     "Someone just signed in to your Mally account with a Google account that has this email, and Google sign-in is now linked to it. If it was you, nothing else is needed.": "Someone just signed in to your Mally account with a Google account that has this email, and Google sign-in is now linked to it. If it was you, nothing else is needed.",
-    "If it was not you, reset your password on the Mally website right away and write to us.": "If it was not you, reset your password on the Mally website right away and write to us."
+    "If it was not you, reset your password on the Mally website right away and write to us.": "If it was not you, reset your password on the Mally website right away and write to us.",
+    "Order": "Order",
+    "New order": "New order",
+    "Order №:number": "Order №:number",
+    "Edit order №:number": "Edit order №:number",
+    "Products in the order": "Products in the order",
+    "Calculated from the products when you save.": "Calculated from the products when you save."
 }

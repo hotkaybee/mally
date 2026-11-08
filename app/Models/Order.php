@@ -50,6 +50,17 @@ class Order extends Model
             : null);
     }
 
+    /**
+     * Sets the USD total from the order's own lines minus the discount saved
+     * with it. The admin form never sends a total of its own.
+     */
+    public function recalculateAmount(): void
+    {
+        $subtotal = (float) $this->orderProducts()->sum('total_price');
+
+        $this->forceFill(['amount' => max(0, round($subtotal - (float) $this->discount_amount, 2))])->save();
+    }
+
     public function isPaid(): bool
     {
         return (float) $this->amount > 0 && (float) $this->amount_paid >= (float) $this->amount;

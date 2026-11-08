@@ -22,9 +22,14 @@ class OrderForm
                     ->relationship('customer', 'first_name')
                     ->getOptionLabelFromRecordUsing(fn ($record) => $record->first_name.' '.$record->last_name)
                     ->searchable(['first_name', 'last_name'])
-                    ->required(),
+                    ->required()
+                    // An order stays with the customer it was placed for: it shows
+                    // in their profile and they hold its receipt link. A wrong
+                    // customer means deleting the order and creating it again.
+                    ->disabledOn('edit'),
 
                 Repeater::make('orderProducts')
+                    ->label(__('Products in the order'))
                     ->relationship('orderProducts')
                     ->schema([
                         Select::make('product_id')
@@ -32,6 +37,7 @@ class OrderForm
                             ->options(Product::orderBy('name')->pluck('name', 'id'))
                             ->searchable()
                             ->required()
+                            ->columnSpan(2)
                             ->reactive()
                             ->afterStateUpdated(function (Set $set) {
                                 // Reset the receipt-dependent fields when the product changes.
@@ -121,21 +127,25 @@ class OrderForm
                                 $set('total_price', ($state ?: 0) * $quantity);
                             }),
 
+                        // Shown while editing; the saved value is price × quantity
+                        // from OrderProductObserver.
                         TextInput::make('total_price')
                             ->label(__('total_price'))
                             ->numeric()
-                            ->disabled()
-                            ->dehydrated(),
+                            ->disabled(),
                     ])
-                    ->columns(5)
+                    ->columns(6)
+                    ->columnSpanFull()
                     ->defaultItems(1)
                     ->addActionLabel(__('Add Product'))
                     ->collapsible(),
 
+                // Calculated on the server from the lines (Order::recalculateAmount).
                 TextInput::make('amount')
                     ->label(__('amount'))
-                    ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->disabled()
+                    ->helperText(__('Calculated from the products when you save.')),
                 TextInput::make('amount_paid')
                     ->label(__('amount_paid'))
                     ->required()

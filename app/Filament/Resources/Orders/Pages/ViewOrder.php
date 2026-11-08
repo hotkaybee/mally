@@ -10,6 +10,11 @@ class ViewOrder extends ViewRecord
 {
     protected static string $resource = OrderResource::class;
 
+    public function getTitle(): string
+    {
+        return __('Order №:number', ['number' => $this->record->order_number]);
+    }
+
     protected function getHeaderActions(): array
     {
         return [

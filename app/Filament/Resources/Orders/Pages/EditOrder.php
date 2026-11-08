@@ -11,6 +11,16 @@ class EditOrder extends EditRecord
 {
     protected static string $resource = OrderResource::class;
 
+    public function getTitle(): string
+    {
+        return __('Edit order №:number', ['number' => $this->record->order_number]);
+    }
+
+    protected function afterSave(): void
+    {
+        $this->record->recalculateAmount();
+    }
+
     protected function getHeaderActions(): array
     {
         return [

@@ -11,11 +11,14 @@ class OrderProductObserver
     public function __construct(private InventoryService $inventory) {}
 
     /**
-     * Freeze the unit cost from the chosen receipt onto the line, so profit
-     * stays correct even if the receipt is edited later.
+     * The line total is always price × quantity. The unit cost from the
+     * chosen receipt is frozen onto the line, so profit stays correct even if
+     * the receipt is edited later.
      */
     public function saving(OrderProduct $line): void
     {
+        $line->total_price = round((float) $line->price * (int) $line->quantity, 2);
+
         if ($line->product_receipt_id) {
             $receipt = ProductReceipt::find($line->product_receipt_id);
             $line->unit_cost = $receipt ? $receipt->unit_cost : 0;

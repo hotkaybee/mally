@@ -269,5 +269,11 @@
     "Add your email with Google, it is confirmed at once.": "Emailni Google orqali qo‘shing, u darhol tasdiqlanadi.",
     "Google sign-in was added to your Mally account": "Mally akkauntingizga Google orqali kirish qo‘shildi",
     "Someone just signed in to your Mally account with a Google account that has this email, and Google sign-in is now linked to it. If it was you, nothing else is needed.": "Mally akkauntingizga shu email’li Google akkaunti orqali hozirgina kirildi va endi Google orqali kirish unga ulandi. Agar bu siz bo‘lsangiz, boshqa hech narsa qilish shart emas.",
-    "If it was not you, reset your password on the Mally website right away and write to us.": "Agar bu siz bo‘lmasangiz, darhol Mally saytida parolni tiklang va bizga yozing."
+    "If it was not you, reset your password on the Mally website right away and write to us.": "Agar bu siz bo‘lmasangiz, darhol Mally saytida parolni tiklang va bizga yozing.",
+    "Order": "Buyurtma",
+    "New order": "Yangi buyurtma",
+    "Order №:number": "Buyurtma №:number",
+    "Edit order №:number": "Buyurtmani tahrirlash №:number",
+    "Products in the order": "Buyurtmadagi mahsulotlar",
+    "Calculated from the products when you save.": "Saqlaganda mahsulotlar bo'yicha hisoblanadi."
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\OrderStatus;
 use App\Exceptions\CheckoutException;
 use App\Models\Customer;
 use App\Models\Order;
@@ -60,7 +61,7 @@ class OrderService
                 'discount_amount' => 0,
                 'amount' => 0,
                 'amount_paid' => 0,
-                'status' => 'processing',
+                'status' => OrderStatus::Processing,
             ]);
 
             $subtotal = 0.0;

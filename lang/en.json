@@ -275,5 +275,13 @@
     "Order №:number": "Order №:number",
     "Edit order №:number": "Edit order №:number",
     "Products in the order": "Products in the order",
-    "Calculated from the products when you save.": "Calculated from the products when you save."
+    "Calculated from the products when you save.": "Calculated from the products when you save.",
+    "order_status.placed": "Placed",
+    "order_status.paid": "Paid",
+    "order_status.packing": "Packing",
+    "order_status.shipped": "On the way",
+    "order_status.delivered": "Delivered",
+    "order_status.cancelled": "Cancelled",
+    "A cancelled order returns its products to stock.": "A cancelled order returns its products to stock.",
+    "There is not enough stock left to bring this order back.": "There is not enough stock left to bring this order back."
 }

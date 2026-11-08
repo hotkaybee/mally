@@ -275,5 +275,13 @@
     "Order №:number": "Buyurtma №:number",
     "Edit order №:number": "Buyurtmani tahrirlash №:number",
     "Products in the order": "Buyurtmadagi mahsulotlar",
-    "Calculated from the products when you save.": "Saqlaganda mahsulotlar bo'yicha hisoblanadi."
+    "Calculated from the products when you save.": "Saqlaganda mahsulotlar bo'yicha hisoblanadi.",
+    "order_status.placed": "Rasmiylashtirildi",
+    "order_status.paid": "To'langan",
+    "order_status.packing": "Yig'ilmoqda",
+    "order_status.shipped": "Yo'lda",
+    "order_status.delivered": "Topshirildi",
+    "order_status.cancelled": "Bekor qilingan",
+    "A cancelled order returns its products to stock.": "Bekor qilingan buyurtma mahsulotlarni omborga qaytaradi.",
+    "There is not enough stock left to bring this order back.": "Bu buyurtmani qaytarish uchun omborda mahsulot yetarli emas."
 }

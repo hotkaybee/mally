@@ -2,8 +2,11 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Enums\OrderStatus;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductReceipt;
+use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -153,13 +156,18 @@ class OrderForm
                     ->default(0.0),
                 Select::make('status')
                     ->label(__('status'))
-                    ->options([
-                        'processing' => __('Processing'),
-                        'awaiting_delivery' => __('Awaiting delivery'),
-                        'delivered' => __('Delivered'),
-                    ])
-                    ->default('processing')
-                    ->required(),
+                    ->options(OrderStatus::class)
+                    ->default(OrderStatus::Processing)
+                    ->required()
+                    ->helperText(__('A cancelled order returns its products to stock.'))
+                    // Bringing a cancelled order back takes its products again.
+                    ->rule(fn (?Order $record) => function (string $attribute, $value, Closure $fail) use ($record) {
+                        $value = $value instanceof OrderStatus ? $value : OrderStatus::tryFrom((string) $value);
+
+                        if ($record?->isCancelled() && $value !== OrderStatus::Cancelled && ! $record->hasStockToRestore()) {
+                            $fail(__('There is not enough stock left to bring this order back.'));
+                        }
+                    }),
             ]);
     }
 }

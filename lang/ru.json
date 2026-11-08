@@ -275,5 +275,13 @@
     "Order №:number": "Заказ №:number",
     "Edit order №:number": "Редактирование заказа №:number",
     "Products in the order": "Товары в заказе",
-    "Calculated from the products when you save.": "Считается по товарам при сохранении."
+    "Calculated from the products when you save.": "Считается по товарам при сохранении.",
+    "order_status.placed": "Оформлен",
+    "order_status.paid": "Оплачен",
+    "order_status.packing": "Сборка",
+    "order_status.shipped": "В пути",
+    "order_status.delivered": "Вручен",
+    "order_status.cancelled": "Отменён",
+    "A cancelled order returns its products to stock.": "Отменённый заказ возвращает товары на склад.",
+    "There is not enough stock left to bring this order back.": "На складе уже не хватает товаров, чтобы вернуть этот заказ."
 }

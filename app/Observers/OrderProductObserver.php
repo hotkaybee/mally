@@ -2,6 +2,8 @@
 
 namespace App\Observers;
 
+use App\Enums\OrderStatus;
+use App\Models\Order;
 use App\Models\OrderProduct;
 use App\Models\ProductReceipt;
 use App\Services\InventoryService;
@@ -29,6 +31,10 @@ class OrderProductObserver
 
     public function created(OrderProduct $line): void
     {
+        if ($this->orderIsCancelled($line)) {
+            return;
+        }
+
         $this->inventory->consume($line);
     }
 
@@ -38,6 +44,10 @@ class OrderProductObserver
      */
     public function updating(OrderProduct $line): void
     {
+        if ($this->orderIsCancelled($line)) {
+            return;
+        }
+
         $this->inventory->release(
             $line->getOriginal('product_receipt_id'),
             (int) $line->getOriginal('quantity'),
@@ -48,6 +58,16 @@ class OrderProductObserver
 
     public function deleted(OrderProduct $line): void
     {
+        if ($this->orderIsCancelled($line)) {
+            return;
+        }
+
         $this->inventory->release($line->product_receipt_id, (int) $line->quantity);
+    }
+
+    /** A cancelled order holds no stock, so its lines don't move any (see OrderObserver). */
+    private function orderIsCancelled(OrderProduct $line): bool
+    {
+        return Order::whereKey($line->order_id)->value('status') === OrderStatus::Cancelled;
     }
 }

@@ -55,6 +55,7 @@
                     @if($this->authNotice)
                         <p class="mb-4 p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-800 font-medium text-center">{{ $this->authNotice }}</p>
                     @endif
+
                     @error('authTelegram')
                         <p role="alert" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>
                     @enderror
@@ -144,6 +145,14 @@
                             <span>{{ __('Sign up') }}</span>
                         </button>
 
+                        <a
+                            href="{{ route('auth.google', array_filter(['redirect' => $this->authRedirectTo ?? null])) }}"
+                            class="w-full py-3.5 px-5 rounded-xl bg-white hover:bg-[#FAF7F5] border border-[#E3DBD5] text-[#1C1917] text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-google text-base text-[#DB4437]"></i>
+                            <span>{{ __('Continue with Google') }}</span>
+                        </a>
+
                         <button
                             type="button"
                             wire:click="startTelegramAuth"
@@ -196,6 +205,14 @@
                         >
                             <span>{{ __('Get code') }}</span>
                         </button>
+
+                        <a
+                            href="{{ route('auth.google', array_filter(['redirect' => $this->authRedirectTo ?? null])) }}"
+                            class="w-full py-3 px-4 rounded-xl bg-white hover:bg-[#FAF7F5] border border-[#E3DBD5] text-[#1C1917] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-google text-base text-[#DB4437]"></i>
+                            <span>{{ __('Continue with Google') }}</span>
+                        </a>
 
                         <button
                             type="button"
@@ -702,7 +719,13 @@
                 <!-- TELEGRAM: ШАГ 1 — ОТКРЫТЬ БОТА И ПОДЕЛИТЬСЯ КОНТАКТОМ -->
                 <div @if($this->authTelegramBotUrl) wire:poll.2s.keep-alive="checkTelegramAuthStatus" @endif class="space-y-4">
                     <h2 class="font-serif text-2xl font-bold text-[#1C1917] text-center">
-                        {{ ($this->authTelegramPurpose ?? 'login') === 'reset' ? __('Password reset via Telegram') : __('Sign in with Telegram') }}
+                        @if(($this->authTelegramPurpose ?? 'login') === 'reset')
+                            {{ __('Password reset via Telegram') }}
+                        @elseif(($this->authTelegramPurpose ?? 'login') === 'link')
+                            {{ __('Add Telegram') }}
+                        @else
+                            {{ __('Sign in with Telegram') }}
+                        @endif
                     </h2>
 
                     @error('authTelegram')
@@ -713,7 +736,11 @@
                         <div class="p-4 rounded-2xl bg-[#F0F9FF] border border-[#BAE6FD] space-y-2.5 text-xs text-[#0C4A6E]">
                             <ol class="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed text-[#0369A1]">
                                 <li>{{ __('Open the bot with the button below and press Start.') }}</li>
-                                <li>{{ __('Share your contact with the "📱 Share contact" button.') }}</li>
+                                <li>
+                                    {{ ($this->authTelegramPurpose ?? 'login') === 'link'
+                                        ? __('Optionally, share your contact with the "📱 Share contact" button to add your phone number too.')
+                                        : __('Share your contact with the "📱 Share contact" button.') }}
+                                </li>
                                 <li>{{ __('The bot will send you a 6-digit code — enter it here.') }}</li>
                             </ol>
                         </div>
@@ -736,7 +763,7 @@
                     @else
                         <button
                             type="button"
-                            wire:click="startTelegramAuth"
+                            wire:click="{{ ($this->authTelegramPurpose ?? 'login') === 'link' ? 'startTelegramLink' : 'startTelegramAuth' }}"
                             class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
                         >
                             <i class="fa-brands fa-telegram text-base"></i>
@@ -746,7 +773,7 @@
 
                     <button
                         type="button"
-                        wire:click="backToLogin"
+                        wire:click="{{ ($this->authTelegramPurpose ?? 'login') === 'link' ? 'closeAuthModal' : 'backToLogin' }}"
                         class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                         <i class="fa-solid fa-arrow-left text-[10px]"></i>
@@ -790,12 +817,53 @@
 
                     <button
                         type="button"
-                        wire:click="backToLogin"
+                        wire:click="{{ ($this->authTelegramPurpose ?? 'login') === 'link' ? 'closeAuthModal' : 'backToLogin' }}"
                         class="w-full py-2 text-xs text-[#78716C] hover:text-[#1C1917] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                         <i class="fa-solid fa-arrow-left text-[10px]"></i>
                         <span>{{ __('Back') }}</span>
                     </button>
+                </div>
+
+            @elseif($step === 'offer-telegram')
+                <!-- ПОСЛЕ GOOGLE: необязательная привязка Telegram и телефона через бота -->
+                <div class="space-y-5 text-center">
+                    <div class="w-14 h-14 mx-auto rounded-2xl bg-[#0088CC]/10 flex items-center justify-center">
+                        <i class="fa-brands fa-telegram text-3xl text-[#0088CC]"></i>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h2 class="font-serif text-2xl font-bold text-[#1C1917]">
+                            {{ __('Add Telegram to your profile?') }}
+                        </h2>
+                        <p class="text-xs text-[#78716C] leading-relaxed max-w-xs mx-auto">
+                            {{ __('Optional: confirm your Telegram through our bot. You can also share your phone number there, only if you want to. You can do this later in your profile.') }}
+                        </p>
+                    </div>
+
+                    @error('authTelegram')
+                        <p role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">{{ $message }}</p>
+                    @enderror
+
+                    <div class="space-y-2.5">
+                        <button
+                            type="button"
+                            wire:click="startTelegramLink"
+                            wire:loading.attr="disabled"
+                            class="w-full py-3.5 px-5 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] disabled:opacity-60 text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <i class="fa-brands fa-telegram text-base"></i>
+                            <span>{{ __('Add Telegram') }}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            wire:click="skipTelegramOffer"
+                            class="w-full py-3 px-5 rounded-xl bg-[#FAF7F5] hover:bg-[#F2EAE4] border border-[#EAE3DE] text-[#57534E] text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+                        >
+                            {{ __('Skip') }}
+                        </button>
+                    </div>
                 </div>
 
             @elseif($step === 'telegram-register')

@@ -47,6 +47,13 @@ return [
         'auth_webhook_secret' => env('TELEGRAM_AUTH_WEBHOOK_SECRET', ''),
     ],
 
+    // "Continue with Google" for the storefront, see GoogleAuthService.
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID', ''),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET', ''),
+        'redirect' => env('GOOGLE_REDIRECT_URI', rtrim((string) env('APP_URL', 'http://localhost'), '/').'/auth/google/callback'),
+    ],
+
     'store' => [
         'card_number' => env('STORE_CARD_NUMBER', ''),
         'card_holder' => env('STORE_CARD_HOLDER', ''),

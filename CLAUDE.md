@@ -79,7 +79,7 @@ House style is in `guidelines.md`: business logic in models/services (not in Fil
 **Security**
 - Every `public` Livewire property and method is client-controllable. Mark server-owned state `#[Locked]` and re-verify on the server before acting.
 - No hardcoded / universal / "dev" login codes. OTP codes: random, hashed server-side, expiring, rate-limited, single-use, never rendered or logged outside `local`.
-- Registration with an existing phone or email is rejected. Never merge accounts. A new account is linked to an existing customer without an account only when the phone was verified through Telegram.
+- Registration with an existing phone or email is rejected. Never merge accounts. A new account is linked to an existing customer without an account only when the phone was verified through Telegram. The one exception: "Continue with Google" may sign in to an existing shopper account with the same email, only when Google controls that address (gmail.com / googlemail.com, or a Workspace account whose `hd` is the address's own domain, see `CustomerAccountService::isGoogleAuthoritative`), and the owner always gets a `GoogleLinkedMail`.
 - Never use `withoutVerifying()` / `verify => false`. Tests use `Http::fake()`.
 - Never show `$e->getMessage()` to customers — show a generic message and `report($e)`.
 - No custom `server.php` in the project root (it can serve `.env`).

@@ -247,6 +247,8 @@ class EmailAuthService
             || str_starts_with($path, '//')
             || str_starts_with($path, '/\\')
             || preg_match('/^[a-zA-Z][a-zA-Z0-9+.-]*:/', $path) === 1
+            // Browsers drop tabs and line breaks inside a URL, so "/<TAB>/host" would become "//host".
+            || preg_match('/[\x00-\x20\x7f\\\\]/', $path) === 1
         ) {
             return '/';
         }
@@ -537,12 +539,14 @@ class EmailAuthService
                 ];
             }
 
-            $user = User::create([
+            $user = new User([
                 'name' => $cleanName,
                 'email' => $email,
                 'phone' => $normalizedPhone,
                 'password' => Hash::make($plainPassword),
             ]);
+            // The person has just typed the code we emailed to this address.
+            $user->forceFill(['email_verified_at' => now()])->save();
 
             $this->invalidateActiveCodes($email, AuthCode::PURPOSE_REGISTER);
 

@@ -222,11 +222,15 @@
                                 </h1>
                             </div>
                             <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                                <span class="text-xs text-[#78716C] font-mono">{{ $customer->phone_number }}</span>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                    <i class="fa-solid fa-shield-halved text-[9px]"></i>
-                                    <span>{{ $pt['device_bound'] }}</span>
-                                </span>
+                                @if($phoneStatus !== 'missing')
+                                    <span class="text-xs text-[#78716C] font-mono">{{ $customer->phone_number }}</span>
+                                @endif
+                                @if($phoneStatus === 'verified')
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                        <i class="fa-solid fa-shield-halved text-[9px]"></i>
+                                        <span>{{ $pt['device_bound'] }}</span>
+                                    </span>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -515,22 +519,84 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <!-- Телефон: подтверждается только через Telegram -->
+                            <div data-phone-status="{{ $phoneStatus }}">
                                 <div class="flex items-center justify-between mb-1">
                                     <label class="block text-xs font-semibold text-[#78716C]">
                                         {{ $pt['phone'] }}
                                     </label>
-                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
-                                        <i class="fa-solid fa-check text-[10px]"></i>
-                                        <span>{{ $pt['verified'] }}</span>
-                                    </span>
+                                    @if($phoneStatus === 'verified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-check text-[10px]"></i>
+                                            <span>{{ $pt['verified'] }}</span>
+                                        </span>
+                                    @elseif($phoneStatus === 'unverified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold">
+                                            <span>{{ __('Not confirmed') }}</span>
+                                        </span>
+                                    @endif
                                 </div>
-                                <input
-                                    type="tel"
-                                    disabled
-                                    value="{{ $phone }}"
-                                    class="w-full px-4 py-2.5 bg-emerald-50/40 border border-emerald-200/70 rounded-xl text-xs font-mono font-bold text-emerald-950"
-                                />
+
+                                @if($phoneStatus !== 'missing')
+                                    <input
+                                        type="tel"
+                                        data-phone-field
+                                        disabled
+                                        value="{{ $phone }}"
+                                        class="w-full px-4 py-2.5 rounded-xl text-xs font-mono font-bold {{ $phoneStatus === 'verified' ? 'bg-emerald-50/40 border border-emerald-200/70 text-emerald-950' : 'bg-[#FAF8F6] border border-[#E3DBD5] text-[#57534E]' }}"
+                                    />
+                                @endif
+
+                                @if($phoneStatus !== 'verified' && $accountSignedIn)
+                                    <button
+                                        type="button"
+                                        wire:click="openLinkTelegram"
+                                        class="{{ $phoneStatus === 'missing' ? '' : 'mt-2 ' }}w-full py-3 px-4 rounded-xl bg-[#0088CC] hover:bg-[#0077B5] text-white text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <i class="fa-brands fa-telegram text-base"></i>
+                                        <span>{{ __('Continue with Telegram') }}</span>
+                                    </button>
+                                @endif
+                            </div>
+
+                            <!-- Email: подтверждается через Google -->
+                            <div data-email-status="{{ $emailStatus }}">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-xs font-semibold text-[#78716C]">
+                                        {{ __('Email') }}
+                                    </label>
+                                    @if($emailStatus === 'verified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-check text-[10px]"></i>
+                                            <span>{{ $pt['verified'] }}</span>
+                                        </span>
+                                    @elseif($emailStatus === 'unverified')
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold">
+                                            <span>{{ __('Not confirmed') }}</span>
+                                        </span>
+                                    @endif
+                                </div>
+
+                                @if($emailStatus !== 'missing')
+                                    <input
+                                        type="email"
+                                        data-email-field
+                                        disabled
+                                        value="{{ $accountEmail }}"
+                                        class="w-full px-4 py-2.5 rounded-xl text-xs font-bold {{ $emailStatus === 'verified' ? 'bg-emerald-50/40 border border-emerald-200/70 text-emerald-950' : 'bg-[#FAF8F6] border border-[#E3DBD5] text-[#57534E]' }}"
+                                    />
+                                @elseif($accountSignedIn)
+                                    <a
+                                        href="{{ route('auth.google', ['link' => 1, 'redirect' => '/profile']) }}"
+                                        class="w-full py-3 px-4 rounded-xl bg-white hover:bg-[#FAF7F5] border border-[#E3DBD5] text-[#1C1917] text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <i class="fa-brands fa-google text-base text-[#DB4437]"></i>
+                                        <span>{{ __('Continue with Google') }}</span>
+                                    </a>
+                                    <p class="mt-1.5 text-[11px] text-[#78716C] leading-relaxed">
+                                        {{ __('Add your email with Google, it is confirmed at once.') }}
+                                    </p>
+                                @endif
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

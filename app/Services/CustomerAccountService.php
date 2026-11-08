@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * Storefront accounts: a User (login) owns exactly one Customer
@@ -21,6 +23,16 @@ class CustomerAccountService
     public const TELEGRAM_TAKEN = 'telegram_taken';
 
     public const PHONE_TAKEN = 'phone_taken';
+
+    public const TELEGRAM_ALREADY_LINKED = 'telegram_already_linked';
+
+    public const GOOGLE_INVALID = 'google_invalid';
+
+    public const GOOGLE_UNVERIFIED = 'google_unverified';
+
+    public const GOOGLE_EMAIL_TAKEN = 'google_email_taken';
+
+    public const GOOGLE_ALREADY_LINKED = 'google_already_linked';
 
     public function __construct(private readonly StorefrontService $storefront) {}
 
@@ -161,6 +173,187 @@ class CustomerAccountService
     public function changePassword(User $user, string $password): void
     {
         $user->update(['password' => Hash::make($password)]);
+    }
+
+    /**
+     * The account for a Google identity (Google's stable `sub`). Signing in
+     * with Google already proves the person owns that Google account, and
+     * Google confirms the email, so no password is asked: a confirmed email
+     * that belongs to an existing shopper account signs in to it and links
+     * the Google identity to it. Admin accounts and accounts that already
+     * have another Google are never touched.
+     *
+     * @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string, hosted_domain?: string}  $profile
+     * @return array{result: string, user?: User, created?: bool, linked?: bool}
+     */
+    public function resolveGoogle(array $profile): array
+    {
+        $sub = trim($profile['sub']);
+        if ($sub === '') {
+            return ['result' => self::GOOGLE_INVALID];
+        }
+
+        return Cache::lock('account-google:'.hash('sha256', $sub), 10)->block(5, fn () => DB::transaction(function () use ($profile, $sub) {
+            $known = User::shoppers()->where('google_id', $sub)->first();
+            if ($known) {
+                return ['result' => self::OK, 'user' => $known];
+            }
+
+            // An unconfirmed email must not claim or create an account.
+            $email = mb_strtolower(trim($profile['email']));
+            if (! $profile['email_verified'] || $email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+                return ['result' => self::GOOGLE_UNVERIFIED];
+            }
+
+            // users.email is unique and shared with admins.
+            $sameEmail = User::whereRaw('LOWER(email) = ?', [$email])->first();
+            if ($sameEmail) {
+                // Only an address Google itself is the authority for may sign in to an
+                // existing account; for any other address the account owner signs in
+                // the way they registered.
+                if ($sameEmail->is_admin
+                    || filled($sameEmail->google_id)
+                    || ! self::isGoogleAuthoritative($email, (string) ($profile['hosted_domain'] ?? ''))) {
+                    return ['result' => self::GOOGLE_EMAIL_TAKEN];
+                }
+
+                $sameEmail->forceFill([
+                    'google_id' => $sub,
+                    'email_verified_at' => $sameEmail->email_verified_at ?? now(),
+                ])->save();
+
+                return ['result' => self::OK, 'user' => $sameEmail, 'linked' => true];
+            }
+
+            $first = mb_substr(trim($profile['first_name']), 0, 100);
+            $last = mb_substr(trim($profile['last_name']), 0, 100);
+
+            $user = new User([
+                'name' => trim($first.' '.$last) ?: Str::before($email, '@'),
+                'email' => $email,
+                'google_id' => $sub,
+                'password' => null,
+            ]);
+            $user->forceFill(['email_verified_at' => now()])->save();
+
+            $customer = $this->customerFor($user);
+            if ($first !== '') {
+                $customer->update(['first_name' => $first, 'last_name' => $last]);
+            }
+
+            return ['result' => self::OK, 'user' => $user, 'created' => true];
+        }));
+    }
+
+    /**
+     * Google decides who owns the address: gmail.com / googlemail.com, or a
+     * Google Workspace account whose hosted domain (`hd`) is the address's own
+     * domain. Any other address (mail.ru, a school or company mailbox without
+     * Workspace) can change hands without Google knowing, so a confirmed
+     * Google email on it is not enough to enter an existing account.
+     */
+    public static function isGoogleAuthoritative(string $email, string $hostedDomain): bool
+    {
+        $domain = Str::after(mb_strtolower(trim($email)), '@');
+        $hosted = mb_strtolower(trim($hostedDomain));
+
+        return in_array($domain, ['gmail.com', 'googlemail.com'], true)
+            || ($hosted !== '' && $hosted === $domain);
+    }
+
+    /**
+     * "Continue with Google" in the profile: add a confirmed email (and the
+     * Google identity) to the signed-in account. An account that already has
+     * an email only accepts Google with that same email; an email that
+     * belongs to another account is refused (accounts are never merged).
+     *
+     * @param  array{sub: string, email: string, email_verified: bool, first_name: string, last_name: string}  $profile
+     */
+    public function attachGoogle(User $user, array $profile): string
+    {
+        $sub = trim($profile['sub']);
+        $email = mb_strtolower(trim($profile['email']));
+
+        if ($user->is_admin || $sub === '' || filled($user->google_id)) {
+            return self::GOOGLE_ALREADY_LINKED;
+        }
+        if (! $profile['email_verified'] || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return self::GOOGLE_UNVERIFIED;
+        }
+        if (User::where('google_id', $sub)->exists()) {
+            return self::GOOGLE_ALREADY_LINKED;
+        }
+        if (filled($user->email)
+            ? mb_strtolower((string) $user->email) !== $email
+            : User::whereRaw('LOWER(email) = ?', [$email])->exists()) {
+            return self::GOOGLE_EMAIL_TAKEN;
+        }
+
+        try {
+            DB::transaction(function () use ($user, $sub, $email) {
+                $user->forceFill([
+                    'email' => $email,
+                    'google_id' => $sub,
+                    'email_verified_at' => $user->email_verified_at ?? now(),
+                ])->save();
+
+                $customer = $this->customerFor($user);
+                if (blank($customer->email) && ! Customer::whereRaw('LOWER(email) = ?', [$email])->exists()) {
+                    $customer->update(['email' => $email]);
+                }
+            });
+        } catch (UniqueConstraintViolationException) {
+            return self::GOOGLE_EMAIL_TAKEN;
+        }
+
+        return self::OK;
+    }
+
+    /**
+     * Link the Telegram account verified by TelegramAuthService to a signed-in
+     * user. The phone Telegram shared is saved only when it is free; refusing
+     * the phone never refuses the link.
+     *
+     * @param  array{telegram_user_id: string, telegram_username: string, phone: string}  $identity
+     * @return array{result: string, phone_saved: bool}
+     */
+    public function linkTelegram(User $user, array $identity): array
+    {
+        $telegramId = $identity['telegram_user_id'];
+
+        $owner = $this->findByTelegram($telegramId);
+        if ($owner && $owner->id !== $user->id) {
+            return ['result' => self::TELEGRAM_TAKEN, 'phone_saved' => false];
+        }
+        if (filled($user->telegram_id) && $user->telegram_id !== $telegramId) {
+            return ['result' => self::TELEGRAM_ALREADY_LINKED, 'phone_saved' => false];
+        }
+
+        $phone = Customer::normalizePhone($identity['phone'] !== '' ? $identity['phone'] : null);
+        $savePhone = $phone !== null
+            && ! $this->phoneTaken($phone, $user->id)
+            && (blank($user->phone) || $user->phone === $phone);
+
+        try {
+            DB::transaction(function () use ($user, $telegramId, $phone, $savePhone, $identity) {
+                $user->telegram_id = $telegramId;
+                if ($savePhone) {
+                    $user->phone = $phone;
+                    $user->phone_verified_at = now();
+                }
+                $user->save();
+
+                $customer = $this->customerFor($user);
+                if ($savePhone && blank($customer->phone_number) && ! Customer::wherePhone($phone)->exists()) {
+                    $customer->update(['phone_number' => $phone]);
+                }
+                $this->rememberTelegramHandle($customer, $identity['telegram_username']);
+            });
+        } catch (UniqueConstraintViolationException) {
+            return ['result' => self::TELEGRAM_TAKEN, 'phone_saved' => false];
+        }
+
+        return ['result' => self::OK, 'phone_saved' => $savePhone];
     }
 
     private function rememberTelegramHandle(Customer $customer, string $username): void

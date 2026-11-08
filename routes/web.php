@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\GoogleAuthController;
 use App\Livewire\Storefront\CartPage;
 use App\Livewire\Storefront\CatalogPage;
 use App\Livewire\Storefront\CheckoutPage;
@@ -11,6 +12,11 @@ use App\Livewire\Storefront\ProductDetailPage;
 use App\Livewire\Storefront\ProfilePage;
 use App\Livewire\Storefront\ReturnsPage;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])
+    ->middleware('throttle:20,1')->name('auth.google');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])
+    ->middleware('throttle:20,1')->name('auth.google.callback');
 
 Route::get('/', HomePage::class)->name('home');
 Route::get('/catalog', CatalogPage::class)->name('catalog');

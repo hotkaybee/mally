@@ -754,6 +754,7 @@ class EmailAuthTest extends TestCase
         $this->assertSame('+998 90 123 45 67', $user->phone);
         $this->assertFalse(Schema::hasColumn('users', 'role'));
         $this->assertTrue(Hash::check('MySecurePass123', $user->password));
+        $this->assertNotNull($user->email_verified_at, 'The email code confirms the email.');
         $this->assertDatabaseMissing('users', ['email' => 'tampered@example.com']);
         $this->assertSame($user->id, session('mally_user_id'));
         $this->assertNotNull(session('mally_customer_id'));

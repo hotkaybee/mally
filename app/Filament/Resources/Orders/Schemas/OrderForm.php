@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Customers\CustomerResource;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductReceipt;
@@ -10,6 +11,7 @@ use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -29,7 +31,17 @@ class OrderForm
                     // An order stays with the customer it was placed for: it shows
                     // in their profile and they hold its receipt link. A wrong
                     // customer means deleting the order and creating it again.
-                    ->disabledOn('edit'),
+                    // A hidden field isn't saved, so edit shows the name as text.
+                    ->hiddenOn('edit'),
+
+                TextEntry::make('customer_name')
+                    ->label(__('customer_id'))
+                    ->state(fn (Order $record) => trim($record->customer?->first_name.' '.$record->customer?->last_name))
+                    ->url(fn (Order $record) => $record->customer_id
+                        ? CustomerResource::getUrl('view', ['record' => $record->customer_id])
+                        : null)
+                    ->placeholder('—')
+                    ->visibleOn('edit'),
 
                 Repeater::make('orderProducts')
                     ->label(__('Products in the order'))

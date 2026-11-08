@@ -539,12 +539,14 @@ class EmailAuthService
                 ];
             }
 
-            $user = User::create([
+            $user = new User([
                 'name' => $cleanName,
                 'email' => $email,
                 'phone' => $normalizedPhone,
                 'password' => Hash::make($plainPassword),
             ]);
+            // The person has just typed the code we emailed to this address.
+            $user->forceFill(['email_verified_at' => now()])->save();
 
             $this->invalidateActiveCodes($email, AuthCode::PURPOSE_REGISTER);
 

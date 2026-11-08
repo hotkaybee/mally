@@ -6,6 +6,7 @@ use App\Livewire\Storefront\ProfilePage;
 use App\Models\User;
 use App\Services\CustomerAccountService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -22,6 +23,8 @@ class ProfileAccountStatusTest extends TestCase
     use RefreshDatabase;
 
     private const PHONE = '+998 90 123 45 67';
+
+    private const MIGRATION = 'database/migrations/2026_11_01_000000_add_google_auth_to_users_table.php';
 
     protected function setUp(): void
     {
@@ -169,5 +172,25 @@ class ProfileAccountStatusTest extends TestCase
         $this->profile()
             ->assertDontSeeHtml('wire:click="openSetPassword"')
             ->assertDontSeeHtml('wire:model="authPassword"');
+    }
+
+    public function test_migration_marks_emails_of_existing_shoppers_as_confirmed(): void
+    {
+        $this->artisan('migrate:rollback', ['--path' => self::MIGRATION])->assertSuccessful();
+
+        $insert = fn (?string $email, bool $admin = false) => DB::table('users')->insertGetId([
+            'name' => 'A', 'email' => $email, 'password' => 'x', 'is_admin' => $admin,
+            'created_at' => '2026-10-20 10:00:00', 'updated_at' => now(),
+        ]);
+        $shopper = $insert('shopper@example.com');
+        $admin = $insert('admin@example.com', true);
+        $noEmail = $insert(null);
+
+        $this->artisan('migrate', ['--path' => self::MIGRATION])->assertSuccessful();
+
+        $verifiedAt = fn (int $id) => DB::table('users')->where('id', $id)->value('email_verified_at');
+        $this->assertSame('2026-10-20 10:00:00', $verifiedAt($shopper));
+        $this->assertNull($verifiedAt($admin));
+        $this->assertNull($verifiedAt($noEmail));
     }
 }

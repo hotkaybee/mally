@@ -61,7 +61,8 @@ class AdminOrderFormTest extends TestCase
         $order = $this->order($owner);
 
         Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
-            ->assertFormFieldIsDisabled('customer_id')
+            ->assertFormFieldIsHidden('customer_id')
+            ->assertSee('Owner B')
             ->fillForm(['customer_id' => $other->id])
             ->call('save')
             ->assertHasNoFormErrors();

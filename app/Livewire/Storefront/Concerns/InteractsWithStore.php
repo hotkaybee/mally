@@ -11,7 +11,6 @@ use App\Services\EmailAuthService;
 use App\Services\GoogleAuthService;
 use App\Services\StorefrontService;
 use App\Services\TelegramAuthService;
-use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
 
 trait InteractsWithStore
@@ -68,10 +67,6 @@ trait InteractsWithStore
     public string $authTelegramPurpose = 'login';
 
     public string $authTelegramCode = '';
-
-    /** This email only has Google to sign in with: the form says so and goes to Google. */
-    #[Locked]
-    public bool $authGoogleHint = false;
 
     /**
      * After a brand-new Google sign-up the next full page load opens the
@@ -190,7 +185,6 @@ trait InteractsWithStore
         $this->authPhone = '+998 ';
         $this->authError = '';
         $this->authNotice = '';
-        $this->authGoogleHint = false;
         $this->authCooldownSeconds = 0;
         $this->authRedirectTo = $redirectTo !== null
             ? $this->emailAuth()->sanitizeRedirectPath($redirectTo)
@@ -285,14 +279,6 @@ trait InteractsWithStore
             $hasValidationError = true;
         }
 
-        // The person signed up with Google and has no password: send them back to Google.
-        if (! $hasValidationError && ! $isPhone && $this->googleOnlyEmail($normalizedInput)) {
-            $this->authPassword = '';
-            $this->authGoogleHint = true;
-
-            return;
-        }
-
         if ($this->authPassword === '') {
             $this->failAuth('authPassword', __('Enter your password.'));
             $hasValidationError = true;
@@ -316,22 +302,6 @@ trait InteractsWithStore
         }
 
         $this->finishLogin($res['user']);
-    }
-
-    /**
-     * True when this email belongs to an account that only has Google to sign
-     * in with. Answering it tells whether the email has an account, so it is
-     * rate-limited per IP like the sign-in attempts themselves.
-     */
-    protected function googleOnlyEmail(string $email): bool
-    {
-        $key = 'google-only-hint:'.request()->ip();
-        if (RateLimiter::tooManyAttempts($key, 20)) {
-            return false;
-        }
-        RateLimiter::hit($key, 60);
-
-        return $this->emailAuth()->isGoogleOnlyAccount($email);
     }
 
     /**
@@ -1036,7 +1006,6 @@ trait InteractsWithStore
         $this->authError = '';
         $this->authNotice = '';
         $this->authSuggestTelegram = false;
-        $this->authGoogleHint = false;
         $this->resetValidation();
     }
 

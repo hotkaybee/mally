@@ -91,17 +91,6 @@ class EmailAuthService
     }
 
     /**
-     * The account with this email signed up with Google and has no password,
-     * so the only way in is Google.
-     */
-    public function isGoogleOnlyAccount(string $rawEmail): bool
-    {
-        $user = $this->findUserByEmail($rawEmail);
-
-        return $user !== null && filled($user->google_id) && ! $user->hasPassword();
-    }
-
-    /**
      * Authenticate a storefront user by email and password with rate limiting.
      *
      * @return array{success: bool, error?: string, message: string, user?: User, customer?: Customer}

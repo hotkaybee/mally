@@ -513,38 +513,21 @@ class GoogleAuthTest extends TestCase
 
     // ------------------------------------- the sign-in form for a Google-only email
 
-    public function test_the_sign_in_form_sends_a_google_only_email_back_to_google(): void
-    {
-        $this->signedInGoogleUser();
-        session()->invalidate();
-        session(['mally_locale' => 'ru']);
-
-        Livewire::test(HomePage::class)
-            ->call('openAuthModal')
-            ->set('authEmail', 'Malika@Gmail.com')
-            ->set('authPassword', '')
-            ->call('loginWithPassword')
-            ->assertSet('authGoogleHint', true)
-            ->assertHasNoErrors()
-            ->assertSee('Вы входили через Google. Пожалуйста, продолжите тем же способом')
-            ->assertSeeHtml('login_hint=malika%40gmail.com');
-
-        $this->assertNull(session('mally_customer_id'));
-    }
-
-    public function test_the_google_hint_does_not_depend_on_the_typed_password(): void
+    public function test_a_google_only_email_gets_the_same_answer_as_an_unknown_one(): void
     {
         $this->signedInGoogleUser();
         session()->invalidate();
 
-        Livewire::test(HomePage::class)
+        $answer = fn (string $email) => Livewire::test(HomePage::class)
             ->call('openAuthModal')
-            ->set('authEmail', 'malika@gmail.com')
+            ->set('authEmail', $email)
             ->set('authPassword', 'some-guess-12345')
             ->call('loginWithPassword')
-            ->assertSet('authGoogleHint', true)
-            ->assertSet('authPassword', '');
+            ->assertHasErrors('authPassword')
+            ->assertDontSeeHtml('login_hint=')
+            ->get('authError');
 
+        $this->assertSame($answer('nobody@gmail.com'), $answer('malika@gmail.com'));
         $this->assertNull(session('mally_customer_id'));
     }
 
@@ -557,7 +540,6 @@ class GoogleAuthTest extends TestCase
             ->set('authEmail', 'malika@gmail.com')
             ->set('authPassword', 'WrongPass1234')
             ->call('loginWithPassword')
-            ->assertSet('authGoogleHint', false)
             ->assertHasErrors('authPassword');
 
         Livewire::test(HomePage::class)
@@ -569,32 +551,11 @@ class GoogleAuthTest extends TestCase
         $this->assertNotNull(session('mally_customer_id'));
     }
 
-    public function test_an_unknown_email_gets_the_ordinary_wrong_password_answer(): void
+    public function test_the_sign_in_form_always_offers_google(): void
     {
         Livewire::test(HomePage::class)
             ->call('openAuthModal')
-            ->set('authEmail', 'nobody@gmail.com')
-            ->set('authPassword', 'WrongPass1234')
-            ->call('loginWithPassword')
-            ->assertSet('authGoogleHint', false)
-            ->assertHasErrors('authPassword');
-    }
-
-    public function test_the_google_hint_is_rate_limited(): void
-    {
-        $this->signedInGoogleUser();
-        session()->invalidate();
-        for ($i = 0; $i < 20; $i++) {
-            RateLimiter::hit('google-only-hint:127.0.0.1', 60);
-        }
-
-        Livewire::test(HomePage::class)
-            ->call('openAuthModal')
-            ->set('authEmail', 'malika@gmail.com')
-            ->set('authPassword', 'WrongPass1234')
-            ->call('loginWithPassword')
-            ->assertSet('authGoogleHint', false)
-            ->assertHasErrors('authPassword');
+            ->assertSeeHtml(route('auth.google'));
     }
 
     public function test_a_google_account_cannot_be_entered_with_an_empty_or_guessed_password(): void

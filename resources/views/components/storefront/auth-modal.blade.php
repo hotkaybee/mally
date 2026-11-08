@@ -55,28 +55,6 @@
                     @if($this->authNotice)
                         <p class="mb-4 p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-800 font-medium text-center">{{ $this->authNotice }}</p>
                     @endif
-                    @if($this->authGoogleHint)
-                        @php($googleUrl = route('auth.google', array_filter(['login_hint' => $this->authEmail, 'redirect' => $this->authRedirectTo ?? null])))
-                        <div
-                            x-data
-                            x-init="setTimeout(() => window.location.href = @js($googleUrl), 3000)"
-                            class="mb-5 p-4 rounded-2xl bg-[#FAF7F5] border border-[#EAE3DE] text-center space-y-3"
-                        >
-                            <div class="w-11 h-11 mx-auto rounded-full bg-white border border-[#E3DBD5] flex items-center justify-center shadow-sm">
-                                <i class="fa-brands fa-google text-lg text-[#DB4437]"></i>
-                            </div>
-                            <p class="text-xs text-[#44403C] font-medium leading-relaxed">
-                                {{ __('You signed in with Google before. Please continue the same way: we will take you to Google.') }}
-                            </p>
-                            <a
-                                href="{{ $googleUrl }}"
-                                class="w-full py-3 px-5 rounded-xl bg-[#1C1917] hover:bg-[#2C2724] text-white text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                                <i class="fa-brands fa-google text-sm"></i>
-                                <span>{{ __('Continue with Google') }}</span>
-                            </a>
-                        </div>
-                    @endif
 
                     @error('authTelegram')
                         <p role="alert" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-center">{{ $message }}</p>

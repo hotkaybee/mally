@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
 use App\Observers\OrderObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -37,6 +38,13 @@ class Order extends Model
         'status',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'status' => OrderStatus::class,
+        ];
+    }
+
     protected function orderNumber(): Attribute
     {
         return Attribute::get(fn () => $this->id ? $this->id + self::NUMBER_OFFSET : null);
@@ -64,6 +72,44 @@ class Order extends Model
     public function isPaid(): bool
     {
         return (float) $this->amount > 0 && (float) $this->amount_paid >= (float) $this->amount;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === OrderStatus::Cancelled;
+    }
+
+    /**
+     * Where the order is for the customer: placed, paid, packing, shipped,
+     * delivered or cancelled. "Paid" is a placed order whose payment covers it.
+     */
+    public function progressStep(): string
+    {
+        return match ($this->status) {
+            OrderStatus::Processing => $this->isPaid() ? 'paid' : 'placed',
+            default => $this->status->value,
+        };
+    }
+
+    public function progressLabel(): string
+    {
+        return __('order_status.'.$this->progressStep());
+    }
+
+    /** A cancelled order can be brought back only while its receipts still have its units. */
+    public function hasStockToRestore(): bool
+    {
+        return $this->orderProducts()
+            ->whereNotNull('product_receipt_id')
+            ->selectRaw('product_receipt_id, SUM(quantity) as needed')
+            ->groupBy('product_receipt_id')
+            ->get()
+            ->every(function ($row) {
+                $receipt = ProductReceipt::find($row->product_receipt_id);
+
+                // A deleted receipt is skipped by InventoryService::consume() too.
+                return ! $receipt || $receipt->quantity_remaining >= (int) $row->needed;
+            });
     }
 
     /** Find an order by its customer-facing number. */

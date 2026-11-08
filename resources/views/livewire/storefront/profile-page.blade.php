@@ -47,13 +47,6 @@
             'review_photo_placeholder' => 'Havolani kiriting https://...',
             'add_link_btn' => '+ Havola',
             'publish_review_btn' => "Fikrni e'lon qilish",
-            'st_new' => 'Yangi buyurtma',
-            'st_paid' => "To'langan",
-            'st_packing' => "Yig'ilmoqda",
-            'st_shipped' => 'Yetkazilmoqda',
-            'st_delivered' => 'Topshirildi',
-            'st_cancelled' => 'Bekor qilingan',
-            'st_archived' => 'Arxivda',
         ],
         'en' => [
             'home' => 'Home',
@@ -102,13 +95,6 @@
             'review_photo_placeholder' => 'Paste image URL https://...',
             'add_link_btn' => '+ Add URL',
             'publish_review_btn' => 'Publish Review',
-            'st_new' => 'New Order',
-            'st_paid' => 'Paid',
-            'st_packing' => 'Packing',
-            'st_shipped' => 'In Delivery',
-            'st_delivered' => 'Delivered',
-            'st_cancelled' => 'Cancelled',
-            'st_archived' => 'Archived',
         ],
         default => [
             'home' => 'Главная',
@@ -157,13 +143,6 @@
             'review_photo_placeholder' => 'Вставьте ссылку https://...',
             'add_link_btn' => '+ Ссылка',
             'publish_review_btn' => 'Опубликовать отзыв',
-            'st_new' => 'Новый заказ',
-            'st_paid' => 'Оплачен',
-            'st_packing' => 'Комплектуется',
-            'st_shipped' => 'В доставке',
-            'st_delivered' => 'Вручен',
-            'st_cancelled' => 'Отменён',
-            'st_archived' => 'В архиве',
         ],
     };
 @endphp
@@ -302,17 +281,14 @@
                             </div>
                         @else
                             @php
+                                // Colours per step; labels come from Order::progressLabel().
                                 $statusMap = [
-                                    'processing' => ['label' => $pt['st_new'], 'bg' => '#EFF6FF', 'color' => '#1D4ED8', 'border' => '#BFDBFE'],
-                                    'NEW' => ['label' => $pt['st_new'], 'bg' => '#EFF6FF', 'color' => '#1D4ED8', 'border' => '#BFDBFE'],
-                                    'PAYMENT_RECEIVED' => ['label' => $pt['st_paid'], 'bg' => '#ECFDF5', 'color' => '#047857', 'border' => '#A7F3D0'],
-                                    'awaiting_delivery' => ['label' => $pt['st_packing'], 'bg' => '#FFFBEB', 'color' => '#B45309', 'border' => '#FDE68A'],
-                                    'PACKING' => ['label' => $pt['st_packing'], 'bg' => '#FFFBEB', 'color' => '#B45309', 'border' => '#FDE68A'],
-                                    'SHIPPED' => ['label' => $pt['st_shipped'], 'bg' => '#F5F3FF', 'color' => '#6D28D9', 'border' => '#DDD6FE'],
-                                    'delivered' => ['label' => $pt['st_delivered'], 'bg' => '#F0FDF4', 'color' => '#15803D', 'border' => '#BBF7D0'],
-                                    'DELIVERED' => ['label' => $pt['st_delivered'], 'bg' => '#F0FDF4', 'color' => '#15803D', 'border' => '#BBF7D0'],
-                                    'CANCELLED' => ['label' => $pt['st_cancelled'], 'bg' => '#FEF2F2', 'color' => '#B91C1C', 'border' => '#FECACA'],
-                                    'ARCHIVED' => ['label' => $pt['st_archived'], 'bg' => '#F5F5F4', 'color' => '#57534E', 'border' => '#D6D3D1'],
+                                    'placed' => ['bg' => '#EFF6FF', 'color' => '#1D4ED8', 'border' => '#BFDBFE'],
+                                    'paid' => ['bg' => '#ECFDF5', 'color' => '#047857', 'border' => '#A7F3D0'],
+                                    'packing' => ['bg' => '#FFFBEB', 'color' => '#B45309', 'border' => '#FDE68A'],
+                                    'shipped' => ['bg' => '#F5F3FF', 'color' => '#6D28D9', 'border' => '#DDD6FE'],
+                                    'delivered' => ['bg' => '#F0FDF4', 'color' => '#15803D', 'border' => '#BBF7D0'],
+                                    'cancelled' => ['bg' => '#FEF2F2', 'color' => '#B91C1C', 'border' => '#FECACA'],
                                 ];
                             @endphp
 
@@ -322,7 +298,7 @@
                                     $receiptUrl = $order->secure_hash
                                         ? route('checkout.receipt', ['orderNumber' => $orderNum, 'orderHash' => $order->secure_hash])
                                         : route('checkout.receipt', ['orderNumber' => $orderNum]);
-                                    $st = $statusMap[$order->status] ?? ['label' => $order->status, 'bg' => '#F3F4F6', 'color' => '#374151', 'border' => '#E5E7EB'];
+                                    $st = $statusMap[$order->progressStep()] + ['label' => $order->progressLabel()];
                                     // Stored in USD; so'm only with the rate saved on the order.
                                     $rate = (float) ($order->exchange_rate ?? 0);
                                     $hasUzs = $rate > 0 && $order->amount_uzs !== null;
@@ -330,7 +306,7 @@
                                     $money = fn (float $usd) => $hasUzs
                                         ? number_format(round($usd * $rate), 0, '.', ' ').' '.$pt['sum_unit']
                                         : '$'.number_format($usd, 2, '.', ',');
-                                    $isDelivered = in_array($order->status, ['delivered', 'DELIVERED', 'ARCHIVED'], true);
+                                    $isDelivered = $order->status === \App\Enums\OrderStatus::Delivered;
                                 @endphp
                                 <div class="bg-white rounded-3xl p-6 border border-[#EAE3DE] shadow-sm space-y-4 hover:border-[#D5CCC7] transition">
                                     <!-- Order Header -->

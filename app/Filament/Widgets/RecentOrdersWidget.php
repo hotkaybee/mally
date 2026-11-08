@@ -38,13 +38,7 @@ class RecentOrdersWidget extends BaseWidget
                     ->money('USD')
                     ->sortable(),
                 TextColumn::make('status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'processing' => 'warning',
-                        'awaiting_delivery' => 'info',
-                        'delivered' => 'success',
-                        default => 'gray',
-                    }),
+                    ->badge(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable(),

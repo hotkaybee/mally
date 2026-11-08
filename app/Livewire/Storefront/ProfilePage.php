@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Storefront;
 
+use App\Enums\OrderStatus;
 use App\Livewire\Storefront\Concerns\InteractsWithStore;
 use App\Models\Customer;
 use App\Models\Order;
@@ -225,7 +226,7 @@ class ProfilePage extends Component
 
         return Order::where('customer_id', $customer->id)
             ->withNumber($orderNumber)
-            ->where('status', 'delivered')
+            ->where('status', OrderStatus::Delivered)
             ->whereHas('orderProducts', fn ($q) => $q->where('product_id', $productId))
             ->first();
     }

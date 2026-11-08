@@ -12,14 +12,13 @@
     $totalDisplay = $hasUzs ? number_format((int) $order->amount_uzs, 0, '.', ' ').' '.$sumUnit : $money($amountUsd);
     $totalCopyValue = $hasUzs ? (string) (int) $order->amount_uzs : number_format($amountUsd, 2, '.', '');
 
-    $statusNormalized = match ($order->status) {
-        'processing', 'new', 'NEW' => 'NEW',
-        'paid', 'PAYMENT_RECEIVED' => 'PAYMENT_RECEIVED',
-        'awaiting_delivery', 'PACKING' => 'PACKING',
-        'on_the_way', 'SHIPPED' => 'SHIPPED',
-        'delivered', 'DELIVERED' => 'DELIVERED',
-        'cancelled', 'CANCELLED' => 'CANCELLED',
-        'ARCHIVED' => 'ARCHIVED',
+    // One list of statuses (App\Enums\OrderStatus); "paid" follows from the payment.
+    $statusNormalized = match ($order->progressStep()) {
+        'paid' => 'PAYMENT_RECEIVED',
+        'packing' => 'PACKING',
+        'shipped' => 'SHIPPED',
+        'delivered' => 'DELIVERED',
+        'cancelled' => 'CANCELLED',
         default => 'NEW',
     };
 
@@ -365,7 +364,7 @@
                 </div>
 
                 <!-- Шкала выполнения заказа (Stepper) -->
-                @if($statusNormalized !== 'CANCELLED' && $statusNormalized !== 'ARCHIVED')
+                @if($statusNormalized !== 'CANCELLED')
                     <div class="w-full max-w-2xl pt-4 pb-2">
                         <div class="grid grid-cols-5 gap-1 sm:gap-2 relative">
                             @foreach($stepDefinitions as $idx => $step)

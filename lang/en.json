@@ -283,5 +283,6 @@
     "order_status.delivered": "Delivered",
     "order_status.cancelled": "Cancelled",
     "A cancelled order returns its products to stock.": "A cancelled order returns its products to stock.",
-    "There is not enough stock left to bring this order back.": "There is not enough stock left to bring this order back."
+    "There is not enough stock left to bring this order back.": "There is not enough stock left to bring this order back.",
+    "Confirmed": "Confirmed"
 }

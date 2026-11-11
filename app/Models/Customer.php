@@ -32,6 +32,34 @@ class Customer extends Model
     }
 
     /**
+     * missing | unverified | verified. Only a number the owner shared through
+     * Telegram (users.phone_verified_at) and that is still the customer's
+     * number counts as verified; a number typed at registration does not.
+     */
+    public function phoneStatus(): string
+    {
+        $phone = self::normalizePhone($this->phone_number);
+        if ($phone === null) {
+            return 'missing';
+        }
+
+        $user = $this->user;
+
+        return $user && $user->hasVerifiedPhone() && $user->phone === $phone ? 'verified' : 'unverified';
+    }
+
+    /** missing | unverified | verified for the account's email: Google or an email code confirms it. */
+    public function emailStatus(): string
+    {
+        $user = $this->user;
+        if (! $user || blank($user->email)) {
+            return 'missing';
+        }
+
+        return $user->email_verified_at !== null ? 'verified' : 'unverified';
+    }
+
+    /**
      * The one stored format, so the same number can't be saved twice in
      * different spellings: Uzbek numbers become "+998 90 123 45 67", anything
      * else is kept as typed (trimmed), and empty becomes null.

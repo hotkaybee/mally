@@ -238,34 +238,6 @@ class ProfilePage extends Component
             && filter_var($url, FILTER_VALIDATE_URL) !== false;
     }
 
-    /**
-     * missing | unverified | verified. Only a number the owner shared through
-     * Telegram (users.phone_verified_at) and that is still the customer's
-     * number counts as verified; a number typed at registration does not.
-     */
-    protected function phoneStatus(?Customer $customer): string
-    {
-        $phone = Customer::normalizePhone($customer?->phone_number);
-        if ($phone === null) {
-            return 'missing';
-        }
-
-        $user = $customer->user;
-
-        return $user && $user->hasVerifiedPhone() && $user->phone === $phone ? 'verified' : 'unverified';
-    }
-
-    /** missing | unverified | verified: a confirmed email comes from Google or an email code. */
-    protected function emailStatus(?Customer $customer): string
-    {
-        $user = $customer?->user;
-        if (! $user || blank($user->email)) {
-            return 'missing';
-        }
-
-        return $user->email_verified_at !== null ? 'verified' : 'unverified';
-    }
-
     public function render()
     {
         $service = app(StorefrontService::class);
@@ -291,9 +263,9 @@ class ProfilePage extends Component
             'orders' => $orders,
             'reviewedKeys' => $reviewedKeys,
             'accountSignedIn' => $customer?->user !== null,
-            'phoneStatus' => $this->phoneStatus($customer),
+            'phoneStatus' => $customer?->phoneStatus() ?? 'missing',
             'accountEmail' => (string) $customer?->user?->email,
-            'emailStatus' => $this->emailStatus($customer),
+            'emailStatus' => $customer?->emailStatus() ?? 'missing',
         ]));
     }
 }

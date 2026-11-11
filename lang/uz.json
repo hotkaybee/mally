@@ -283,5 +283,6 @@
     "order_status.delivered": "Topshirildi",
     "order_status.cancelled": "Bekor qilingan",
     "A cancelled order returns its products to stock.": "Bekor qilingan buyurtma mahsulotlarni omborga qaytaradi.",
-    "There is not enough stock left to bring this order back.": "Bu buyurtmani qaytarish uchun omborda mahsulot yetarli emas."
+    "There is not enough stock left to bring this order back.": "Bu buyurtmani qaytarish uchun omborda mahsulot yetarli emas.",
+    "Confirmed": "Tasdiqlangan"
 }

@@ -283,5 +283,6 @@
     "order_status.delivered": "Вручен",
     "order_status.cancelled": "Отменён",
     "A cancelled order returns its products to stock.": "Отменённый заказ возвращает товары на склад.",
-    "There is not enough stock left to bring this order back.": "На складе уже не хватает товаров, чтобы вернуть этот заказ."
+    "There is not enough stock left to bring this order back.": "На складе уже не хватает товаров, чтобы вернуть этот заказ.",
+    "Confirmed": "Подтверждён"
 }
